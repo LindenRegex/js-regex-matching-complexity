@@ -1,0 +1,6 @@
+(include_subdirs qualified)
+
+(coq.theory
+ (name JsRegexOptp)
+ (package jsregexoptp)
+ (theories Linden Warblre Ltac2))
