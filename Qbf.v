@@ -3,7 +3,7 @@ Open Scope bool_scope.
 
 (** * Definition of quantified boolean formulas and their interpretation. *)
 
-(* A variable is represented by a nat. *)
+(* A variable is represented by a nat. It is indexed from 1 to numVars. *)
 Definition variable: Type := nat.
 
 (* A literal is either a variable or its negation. *)
@@ -23,7 +23,7 @@ Inductive quantifier: Type :=
 Definition qbf := (list quantifier * list clause)%type.
 
 (* A QBF is well-formed if all the variables that appear in it are quantified. *)
-Definition wf_var (num_vars: nat) (v: variable): Prop := v < num_vars.
+Definition wf_var (num_vars: nat) (v: variable): Prop := v <> 0 /\ v <= num_vars.
 
 Inductive wf_literal (num_vars: nat): literal -> Prop :=
 | WfPosVar: forall v, wf_var num_vars v -> wf_literal num_vars (PosVar v)
@@ -95,5 +95,5 @@ Fixpoint qbf_valid_aux (e: env) (n: nat) (ql: list quantifier) (cl: list clause)
   end.
 
 Definition qbf_valid (q: qbf): bool :=
-  qbf_valid_aux Environment.empty 0 (fst q) (snd q).
+  qbf_valid_aux Environment.empty 1 (fst q) (snd q).
 

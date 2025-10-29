@@ -49,7 +49,7 @@ Section RegexEncoding.
     | Qbf.NotExists::ql => Lookaround NegLookAhead (Sequence (def_var_regex v) (theRegex_aux (S v) ql))
     end.
   
-  Definition theRegex := theRegex_aux 0 (fst q).
+  Definition theRegex := theRegex_aux 1 (fst q).
 
   (* The string *)
   Definition theString: LWParameters.string :=
