@@ -56,8 +56,10 @@ Definition valid_clause (e: env) (c: clause): Prop :=
 Inductive qbf_valid: nat -> env -> qbf -> Prop :=
 | Valid_noquant: forall (n: nat) (e: env) (cl: list clause),
     Forall (valid_clause e) cl -> qbf_valid n e (nil, cl)
-| Valid_Exists: forall (n: nat) (e: env) (ql: list quantifier) (cl: list clause),
+| Valid_Exists_false: forall (n: nat) (e: env) (ql: list quantifier) (cl: list clause),
     qbf_valid (S n) e (ql, cl) ->
+    qbf_valid n e (Exists::ql, cl)
+| Valid_Exists_true: forall (n: nat) (e: env) (ql: list quantifier) (cl: list clause),
     qbf_valid (S n) (Environment.add n e) (ql, cl) ->
     qbf_valid n e (Exists::ql, cl)
 | Valid_NotExists: forall (n: nat) (e: env) (ql: list quantifier) (cl: list clause),
