@@ -291,47 +291,133 @@ Section MembershipProof.
     - simpl. lia.
   Admitted.
 
-  (* Formalizing when a list of actions comes from a supported regex (forward direction only) *)
-  Inductive act_from_regex (r: regex): actions -> Prop :=
-  | afr_refl: act_from_regex r [Areg r]
-  | afr_pop_check: forall inpcheck l,
-      act_from_regex r (Acheck inpcheck :: l) -> act_from_regex r l
-  | afr_pop_close: forall gid l,
-      act_from_regex r (Aclose gid :: l) -> act_from_regex r l
-  | afr_pop_epsilon: forall l,
-      act_from_regex r (Areg Epsilon :: l) -> act_from_regex r l
-  | afr_pop_char: forall cd l,
-      act_from_regex r (Areg (Regex.Character cd) :: l) -> act_from_regex r l
-  | afr_pop_disj_l: forall r1 r2 l,
-      act_from_regex r (Areg (Disjunction r1 r2) :: l) -> act_from_regex r (Areg r1 :: l)
-  | afr_pop_disj_r: forall r1 r2 l,
-      act_from_regex r (Areg (Disjunction r1 r2) :: l) -> act_from_regex r (Areg r2 :: l)
-  | afr_pop_sequence: forall r1 r2 l,
-      act_from_regex r (Areg (Sequence r1 r2) :: l) -> act_from_regex r (Areg r1 :: Areg r2 :: l)
-  | afr_pop_quant_done: forall greedy r1 l,
-      act_from_regex r (Areg (Quantified greedy 0 (NoI.N 0) r1) :: l) -> act_from_regex r l
+  (* Formalizing when an input and list of actions come from a supported regex (forward direction only) *)
+  Inductive act_from_regex (r: regex): input -> actions -> Prop :=
+  | afr_refl: forall inp, act_from_regex r inp [Areg r]
+  | afr_pop_check: forall inp inpcheck l,
+      strict_suffix inp inpcheck forward ->
+      act_from_regex r inp (Acheck inpcheck :: l) ->
+      act_from_regex r inp l
+  | afr_pop_close: forall inp gid l,
+      act_from_regex r inp (Aclose gid :: l) -> act_from_regex r inp l
+  | afr_pop_epsilon: forall inp l,
+      act_from_regex r inp (Areg Epsilon :: l) -> act_from_regex r inp l
+  | afr_pop_char: forall inp nextinp cd l,
+      act_from_regex r inp (Areg (Regex.Character cd) :: l) ->
+      advance_input inp forward = Some nextinp ->
+      act_from_regex r nextinp l
+  | afr_pop_disj_l: forall inp r1 r2 l,
+      act_from_regex r inp (Areg (Disjunction r1 r2) :: l) ->
+      act_from_regex r inp (Areg r1 :: l)
+  | afr_pop_disj_r: forall inp r1 r2 l,
+      act_from_regex r inp (Areg (Disjunction r1 r2) :: l) ->
+      act_from_regex r inp (Areg r2 :: l)
+  | afr_pop_sequence: forall inp r1 r2 l,
+      act_from_regex r inp (Areg (Sequence r1 r2) :: l) ->
+      act_from_regex r inp (Areg r1 :: Areg r2 :: l)
+  | afr_pop_quant_done: forall inp greedy r1 l,
+      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 0) r1) :: l) ->
+      act_from_regex r inp l
   | afr_pop_quant_free_iter: forall greedy delta r1 inp l,
-      act_from_regex r (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) -> act_from_regex r (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 delta r1) :: l)
-  | afr_pop_quant_free_skip: forall greedy delta r1 l,
-      act_from_regex r (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) -> act_from_regex r l
-  | afr_pop_group: forall gid r1 l,
-      act_from_regex r (Areg (Group gid r1) :: l) -> act_from_regex r (Areg r1 :: Aclose gid :: l)
-  | afr_pop_anchor: forall a l,
-      act_from_regex r (Areg (Anchor a) :: l) -> act_from_regex r l
-  | afr_pop_backref: forall gid l,
-      act_from_regex r (Areg (Backreference gid) :: l) -> act_from_regex r l.
+      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) ->
+      act_from_regex r inp (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 delta r1) :: l)
+  | afr_pop_quant_free_skip: forall inp greedy delta r1 l,
+      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) ->
+      act_from_regex r inp l
+  | afr_pop_group: forall inp gid r1 l,
+      act_from_regex r inp (Areg (Group gid r1) :: l) ->
+      act_from_regex r inp (Areg r1 :: Aclose gid :: l)
+  | afr_pop_anchor: forall inp a l,
+      act_from_regex r inp (Areg (Anchor a) :: l) ->
+      act_from_regex r inp l
+  | afr_pop_backref: forall inp n nextinp gid l,
+      act_from_regex r inp (Areg (Backreference gid) :: l) ->
+      advance_input_n inp n forward = nextinp ->
+      act_from_regex r nextinp l.
   
   Lemma readDepth_inp_act_bound:
-    forall act r, act_from_regex r act ->
-      forall inp, readDepth_inp_act inp act <= 3*regex_size r + 1.
+    forall r inp act, act_from_regex r inp act ->
+      readDepth_inp_act inp act <= 3*regex_size r + 1.
   Proof.
     induction 1.
-    - intro inp. pose proof readDepth_inp_act_reg_le inp r [].
+    - pose proof readDepth_inp_act_reg_le inp r [].
       simpl readDepth_inp_act at 2 in H. lia.
-    - intro inp.
-      (* Blocked! *)
-      (* IHact_from_regex with an input that is a strict suffix if inpcheck gives what we want *)
-      (* but if inp is equal to inpcheck,  *)
+    - simpl in IHact_from_regex.
+      replace (is_strict_suffix inp inpcheck forward) with true in IHact_from_regex.
+      2: { symmetry. apply is_strict_suffix_correct. auto. }
+      lia.
+    - simpl readDepth_inp_act in IHact_from_regex. lia.
+    - simpl readDepth_inp_act in IHact_from_regex. lia.
+    - simpl readDepth_inp_act in IHact_from_regex. (* Character: impossible *)
+      
+  Abort.
+
+  Fixpoint list_tail {A: Type} (l tl: list A): Prop :=
+    tl = l \/
+    match l with
+    | nil => False
+    | x::q => list_tail q tl
+    end.
+
+  Inductive list_tail_2 {A: Type}: list A -> list A -> Prop :=
+    | list_tail_refl: forall l, list_tail_2 l l
+    | list_tail_tail: forall x q tl,
+        list_tail_2 q tl -> list_tail_2 (x::q) tl.
+  
+  Lemma list_tail_equiv {A: Type}:
+    forall l tl: list A, list_tail l tl <-> list_tail_2 l tl.
+  Proof.
+    intros l tl. split.
+    - induction l.
+      + simpl. intros [H|[]]. subst tl. apply list_tail_refl.
+      + simpl. intros [H|H].
+        * subst tl. apply list_tail_refl.
+        * apply list_tail_tail. auto.
+    - induction 1.
+      + destruct l; left; reflexivity.
+      + simpl. right. assumption.
+  Qed.
+
+  Lemma readDepth_inp_act_bound_2:
+    forall r inp act, act_from_regex r inp act ->
+      forall inp' tl, list_tail act tl -> readDepth_inp_act inp' tl <= 3 * regex_size r + 1.
+  Proof.
+    induction 1.
+    - intros inp' tl. simpl. intros [H|[H|[]]]; subst tl.
+      + pose proof readDepth_inp_act_reg_le inp' r nil. simpl readDepth_inp_act at 2 in H. lia.
+      + simpl. lia.
+    - intros inp' tl TAIL. apply IHact_from_regex; auto. simpl. right. auto.
+    - intros inp' tl TAIL. apply IHact_from_regex; auto. simpl. right. auto.
+    - intros inp' tl TAIL. apply IHact_from_regex; auto. simpl. right. auto.
+    - intros inp' tl TAIL. apply IHact_from_regex; auto. simpl. right. auto.
+    - simpl. intros inp' tl [TAIL|TAIL].
+      + subst tl. specialize (IHact_from_regex inp' (Areg (Disjunction r1 r2) :: l)).
+        specialize_prove IHact_from_regex. { simpl. left. reflexivity. }
+        simpl in IHact_from_regex. pose proof readDepth_inp_act_reg_le inp' r1 l. lia.
+      + apply IHact_from_regex. right. auto.
+    - simpl. intros inp' tl [TAIL|TAIL].
+      + subst tl. specialize (IHact_from_regex inp' (Areg (Disjunction r1 r2) :: l)).
+        specialize_prove IHact_from_regex. { simpl. left. reflexivity. }
+        simpl in IHact_from_regex. pose proof readDepth_inp_act_reg_le inp' r2 l. lia.
+      + apply IHact_from_regex. right. auto.
+    - simpl. intros inp' tl.
+      pose proof IHact_from_regex inp' (Areg (Sequence r1 r2) :: l) ltac:(left; reflexivity) as IH'.
+      simpl in IH'. intros [TAIL|[TAIL|TAIL]].
+      + subst tl. pose proof readDepth_inp_act_reg_le inp' r1 (Areg r2 :: l).
+        pose proof readDepth_inp_act_reg_le inp' r2 l. lia.
+      + subst tl. pose proof readDepth_inp_act_reg_le inp' r2 l. lia.
+      + apply IHact_from_regex. right. auto.
+    - intros inp' tl TAIL. apply IHact_from_regex. right. assumption.
+    - intros inp' tl. simpl.
+      pose proof IHact_from_regex inp' (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) ltac:(left; reflexivity) as IH'.
+      intros [TAIL|[TAIL|[TAIL|TAIL]]].
+      + subst tl.
+        replace (readDepth_inp_act inp' _) with (max (3 + regex_size r1) (1 + readDepth_inp_act inp' l)) in IH'.
+        2: { symmetry. simpl. destruct delta; auto. }
+        (* Not sufficient! *)
+        pose proof readDepth_inp_act_reg_le inp' r1 (Acheck inp :: Areg (Quantified greedy 0 delta r1) :: l).
+        simpl readDepth_inp_act at 2 in H0.
+  Abort.
     
 
 End MembershipProof.
