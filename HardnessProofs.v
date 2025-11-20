@@ -1,5 +1,5 @@
 From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps.
-From Linden Require Import Parameters Chars Groups Semantics Tree.
+From Linden Require Import Parameters Chars Groups Semantics Tree Tactics.
 From Linden.Rewriting Require Import ProofSetup.
 From Warblre Require Import Parameters RegExpRecord Base.
 Require Import List Lia.
@@ -225,14 +225,14 @@ Section Proofs.
 
   Lemma check_clause_regex_spec:
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
-      i < m -> List.nth_error clauses i = Some c ->
+      i < m -> wf_clause n c ->
       inp = inp_of_idx (2*(n+i)) -> wf_gm gm ->
       forall t, is_tree rer [Areg (check_clause_regex x_char semicolon_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
           (forall lf, In lf lflist -> lf = (inp_of_idx (2*(n+i+1)), gm)) /\
           (lflist <> nil <-> gm_satisfies_clause gm c = true).
   Proof.
-    intros i c inp gm INB_i EQ_c EQ_inp WF_GM t TREE lflist EQ_lflist.
+    intros i c inp gm INB_i WF_c EQ_inp WF_GM t TREE lflist EQ_lflist.
     unfold check_clause_regex in TREE.
     inversion TREE; subst r1 r2 cont inp0 gm0 dir t0. rewrite app_nil_r in CONT.
     simpl in CONT.
@@ -243,7 +243,6 @@ Section Proofs.
     }
     destruct H as [taux TREE_aux].
     specialize (CONCAT taux CONT TREE_aux).
-    assert (WF_c: wf_clause n c) by admit.
     pose proof check_clause_regex_aux_spec i c inp gm INB_i WF_c EQ_inp WF_GM taux TREE_aux _ eq_refl
       as [AUX_FORM AUX_SUCC_IFF].
     assert (H: forall lf, In lf lflist -> lf = (inp_of_idx (2*(n+i+1)), gm)). {
@@ -264,4 +263,141 @@ Section Proofs.
     split; auto.
   Admitted.
 
+  Lemma FlatMap_empty_iff {X Y: Type}:
+    forall (lx: list X) (f: X -> list Y -> Prop) (ly: list Y),
+      FlatMap.determ f -> FlatMap.FlatMap lx f ly ->
+      (ly <> [] <-> exists (x: X) (fx: list Y), In x lx /\ f x fx /\ fx <> []).
+  Proof.
+    intros lx f ly DETERM. induction 1.
+    - simpl. firstorder.
+    - specialize (IHFlatMap DETERM).
+      destruct ly as [|y ly].
+      + simpl. rewrite IHFlatMap. split; try solve[firstorder].
+        intros [x0 [fx H0]].
+        destruct H0. destruct H0.
+        * subst x0. exfalso. specialize (DETERM x [] fx).
+          rewrite <- DETERM in H1 by tauto. destruct H1. contradiction.
+        * firstorder.
+      + split. 2: rewrite <- app_comm_cons; discriminate.
+        intros _. exists x. exists (y :: ly). split.
+        * left. reflexivity.
+        * split; [auto|discriminate].
+  Qed.
+
+  Lemma check_conjunct_regex_spec:
+    forall (inp: input) (gm: group_map),
+      inp = inp_of_idx (2*n) -> wf_gm gm ->
+      forall t, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev clauses))] inp gm forward t ->
+        forall lflist, lflist = tree_leaves t gm inp forward ->
+          (forall lf, In lf lflist -> lf = (inp_of_idx (2*(n+m)), gm)) /\
+          (lflist <> nil <-> gm_satisfies_conjunct gm clauses = true).
+  Proof.
+    intros inp gm EQ_inp WF_GM. unfold m. fold clauses.
+    assert (LE_length_clauses: length clauses <= m). { reflexivity. }
+    revert LE_length_clauses.
+    assert (WF_clauses: Forall (wf_clause n) clauses). { inversion WF_q; subst. apply H. }
+    revert WF_clauses. generalize clauses. induction clauses0 using rev_ind.
+    - simpl. intros ? ? t TREE lflist EQ_lflist.
+      inversion TREE. subst cont inp0 gm0 dir tcont.
+      inversion ISTREE. subst inp0 gm0 dir t. simpl in EQ_lflist. subst lflist.
+      split.
+      + intros lf [EQ_lf|[]]. subst lf inp. f_equal. f_equal. lia.
+      + split. * reflexivity. * discriminate.
+    - rewrite app_length, rev_app_distr. simpl.
+      intros ? ? t TREE lflist EQ_lflist.
+      inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
+      rewrite app_nil_r in CONT. simpl in CONT.
+      assert (SUBTREE: exists tsub: tree, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev clauses0))] inp gm forward tsub). {
+        eexists. apply compute_tr_is_tree.
+      }
+      destruct SUBTREE as [tsub SUBTREE].
+      specialize_prove IHclauses0. { rewrite Forall_app in WF_clauses. tauto. }
+      specialize (IHclauses0 ltac:(lia) tsub SUBTREE).
+      pose proof leaves_concat rer inp gm forward [Areg (check_conjunct_regex x_char semicolon_char (rev clauses0))] [Areg (check_clause_regex x_char semicolon_char x)] _ _ CONT SUBTREE as CONCAT.
+      rewrite <- EQ_lflist in CONCAT.
+      remember (tree_leaves tsub gm inp forward) as lflist_sub. specialize (IHclauses0 lflist_sub eq_refl).
+      pose proof check_clause_regex_spec (length clauses0) x as SPEC_check_x. 
+      split.
+      + intros lf IN_lf. rewrite @FlatMap_in_r with (X := leaf) in IN_lf.
+        3: apply CONCAT. 2: apply act_from_leaf_determ.
+        destruct IN_lf as [lfsub [lflist_clause [IN_lfsub [TREE_clause IN_lf]]]].
+        inversion TREE_clause. subst act dir l.
+        specialize (SPEC_check_x (fst lfsub) (snd lfsub) ltac:(lia)).
+        specialize_prove SPEC_check_x. {
+          rewrite Forall_app in WF_clauses.
+          destruct WF_clauses as [_ WF_clauses].
+          inversion WF_clauses. auto.
+        }
+        destruct IHclauses0 as [IHclauses0_0 IHclauses0_1].
+        specialize (IHclauses0_0 lfsub IN_lfsub).
+        specialize_prove SPEC_check_x. {
+          rewrite IHclauses0_0. reflexivity.
+        }
+        specialize_prove SPEC_check_x. {
+          rewrite IHclauses0_0. auto.
+        }
+        specialize (SPEC_check_x t0 TREE0 lflist_clause).
+        symmetry in H2. specialize (SPEC_check_x H2).
+        destruct SPEC_check_x as [SPEC_check_x _].
+        specialize (SPEC_check_x lf IN_lf).
+        rewrite SPEC_check_x. f_equal. 2: rewrite IHclauses0_0; reflexivity. f_equal. lia.
+      + rewrite (FlatMap_empty_iff lflist_sub _ lflist ltac:(apply act_from_leaf_determ) CONCAT).
+        split; intro.
+        * destruct H as [lfsub [lflist_clause [IN_lfsub [TREE_clause lflist_clause_nonempty]]]].
+          inversion TREE_clause. subst act dir l. symmetry in H2.
+          specialize (SPEC_check_x (fst lfsub) (snd lfsub) ltac:(lia)).
+          specialize_prove SPEC_check_x. {
+            rewrite Forall_app in WF_clauses.
+            destruct WF_clauses as [_ WF_clauses].
+            inversion WF_clauses. auto.
+          }
+          destruct IHclauses0 as [IHclauses0_0 IHclauses0_1].
+          specialize (IHclauses0_0 lfsub IN_lfsub).
+          specialize_prove SPEC_check_x. {
+            rewrite IHclauses0_0. reflexivity.
+          }
+          specialize_prove SPEC_check_x. {
+            rewrite IHclauses0_0. auto.
+          }
+          specialize (SPEC_check_x t0 TREE0 lflist_clause H2).
+          destruct IHclauses0_1 as [IHclauses0_1 _].
+          specialize_prove IHclauses0_1. {
+            destruct lflist_sub; try discriminate. destruct IN_lfsub.
+          }
+          destruct SPEC_check_x as [_ SPEC_check_x].
+          unfold gm_satisfies_conjunct.
+          rewrite forallb_app. unfold gm_satisfies_conjunct in IHclauses0_1.
+          rewrite IHclauses0_1. simpl.
+          destruct SPEC_check_x as [SPEC_check_x _].
+          specialize (SPEC_check_x lflist_clause_nonempty).
+          rewrite IHclauses0_0 in SPEC_check_x. simpl in SPEC_check_x. rewrite SPEC_check_x. reflexivity.
+        * unfold gm_satisfies_conjunct in *. rewrite forallb_app in H.
+          apply andb_true_iff in H. destruct H as [clauses0_sat x_sat].
+          simpl in x_sat. rewrite andb_true_r in x_sat.
+          destruct IHclauses0 as [IHclauses0_0 [_ IHclauses0_1]].
+          specialize (IHclauses0_1 clauses0_sat).
+          destruct lflist_sub as [|[inpsub gmsub] lflist_sub]; try contradiction.
+          specialize (IHclauses0_0 (inpsub, gmsub) ltac:(left; reflexivity)).
+          injection IHclauses0_0 as EQ_inpsub ->.
+          specialize (SPEC_check_x inpsub gm ltac:(lia)).
+          specialize_prove SPEC_check_x. {
+            rewrite Forall_app in WF_clauses.
+            destruct WF_clauses as [_ WF_clauses].
+            inversion WF_clauses. auto.
+          }
+          specialize (SPEC_check_x EQ_inpsub WF_GM).
+          assert (exists t: tree, is_tree rer [Areg (check_clause_regex x_char semicolon_char x)] inpsub gm forward t). {
+            eexists. apply compute_tr_is_tree.
+          }
+          destruct H as [tclause TREE_clause].
+          specialize (SPEC_check_x tclause TREE_clause).
+          remember (tree_leaves tclause gm inpsub forward) as lflist_clause.
+          specialize (SPEC_check_x _ eq_refl).
+          exists (inpsub, gm). exists lflist_clause. split. 1: left; reflexivity.
+          split.
+          -- rewrite Heqlflist_clause. constructor. auto.
+          -- destruct SPEC_check_x as [_ SPEC_check_x]. tauto.
+  Qed.
+
+  
 End Proofs.

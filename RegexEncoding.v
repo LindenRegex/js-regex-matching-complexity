@@ -35,16 +35,16 @@ Section RegexEncoding.
     Sequence (check_clause_regex_aux c) (Character (CdSingle semicolon_char)).
 
   (* Regex used to check the conjunction *)
-  Fixpoint check_conjunct_regex (cl: list clause): regex :=
-    match cl with
+  Fixpoint check_conjunct_regex (rev_cl: list clause): regex :=
+    match rev_cl with
     | nil => Epsilon
-    | c::cl => Sequence (check_clause_regex c) (check_conjunct_regex cl)
+    | c::cl => Sequence (check_conjunct_regex cl) (check_clause_regex c)
     end.
 
   (* The regex *)
   Fixpoint theRegex_aux (v: variable) (ql: list quantifier) {struct ql}: regex :=
     match ql with
-    | nil => check_conjunct_regex (snd q)
+    | nil => check_conjunct_regex (rev (snd q))
     | Qbf.Exists::ql => Sequence (def_var_regex v) (theRegex_aux (S v) ql)
     | Qbf.NotExists::ql => Lookaround NegLookAhead (Sequence (def_var_regex v) (theRegex_aux (S v) ql))
     end.
