@@ -12,7 +12,7 @@ Section MembershipProof.
   | s_Character: forall cd, supported_regex (Regex.Character cd)
   | s_Disjunction: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Disjunction r1 r2)
   | s_Sequence: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Sequence r1 r2)
-  | s_Quantified: forall greedy delta r, supported_regex r -> supported_regex (Quantified greedy 0 delta r) (* min = 0 *)
+  | s_Quantified: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 +∞ r) (* only the star (greedy or lazy) *)
   (* No lookaround *)
   | s_Group: forall gid r, supported_regex r -> supported_regex (Group gid r)
   | s_Anchor: forall a, supported_regex (Anchor a)
@@ -78,5 +78,52 @@ Section MembershipProof.
       act_from_regex r inp (Areg (Backreference gid) :: l) ->
       advance_input_n inp n forward = nextinp ->
       act_from_regex r nextinp l.
+
+  Fixpoint first_check_input (act: actions): option input :=
+    match act with
+    | [] => None
+    | Areg _ :: l | Aclose _ :: l => first_check_input l
+    | Acheck inp :: _ => Some inp
+    end.
+
+  Fixpoint last_chunk_size (act: actions): nat :=
+    match act with
+    | Acheck _ :: _ => 0 (* should not happen *)
+    | Aclose gid :: l => 1 + last_chunk_size l
+    | Areg r :: l => regex_size r + last_chunk_size l
+    | [] => 0
+    end.
+
+  Fixpoint actions_fuel' (inp: input) (act: actions) (checks_pass: bool) {struct act}: nat :=
+    match act with
+    | Acheck _ :: Areg r :: l =>
+      match first_check_input l with
+      (* Not last chunk *)
+      | Some _ => 2 + actions_fuel' inp l checks_pass
+      (* Last chunk *)
+      | None =>
+          let bonus := if checks_pass then 1 else 0 in
+          1 + (bonus + remaining_length inp forward) * last_chunk_size (Areg r :: l)
+      end
+    | Acheck _ :: _ => 0 (* should not happen *)
+    | Areg r :: l => regex_size r + actions_fuel' inp l checks_pass
+    | Aclose _ :: l => 1 + actions_fuel' inp l checks_pass
+    | [] => 0 (* should not happen *)
+    end.
+  
+  Definition actions_fuel (inp: input) (act: actions): nat :=
+    match first_check_input act with
+    (* Only one (last) chunk: bonus is one *)
+    | None => (1 + remaining_length inp forward) * last_chunk_size act
+    (* At least two chunks *)
+    | Some inpchk =>
+        let b := is_strict_suffix inp inpchk forward in
+        match act with
+        | Areg (Quantified _ _ _ r) :: l =>
+          (if b then 1 else 3 + regex_size r) + actions_fuel' inp l b
+        | _ => actions_fuel' inp act b
+        end
+    end.
+
 
 End MembershipProof.
