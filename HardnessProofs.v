@@ -57,6 +57,15 @@ Section Proofs.
     forall i, input_str (inp_of_idx i) = str.
   Admitted.
 
+  Lemma idx_inp_of_idx:
+    forall i, i <= length str -> idx (inp_of_idx i) = i.
+  Admitted.
+
+  Lemma advance_input_inp_of_idx:
+    forall i, i < length str ->
+      advance_input' (inp_of_idx i) forward = inp_of_idx (S i).
+  Admitted.
+
   Lemma substr_var:
     forall v, wf_var n v ->
       forall i, substr (inp_of_idx i) (2*(v-1)) (2*(v-1)+1) = [x_char].
@@ -399,5 +408,167 @@ Section Proofs.
           -- destruct SPEC_check_x as [_ SPEC_check_x]. tauto.
   Qed.
 
-  
+  Lemma def_var_regex_spec:
+    forall (i: nat) (inp: input),
+      i <> 0 -> i <= n -> inp = inp_of_idx (2*(i-1)) ->
+      forall (t: tree) (gm: group_map),
+        is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward t ->
+        tree_leaves t gm inp forward = [
+          (inp_of_idx (2*i), GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm);
+          (inp_of_idx (2*i), gm)].
+  Proof.
+    intros i inp i_NEQ_0 i_INB EQ_inp t gm TREE.
+    unfold def_var_regex in TREE.
+    inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
+    rewrite app_nil_r in CONT. simpl in CONT.
+    inversion CONT. subst r1 r2 cont inp0 gm0 dir t.
+    inversion ISTREE1. subst gid r1 cont inp0 gm0 dir t1.
+    inversion TREECONT.
+    2: { subst cd cont inp0 gm0 dir treecont. exfalso. admit. }
+    subst cd cont inp0 gm0 dir treecont.
+    inversion TREECONT0. subst gid cont inp0 gm0 dir tcont.
+    inversion TREECONT1. 2: { subst cd cont inp0 gm0 dir treecont. exfalso. admit. }
+    subst cd cont inp0 gm0 dir treecont.
+    inversion TREECONT2. subst inp0 gm0 dir tcont.
+    inversion ISTREE2. 2: { subst cd cont inp0 gm0 dir t2. exfalso. admit. }
+    subst cd cont inp0 gm0 dir t2.
+    inversion TREECONT3. 2: { subst cd cont inp0 gm0 dir tcont. exfalso. admit. }
+    subst cd cont inp0 gm0 dir tcont.
+    inversion TREECONT4. subst inp0 gm0 dir tcont0.
+    simpl tree_leaves. f_equal; f_equal.
+    - subst inp. rewrite advance_input_inp_of_idx. 2: admit.
+      rewrite advance_input_inp_of_idx. 2: admit.
+      f_equal. lia.
+    - apply GroupMap.MapS.Equal_eq.
+      intro i'. destruct (PeanoNat.Nat.eq_dec i' i).
+      + subst i'.
+        unfold GroupMap.close. unfold GroupMap.open at 1.
+        unfold GroupMap.find.
+        rewrite GroupMap.Facts.add_eq_o. 2: reflexivity.
+        subst inp. rewrite idx_inp_of_idx. 2: admit.
+        rewrite advance_input_inp_of_idx. 2: admit.
+        rewrite idx_inp_of_idx. 2: admit.
+        replace (_ <=? _) with true. 2: { symmetry. apply PeanoNat.Nat.leb_le. lia. }
+        rewrite GroupMap.Facts.add_eq_o. 2: reflexivity.
+        rewrite GroupMap.Facts.add_eq_o. 2: reflexivity.
+        f_equal. f_equal. f_equal. lia.
+      + unfold GroupMap.close, GroupMap.add, GroupMap.open at 1, GroupMap.find.
+        rewrite GroupMap.Facts.add_eq_o with (x := i) (y := i). 2: reflexivity.
+        subst inp. rewrite advance_input_inp_of_idx, idx_inp_of_idx, idx_inp_of_idx by admit.
+        replace (_ <=? _) with true. 2: { symmetry. apply PeanoNat.Nat.leb_le. lia. }
+        rewrite GroupMap.Facts.add_neq_o. 2: auto.
+        rewrite GroupMap.Facts.add_neq_o. 2: auto.
+        unfold GroupMap.open. rewrite GroupMap.Facts.add_neq_o. 2: auto.
+        reflexivity.
+    - subst inp. rewrite advance_input_inp_of_idx. 2: admit.
+      rewrite advance_input_inp_of_idx. 2: admit.
+      f_equal. f_equal. lia.
+  Admitted.
+
+  Theorem theRegex_aux_spec:
+    (* We perform backwards induction on i ∈ {1, ..., n+1}. *)
+    forall np1_minus_i i, i = n + 1 - np1_minus_i ->
+    (* Let i ∈ {1, ..., n+1}. *)
+    i <> 0 -> i <= n + 1 ->
+      (* Let gm be a valid group map... *)
+      forall gm: group_map,
+        wf_gm gm ->
+        (* ... such that gm(i), gm(i+1), ..., gm(n) are undefined. *)
+        (forall j, i <= j -> j <= n -> GroupMap.find j gm = None) ->
+        forall inp qtail t,
+          (* Let inp := inp(2(i-1))... *)
+          inp = inp_of_idx (2*(i-1)) ->
+          qtail = List.skipn (i-1) quants ->
+          (* ... and t := T(R(i), inp, gm, →). *)
+          is_tree rer [Areg (theRegex_aux q x_char semicolon_char i qtail)] inp gm forward t ->
+          (* Then: *)
+          (* - t has a leaf iff gm satisfies F_i *)
+          (tree_leaves t gm inp forward <> [] <-> gm_satisfies_qbf_aux gm i qtail clauses = true) /\
+          (* - for any leaf (inp', gm') of t, gm' and gm coincide on indices 1, 2, ..., i-1 *)
+          (forall inp' gm', In (inp', gm') (tree_leaves t gm inp forward) ->
+            forall j, 1 <= j -> j < i -> GroupMap.find j gm = GroupMap.find j gm') /\
+          (* - if Q_i = ∃, then the first leaf of t maps i to (2*(i-1), 2(i-1)+1) iff gm[i ↦ (2(i-1), 2(i-1)+1)] satisfies F_{i+1}. *)
+          (List.hd_error qtail = Some Qbf.Exists ->
+          ((exists inpres gmres, tree_res t gm inp forward = Some (inpres, gmres) /\
+          GroupMap.find i gmres = Some (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1)))) <->
+          gm_satisfies_qbf_aux (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm) (i+1) (List.tl qtail) clauses = true)).
+  Proof.
+    induction np1_minus_i.
+    - intro i. rewrite Nat.sub_0_r. intros -> _ _ gm WF_gm _ inp qtail t.
+      rewrite Nat.add_sub. intros EQ_inp EQ_qtail.
+      unfold n, quants in EQ_qtail. rewrite skipn_all in EQ_qtail. subst qtail.
+      simpl theRegex_aux. simpl gm_satisfies_qbf_aux. simpl hd_error.
+      intro TREE. split; [|split; try discriminate].
+      + apply check_conjunct_regex_spec with (inp := inp) (gm := gm) (t := t) (lflist := tree_leaves t gm inp forward); auto.
+      + pose proof check_conjunct_regex_spec inp gm EQ_inp WF_gm t TREE _ eq_refl as SPEC.
+        destruct SPEC as [SPEC _].
+        intros inp' gm' IN. specialize (SPEC (inp', gm') IN).
+        injection SPEC as -> ->. reflexivity.
+    - intros i EQ_i i_INB _ gm WF_gm UNDEF inp qtail t EQ_inp EQ_qtail TREE.
+      specialize (IHnp1_minus_i (S i)).
+      specialize_prove IHnp1_minus_i. { rewrite EQ_i. lia. }
+      specialize_prove IHnp1_minus_i by discriminate.
+      specialize_prove IHnp1_minus_i. { rewrite EQ_i. lia. }
+      assert (EQ'_qtail: qtail = List.nth (i-1) quants Qbf.Exists :: List.skipn i quants). {
+        rewrite EQ_qtail. admit.
+      }
+      rewrite EQ'_qtail. rewrite EQ'_qtail in TREE.
+      simpl gm_satisfies_qbf_aux.
+      simpl theRegex_aux in TREE.
+      destruct nth eqn:EQ_quant.
+      + (* Exists *)
+        inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
+        rewrite app_nil_r in CONT. simpl in CONT.
+        assert (exists tsub: tree, is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward tsub) as [tsub TREE_sub]. {
+          eexists. apply compute_tr_is_tree.
+        }
+        pose proof leaves_concat rer inp gm forward [Areg (def_var_regex x_char semicolon_char i)] [Areg (theRegex_aux q x_char semicolon_char (S i) (skipn i quants))] t tsub CONT TREE_sub as CONCAT.
+        pose proof def_var_regex_spec i inp i_INB ltac:(lia) EQ_inp tsub gm TREE_sub as DEF_SPEC.
+        rewrite DEF_SPEC in CONCAT. clear DEF_SPEC.
+        remember (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm) as gmpos.
+        inversion CONCAT. subst x lbase f.
+        inversion FM. subst x lbase f.
+        inversion FM0. subst f lmapped0.
+        inversion HEAD. subst act dir l.
+        inversion HEAD0. subst act dir l.
+        rewrite H4. rewrite H5.
+        rewrite app_nil_r.
+        simpl snd in H4, H5, TREE0, TREE1. simpl fst in H4, H5, TREE0, TREE1.
+        clear HEAD HEAD0.
+        specialize (IHnp1_minus_i gmpos) as IHpos. specialize (IHnp1_minus_i gm) as IHneg.
+        clear IHnp1_minus_i.
+        specialize_prove IHpos by admit.
+        specialize_prove IHpos by admit.
+        simpl "-" in IHpos, IHneg.
+        specialize (IHpos (inp_of_idx (i + (i + 0))) (skipn i quants) t0).
+        specialize_prove IHpos. { f_equal. lia. }
+        specialize_prove IHpos. { rewrite Nat.sub_0_r. reflexivity. }
+        specialize (IHpos ltac:(auto)).
+        specialize (IHneg WF_gm).
+        specialize_prove IHneg by admit.
+        specialize (IHneg (inp_of_idx (i + (i + 0))) (skipn i quants) t1).
+        specialize_prove IHneg. { f_equal. lia. }
+        specialize_prove IHneg. { rewrite Nat.sub_0_r. reflexivity. }
+        specialize (IHneg ltac:(auto)).
+        assert (ly ++ ly0 <> [] <-> ly <> [] \/ ly0 <> []) by admit.
+        rewrite H0. clear H0.
+        rewrite H4 in IHpos. rewrite H5 in IHneg.
+        rewrite orb_true_iff. split; [|split].
+        * setoid_rewrite <- Heqgmpos. tauto.
+        * intros inp' gm'. rewrite in_app_iff. intros [INl | INr].
+          -- admit.
+          -- admit.
+        * admit.
+
+      + (* Not exists *)
+        inversion TREE.
+        * (* Negative lookahead succeeds, i.e. QBF is valid, i.e. lookahead expression fails *)
+          subst lk r1 cont inp0 gm0 dir t.
+          inversion TREECONT. subst inp0 gm0 dir treecont.
+          inversion TREELK. subst r1 r2 cont inp0 gm0 dir t.
+          rewrite app_nil_r in CONT. simpl seq_list in CONT.
+           admit.
+        * (* Negative lookahead fails, i.e. QBF is invalid, i.e. lookahead expression doesn't fail *)
+          admit.
+  Admitted.
 End Proofs.
