@@ -332,11 +332,29 @@ Section MembershipProof.
               unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
               destruct first_check_input as [inpchk | ].
               * admit. (* HARD *)
-              * simpl in FUEL.
+              * simpl in FUEL. lia.
             + replace (match r1 with | Quantified _ _ _ r0 => _ | _ => _ end) with (actions_fuel' inp (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 +∞ r1) :: cont) false).
               2: { destruct r1; try discriminate; reflexivity. }
-
+              unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
+              simpl. destruct first_check_input as [inpchk | ].
+              * admit. (* HARD *)
+              * simpl in *. lia.
         }
+        assert (IHskip: compute_tree rer cont inp gm forward fuel <> None). {
+          apply IHfuel.
+          - eapply afr_pop_quant_free_skip with (greedy := greedy) (delta := +∞). apply AFR.
+          - unfold actions_fuel in FUEL.
+            simpl first_check_input in FUEL.
+            destruct first_check_input as [inpchk | ] eqn:FSTCHK.
+            + pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK.
+              assert ((if is_strict_suffix inp inpchk forward then 1 else 3 + regex_size r1) >= 1). { destruct (is_strict_suffix inp inpchk forward); lia. }
+              lia.
+            + simpl in FUEL. unfold actions_fuel. rewrite FSTCHK. simpl. lia.
+        }
+        destruct compute_tree; try contradiction.
+        destruct compute_tree; try contradiction. discriminate.
+      + (* No lookarounds *) exfalso. admit.
+      + (* Group *)
 
 
 End MembershipProof.
