@@ -190,6 +190,33 @@ Section MembershipProof.
         destruct bonus; destruct bonus'; simpl in H; try discriminate; lia.
   Admitted.
 
+  (* Similar to read_decreases_fuel' *)
+  Lemma read_backref_decreases_fuel':
+    forall inp gid n nextinp cont inpchk,
+      advance_input_n inp n forward = nextinp ->
+      actions_fuel' inp (Areg (Backreference gid) :: cont) (is_strict_suffix inp inpchk forward) >
+      actions_fuel' nextinp cont (is_strict_suffix nextinp inpchk forward).
+  Proof.
+    intros inp gid n nextinp cont inpchk ADV. simpl.
+    destruct (Chars.input_eq_dec inp nextinp).
+    { rewrite <- e. lia. }
+    assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit.
+    (* assert (SS: strict_suffix nextinp inp forward) by admit. *)
+    set (bonus := is_strict_suffix inp inpchk forward) in *.
+    set (bonus' := is_strict_suffix nextinp inpchk forward) in *.
+    induction cont.
+    - simpl. lia.
+    - simpl. destruct a; simpl; try lia.
+      destruct cont as [|[r | ? | ?] l]; simpl; try lia.
+      destruct first_check_input.
+      + simpl in IHcont. lia.
+      + unfold gt. apply le_lt_S.
+        apply -> PeanoNat.Nat.succ_le_mono.
+        apply PeanoNat.Nat.mul_le_mono_r.
+        assert (remaining_length nextinp forward < remaining_length inp forward) by admit.
+        destruct bonus; destruct bonus'; simpl in H; try discriminate; lia.
+  Admitted.
+
 
 
   Lemma read_decreases_fuel:
@@ -215,6 +242,29 @@ Section MembershipProof.
     simpl. lia.
   Admitted.
 
+  Lemma read_backref_decreases_fuel:
+    forall inp gid n nextinp cont,
+      advance_input_n inp n forward = nextinp ->
+      actions_fuel inp (Areg (Backreference gid) :: cont) > actions_fuel nextinp cont.
+  Proof.
+    intros inp gid n nextinp cont EQ_nextinp.
+    unfold actions_fuel. simpl first_check_input.
+    destruct first_check_input as [inpchk|].
+    - simpl actions_fuel'.
+      pose proof read_backref_decreases_fuel' inp gid n nextinp cont inpchk EQ_nextinp.
+      simpl in H.
+      destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
+      destruct r; try lia.
+      assert ((if (is_strict_suffix nextinp inpchk forward: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy min delta r)). {
+        simpl. destruct (is_strict_suffix nextinp inpchk forward); lia.
+      }
+      lia.
+    - simpl. unfold gt. apply le_lt_S.
+    apply PeanoNat.Nat.add_le_mono_l.
+    assert (remaining_length nextinp forward <= remaining_length inp forward) by admit.
+    apply PeanoNat.Nat.mul_le_mono_nonneg; lia.
+  Admitted.
+
   Lemma actions_fuel_notlast_le:
     forall inp act inpchk,
       first_check_input act = Some inpchk ->
@@ -238,8 +288,8 @@ Section MembershipProof.
     - lia.
     - intros inp act AFR FUEL gm rer. simpl.
       destruct act as [ | [[] | inpcheck | gid] cont ].
-      + discriminate.
-      + apply IHfuel.
+      + (* Done *) discriminate.
+      + (* Epsilon *) apply IHfuel.
         { apply afr_pop_epsilon. auto. }
         unfold actions_fuel in FUEL. unfold actions_fuel.
         simpl in FUEL.
@@ -249,7 +299,7 @@ Section MembershipProof.
           simpl in FUEL.
           destruct is_strict_suffix; lia.
         * lia.
-      + destruct read_char as [[c nextinp]|] eqn:READ; try discriminate.
+      + (* Read *) destruct read_char as [[c nextinp]|] eqn:READ; try discriminate.
         specialize (IHfuel nextinp cont).
         specialize_prove IHfuel. { apply afr_pop_char with (inp := inp) (cd := cd).
         1: auto. admit. }
@@ -355,6 +405,71 @@ Section MembershipProof.
         destruct compute_tree; try contradiction. discriminate.
       + (* No lookarounds *) exfalso. admit.
       + (* Group *)
+        assert (CONT: compute_tree rer (Areg r0 :: Aclose id :: cont) inp (Groups.GroupMap.open (idx inp) id gm) forward fuel <> None). {
+          apply IHfuel.
+          - apply afr_pop_group. auto.
+          - unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
+            destruct first_check_input as [inpchk|] eqn:FSTCHK.
+            + simpl in FUEL.
+              pose proof actions_fuel_notlast_le inp (Areg r0 :: Aclose id :: cont) inpchk FSTCHK.
+              simpl in H. lia.
+            + unfold actions_fuel. setoid_rewrite FSTCHK.
+              unfold gt in *.
+              simpl last_chunk_size in *. lia.
+        }
+        destruct compute_tree; try contradiction. discriminate.
+      + (* Anchor *)
+        destruct anchor_satisfied; try discriminate.
+        assert (CONT: compute_tree rer cont inp gm forward fuel <> None). {
+          apply IHfuel.
+          - apply afr_pop_anchor with (a := a). auto.
+          - unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
+            destruct first_check_input as [inpchk|] eqn:FSTCHK.
+            + simpl in FUEL. pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK. lia.
+            + unfold actions_fuel. rewrite FSTCHK. simpl last_chunk_size in FUEL. lia.
+        }
+        destruct compute_tree; try contradiction. discriminate.
+      + (* Backreference *)
+        destruct read_backref as [[br_str nextinp]| ] eqn:READ; try discriminate.
+        assert (CONT: compute_tree rer cont nextinp gm forward fuel <> None). {
+          apply IHfuel.
+          - eapply afr_pop_backref. + eauto. + admit. (* The backreference read succeeds, hence nextinp = advance_input n inp for some n *)
+          - assert (exists n: nat, advance_input_n inp n forward = nextinp) by admit.
+            destruct H as [n ADV].
+            pose proof read_backref_decreases_fuel inp id n nextinp cont ADV.
+            lia.
+        }
+        destruct compute_tree; try contradiction. discriminate.
+      + (* Check *)
+        destruct is_strict_suffix eqn:SS; try discriminate.
+        assert (CONT: compute_tree rer cont inp gm forward fuel <> None). {
+          apply IHfuel.
+          - apply afr_pop_check with (inpcheck := inpcheck). + apply is_strict_suffix_correct. auto. + auto.
+          - unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
+            cbv match in FUEL.
+            unfold actions_fuel. simpl in FUEL.
+            (* AFR implies that cont must start with a quantifier *)
+            destruct cont as [|a cont].
+            1: exfalso; admit.
+            destruct a as [rsub | ? | ?]. 2,3: exfalso; admit.
+            destruct rsub. 1-4,6-9: exfalso; admit.
+            simpl first_check_input. destruct first_check_input as [inpchknext | ] eqn:SNDCHK.
+            + (* NON-TRIVIAL: is_strict_suffix inp inpcheck forward = true implies
+              is_strict_suffix inp inpchknext forward = true *)
+              replace (is_strict_suffix inp inpchknext forward) with true by admit. rewrite SS in FUEL. lia.
+            + rewrite SS in FUEL. simpl in *. lia. 
+        }
+        destruct compute_tree; try contradiction. discriminate.
+      + assert (CONT: compute_tree rer cont inp (Groups.GroupMap.close (idx inp) gid gm) forward fuel <> None). {
+          apply IHfuel.
+          - apply afr_pop_close with (gid := gid). auto.
+          - unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
+            destruct first_check_input as [inpchk|] eqn:FSTCHK.
+            + pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK. simpl in FUEL. lia.
+            + unfold actions_fuel. rewrite FSTCHK. simpl in *. lia.
+        }
+        destruct compute_tree; try contradiction. discriminate.
+  Admitted.
 
 
 End MembershipProof.
