@@ -1,7 +1,7 @@
 From Linden Require Import Regex Parameters Semantics Chars StrictSuffix
   FunctionalSemantics Tactics.
 From Warblre Require Import Base.
-Require Import List Lia.
+Require Import List Lia Sorted.
 Import ListNotations.
 
 Section MembershipProof.
@@ -80,6 +80,94 @@ Section MembershipProof.
       advance_input_n inp n forward = nextinp ->
       act_from_regex r nextinp l.
 
+
+  (** * In a valid list of actions, all checks are ordered (non-strictly) from more to less restrictive. *)
+
+  Definition input_le (inp1 inp2: input): Prop :=
+    inp1 = inp2 \/ strict_suffix inp1 inp2 forward.
+
+  Lemma input_le_refl: Relations_1.Reflexive input input_le.
+  Proof.
+    unfold Relations_1.Reflexive. intro x. left. reflexivity.
+  Qed.
+
+  Lemma input_le_trans: Relations_1.Transitive input_le.
+  Proof.
+    unfold Relations_1.Transitive. intros x y z XY YZ.
+    destruct XY as [-> | XY]; destruct YZ as [-> | YZ].
+    - apply input_le_refl.
+    - right. auto.
+    - right. auto.
+    - right. eapply strict_suffix_trans; eauto.
+  Qed.
+
+  #[global] Add Relation input input_le
+    reflexivity proved by input_le_refl
+    transitivity proved by input_le_trans
+    as input_le_rel.
+
+  Fixpoint actions_checks (act: actions): list input :=
+    match act with
+    | [] => []
+    | Acheck inpcheck :: q => inpcheck :: actions_checks q
+    | _ :: q => actions_checks q
+    end.
+  
+  Lemma afr_checks_ordered:
+    forall r inp act,
+      act_from_regex r inp act -> Sorted input_le (inp :: actions_checks act).
+  Proof.
+    induction 1; try solve[simpl in IHact_from_regex; auto].
+    - simpl. constructor; constructor.
+    - simpl in IHact_from_regex. constructor.
+      + inversion IHact_from_regex. subst a l0. inversion H3. auto.
+      + apply Sorted_StronglySorted in IHact_from_regex. 2: apply input_le_trans.
+        inversion IHact_from_regex. subst a l0.
+        destruct (actions_checks l) as [ | inpcheck' q]; constructor.
+        inversion H4. subst x l0. inversion H6. auto.
+    - simpl in IHact_from_regex. inversion IHact_from_regex. subst a l0. constructor; auto.
+      destruct actions_checks as [|inpcheck q]; constructor.
+      inversion H4. subst b l0. transitivity inp; auto.
+      right. apply read_suffix. auto.
+    - simpl in *. constructor; auto.
+      constructor. reflexivity.
+    - simpl in *. inversion IHact_from_regex. subst a l0. constructor; auto.
+      destruct actions_checks as [|inpcheck q]; constructor.
+      inversion H4. subst b l0. transitivity inp; auto.
+      apply advance_input_n_suffix with (n := n). congruence.
+  Qed.
+
+
+  (** * In a valid list of actions, a check is always followed by a quantifier. *)
+  Definition checks_fby_quant (act: actions) :=
+    forall (i: nat) (inpcheck: input),
+      List.nth_error act i = Some (Acheck inpcheck) ->
+      exists greedy min delta r,
+        List.nth_error act (S i) = Some (Areg (Quantified greedy min delta r)).
+  
+  Lemma afr_checks_fby_quant:
+    forall r inp act, act_from_regex r inp act -> checks_fby_quant act.
+  Proof.
+    induction 1; unfold checks_fby_quant; try solve[
+      intros i inpcheck0 EQ_CHECK;
+      specialize (IHact_from_regex (S i) inpcheck0 EQ_CHECK);auto
+    ].
+    - intros i inpcheck. destruct i; try discriminate.
+      simpl. destruct i; discriminate.
+    - intros i inpcheck EQ_CHECK. destruct i; try discriminate.
+      specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
+    - intros i inpcheck EQ_CHECK. destruct i; try discriminate.
+      specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
+    - intros i inpcheck EQ_CHECK. destruct i as [ | []]; try discriminate.
+      specialize (IHact_from_regex (S n) inpcheck EQ_CHECK). auto.
+    - (* Quantifier case: more interesting *)
+      admit. (* Either we consider the newly introduced check, in which case this is trivial, or we consider another check, in which case we apply IH *)
+    - admit. (* Apply IH *)
+  Admitted.
+
+
+
+  (* Getting the first check from the list of actions *)
   Fixpoint first_check_input (act: actions): option input :=
     match act with
     | [] => None
@@ -87,6 +175,8 @@ Section MembershipProof.
     | Acheck inp :: _ => Some inp
     end.
 
+  (* Used to compute the size of the last chunk.
+     Paradoxically (maybe), actually computes the size of the *first* chunk of the list of actions passed. *)
   Fixpoint last_chunk_size (act: actions): nat :=
     match act with
     | Acheck _ :: _ => 0 (* should not happen *)
@@ -95,9 +185,10 @@ Section MembershipProof.
     | [] => 0
     end.
 
+  (* Computes the actions fuel after taking the first regex into account, but before arriving to the last chunk. *)
   Fixpoint actions_fuel' (inp: input) (act: actions) (checks_pass: bool) {struct act}: nat :=
     match act with
-    | Acheck _ :: Areg r :: l =>
+    | Acheck _ :: Areg r :: l => (* r must then be a quantifier *)
       match first_check_input l with
       (* Not last chunk *)
       | Some _ => 2 + actions_fuel' inp l checks_pass
@@ -112,6 +203,7 @@ Section MembershipProof.
     | [] => 0 (* should not happen *)
     end.
   
+  (* The actual actions fuel, which starts by treating the first regex specially if there are at least two chunks *)
   Definition actions_fuel (inp: input) (act: actions): nat :=
     match first_check_input act with
     (* Only one (last) chunk: bonus is one *)
@@ -145,7 +237,7 @@ Section MembershipProof.
       destruct cont as [ | [r | ? | ?] l]; simpl; try lia.
       destruct first_check_input.
       + simpl in IHcont. lia.
-      + assert (remaining_length inp forward > remaining_length nextinp forward) by admit.
+      + assert (remaining_length inp forward > remaining_length nextinp forward) by admit. (* Follows from SS *)
         pose proof PeanoNat.Nat.mul_le_mono_r ((if bonus then 1 else 0) + remaining_length nextinp forward) ((if bonus then 1 else 0) + remaining_length inp forward) (regex_size r + last_chunk_size l).
         specialize_prove H0 by lia. lia.
   Admitted.
@@ -173,7 +265,7 @@ Section MembershipProof.
       actions_fuel' nextinp cont (is_strict_suffix nextinp inpchk forward).
   Proof.
     intros inp cd nextinp cont inpchk ADV. simpl.
-    assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit.
+    pose proof is_strict_suffix_incr inp nextinp inpchk forward ADV as H.
     (* assert (SS: strict_suffix nextinp inp forward) by admit. *)
     set (bonus := is_strict_suffix inp inpchk forward) in *.
     set (bonus' := is_strict_suffix nextinp inpchk forward) in *.
@@ -186,7 +278,7 @@ Section MembershipProof.
       + unfold gt. apply le_lt_S.
         apply -> PeanoNat.Nat.succ_le_mono.
         apply PeanoNat.Nat.mul_le_mono_r.
-        assert (remaining_length nextinp forward < remaining_length inp forward) by admit.
+        assert (remaining_length nextinp forward < remaining_length inp forward) by admit. (* Follows from ADV *)
         destruct bonus; destruct bonus'; simpl in H; try discriminate; lia.
   Admitted.
 
@@ -200,7 +292,7 @@ Section MembershipProof.
     intros inp gid n nextinp cont inpchk ADV. simpl.
     destruct (Chars.input_eq_dec inp nextinp).
     { rewrite <- e. lia. }
-    assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit.
+    assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit. (* Follows from ADV *)
     (* assert (SS: strict_suffix nextinp inp forward) by admit. *)
     set (bonus := is_strict_suffix inp inpchk forward) in *.
     set (bonus' := is_strict_suffix nextinp inpchk forward) in *.
@@ -213,7 +305,7 @@ Section MembershipProof.
       + unfold gt. apply le_lt_S.
         apply -> PeanoNat.Nat.succ_le_mono.
         apply PeanoNat.Nat.mul_le_mono_r.
-        assert (remaining_length nextinp forward < remaining_length inp forward) by admit.
+        assert (remaining_length nextinp forward < remaining_length inp forward) by admit. (* Follows from ADV and n0 : inp <> nextinp *)
         destruct bonus; destruct bonus'; simpl in H; try discriminate; lia.
   Admitted.
 
@@ -238,7 +330,7 @@ Section MembershipProof.
       lia.
     - simpl. unfold gt. apply le_lt_S.
     apply PeanoNat.Nat.add_le_mono_l.
-    replace (remaining_length inp forward) with (S (remaining_length nextinp forward)) by admit.
+    replace (remaining_length inp forward) with (S (remaining_length nextinp forward)) by admit. (* Follows from EQ_nextinp *)
     simpl. lia.
   Admitted.
 
@@ -260,9 +352,9 @@ Section MembershipProof.
       }
       lia.
     - simpl. unfold gt. apply le_lt_S.
-    apply PeanoNat.Nat.add_le_mono_l.
-    assert (remaining_length nextinp forward <= remaining_length inp forward) by admit.
-    apply PeanoNat.Nat.mul_le_mono_nonneg; lia.
+      apply PeanoNat.Nat.add_le_mono_l.
+      assert (remaining_length nextinp forward <= remaining_length inp forward) by admit. (* Follows from EQ_nextinp *)
+      apply PeanoNat.Nat.mul_le_mono_nonneg; lia.
   Admitted.
 
   Lemma actions_fuel_notlast_le:
@@ -302,7 +394,7 @@ Section MembershipProof.
       + (* Read *) destruct read_char as [[c nextinp]|] eqn:READ; try discriminate.
         specialize (IHfuel nextinp cont).
         specialize_prove IHfuel. { apply afr_pop_char with (inp := inp) (cd := cd).
-        1: auto. admit. }
+        1: auto. eapply read_char_success_advance; eauto. }
         specialize_prove IHfuel. {
           pose proof read_decreases_fuel inp cd nextinp cont.
           specialize_prove H. { eapply read_char_success_advance; eauto. }
@@ -369,8 +461,8 @@ Section MembershipProof.
             apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
           }
           lia.
-      + replace min with 0 in * by admit.
-        replace delta with +∞ in * by admit.
+      + replace min with 0 in * by admit. (* Follows from SUPP_REGEX and AFR *)
+        replace delta with +∞ in * by admit. (* Follows from SUPP_REGEX and AFR *)
         simpl noi_pred.
         assert (IHiter: compute_tree rer (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 +∞ r1) :: cont) inp (Groups.GroupMap.reset (def_groups r1) gm) forward fuel <> None). {
           apply IHfuel.
