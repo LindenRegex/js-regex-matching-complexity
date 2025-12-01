@@ -177,12 +177,19 @@ Section MembershipProof.
 
   (* Used to compute the size of the last chunk.
      Paradoxically (maybe), actually computes the size of the *first* chunk of the list of actions passed. *)
-  Fixpoint last_chunk_size (act: actions): nat :=
+  Fixpoint chunk_size (act: actions): nat :=
     match act with
-    | Acheck _ :: _ => 0 (* should not happen *)
-    | Aclose gid :: l => 1 + last_chunk_size l
-    | Areg r :: l => regex_size r + last_chunk_size l
+    | Acheck _ :: _ => 0
+    | Aclose gid :: l => 1 + chunk_size l
+    | Areg r :: l => regex_size r + chunk_size l
     | [] => 0
+    end.
+  
+  Fixpoint last_chunk_size (act: actions): nat :=
+    match first_check_input act, act with
+    | Some _, _::q => last_chunk_size q
+    | Some _, [] => 0 (* impossible *)
+    | None, _ => chunk_size act
     end.
 
   (* Computes the actions fuel after taking the first regex into account, but before arriving to the last chunk. *)
@@ -194,8 +201,9 @@ Section MembershipProof.
       | Some _ => 2 + actions_fuel' inp l checks_pass
       (* Last chunk *)
       | None =>
-          let bonus := if checks_pass then 1 else 0 in
-          1 + (bonus + remaining_length inp forward) * last_chunk_size (Areg r :: l)
+          (* let bonus := if checks_pass then 1 else 0 in
+          1 + (bonus + remaining_length inp forward) * last_chunk_size (Areg r :: l) *)
+          0
       end
     | Acheck _ :: _ => 0 (* should not happen *)
     | Areg r :: l => regex_size r + actions_fuel' inp l checks_pass
@@ -207,15 +215,17 @@ Section MembershipProof.
   Definition actions_fuel (inp: input) (act: actions): nat :=
     match first_check_input act with
     (* Only one (last) chunk: bonus is one *)
-    | None => (1 + remaining_length inp forward) * last_chunk_size act
+    | None => (1 + remaining_length inp forward) * chunk_size act
     (* At least two chunks *)
     | Some inpchk =>
         let b := is_strict_suffix inp inpchk forward in
-        match act with
+        let beginning_fuel := match act with
         | Areg (Quantified _ _ _ r) :: l =>
           (if b then 1 else 3 + regex_size r) + actions_fuel' inp l b
         | _ => actions_fuel' inp act b
-        end
+        end in
+        let last := ((if b then 1 else 0) + remaining_length inp forward) * last_chunk_size act in
+        beginning_fuel + last
     end.
 
 
@@ -253,9 +263,10 @@ Section MembershipProof.
       destruct cont as [|[r | ? | ?] l]; simpl; try lia.
       destruct first_check_input.
       + simpl in IHcont. lia.
-      + apply -> PeanoNat.Nat.succ_le_mono.
+      + (*apply -> PeanoNat.Nat.succ_le_mono.
         apply PeanoNat.Nat.mul_le_mono_r, PeanoNat.Nat.add_le_mono_r.
-        destruct bonus; destruct bonus'; simpl in LE; try discriminate; lia.
+        destruct bonus; destruct bonus'; simpl in LE; try discriminate; lia.*)
+        reflexivity.
   Qed.
 
   Lemma read_decreases_fuel':
@@ -275,12 +286,13 @@ Section MembershipProof.
       destruct cont as [|[r | ? | ?] l]; simpl; try lia.
       destruct first_check_input.
       + simpl in IHcont. lia.
-      + unfold gt. apply le_lt_S.
+      + (*unfold gt. apply le_lt_S.
         apply -> PeanoNat.Nat.succ_le_mono.
         apply PeanoNat.Nat.mul_le_mono_r.
         assert (remaining_length nextinp forward < remaining_length inp forward) by admit. (* Follows from ADV *)
-        destruct bonus; destruct bonus'; simpl in H; try discriminate; lia.
-  Admitted.
+        destruct bonus; destruct bonus'; simpl in H; try discriminate; lia.*)
+        lia.
+  Qed.
 
   (* Similar to read_decreases_fuel' *)
   Lemma read_backref_decreases_fuel':
@@ -302,11 +314,12 @@ Section MembershipProof.
       destruct cont as [|[r | ? | ?] l]; simpl; try lia.
       destruct first_check_input.
       + simpl in IHcont. lia.
-      + unfold gt. apply le_lt_S.
+      + (* unfold gt. apply le_lt_S.
         apply -> PeanoNat.Nat.succ_le_mono.
         apply PeanoNat.Nat.mul_le_mono_r.
         assert (remaining_length nextinp forward < remaining_length inp forward) by admit. (* Follows from ADV and n0 : inp <> nextinp *)
-        destruct bonus; destruct bonus'; simpl in H; try discriminate; lia.
+        destruct bonus; destruct bonus'; simpl in H; try discriminate; lia. *)
+        lia.
   Admitted.
 
 
@@ -318,10 +331,22 @@ Section MembershipProof.
   Proof.
     intros inp cd nextinp cont EQ_nextinp.
     unfold actions_fuel. simpl first_check_input.
-    destruct first_check_input as [inpchk|].
+    destruct first_check_input as [inpchk|] eqn:FSTCHK.
     - simpl actions_fuel'.
       pose proof read_decreases_fuel' inp cd nextinp cont inpchk EQ_nextinp.
       simpl in H.
+      replace (last_chunk_size (Areg _ :: cont)) with (last_chunk_size cont).
+      2: { unfold last_chunk_size at 2. simpl first_check_input.
+        rewrite FSTCHK. reflexivity. }
+      assert (((if is_strict_suffix inp inpchk forward then 1 else 0) +
+remaining_length inp forward) * last_chunk_size cont >= ((if is_strict_suffix nextinp inpchk forward then 1 else 0) +
+remaining_length nextinp forward) * last_chunk_size cont). {
+        unfold ge.
+        apply PeanoNat.Nat.mul_le_mono_r.
+        replace (remaining_length inp forward) with (S (remaining_length nextinp forward)) by admit.
+        pose proof is_strict_suffix_incr inp nextinp inpchk forward EQ_nextinp.
+        destruct is_strict_suffix; destruct is_strict_suffix; try discriminate; lia.
+      }
       destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
       destruct r; try lia.
       assert ((if (is_strict_suffix nextinp inpchk forward: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy min delta r)). {
@@ -329,9 +354,9 @@ Section MembershipProof.
       }
       lia.
     - simpl. unfold gt. apply le_lt_S.
-    apply PeanoNat.Nat.add_le_mono_l.
-    replace (remaining_length inp forward) with (S (remaining_length nextinp forward)) by admit. (* Follows from EQ_nextinp *)
-    simpl. lia.
+      apply PeanoNat.Nat.add_le_mono_l.
+      replace (remaining_length inp forward) with (S (remaining_length nextinp forward)) by admit. (* Follows from EQ_nextinp *)
+      simpl. lia.
   Admitted.
 
   Lemma read_backref_decreases_fuel:
@@ -341,10 +366,22 @@ Section MembershipProof.
   Proof.
     intros inp gid n nextinp cont EQ_nextinp.
     unfold actions_fuel. simpl first_check_input.
-    destruct first_check_input as [inpchk|].
+    destruct first_check_input as [inpchk|] eqn:FSTCHK.
     - simpl actions_fuel'.
       pose proof read_backref_decreases_fuel' inp gid n nextinp cont inpchk EQ_nextinp.
       simpl in H.
+      replace (last_chunk_size (Areg _ :: cont)) with (last_chunk_size cont).
+      2: { simpl.  rewrite FSTCHK. reflexivity. }
+      assert (((if is_strict_suffix inp inpchk forward then 1 else 0) +
+remaining_length inp forward) * last_chunk_size cont >= ((if is_strict_suffix nextinp inpchk forward then 1 else 0) +
+remaining_length nextinp forward) * last_chunk_size cont). {
+        apply PeanoNat.Nat.mul_le_mono_r.
+        destruct (Chars.input_eq_dec inp nextinp).
+        { rewrite <- e. reflexivity. }
+        assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit. (* Follows from EQ_nextinp *)
+        assert (remaining_length nextinp forward < remaining_length inp forward) by admit. (* Follows from n0: inp <> nextinp and EQ_nextinp *)
+        destruct is_strict_suffix; destruct is_strict_suffix; try discriminate; lia.
+      }
       destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
       destruct r; try lia.
       assert ((if (is_strict_suffix nextinp inpchk forward: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy min delta r)). {
@@ -360,7 +397,9 @@ Section MembershipProof.
   Lemma actions_fuel_notlast_le:
     forall inp act inpchk,
       first_check_input act = Some inpchk ->
-      actions_fuel inp act <= actions_fuel' inp act (is_strict_suffix inp inpchk forward).
+      actions_fuel inp act <=
+        actions_fuel' inp act (is_strict_suffix inp inpchk forward) +
+        ((if is_strict_suffix inp inpchk forward then 1 else 0) + remaining_length inp forward) * last_chunk_size act.
   Proof.
     intros inp act inpchk FSTCHK. unfold actions_fuel.
     rewrite FSTCHK.
@@ -385,10 +424,11 @@ Section MembershipProof.
         { apply afr_pop_epsilon. auto. }
         unfold actions_fuel in FUEL. unfold actions_fuel.
         simpl in FUEL.
-        destruct first_check_input as [inpchk|].
+        destruct first_check_input as [inpchk|] eqn:FSTCHK.
         * destruct cont as [|[] cont]; try lia.
           destruct r0; try lia.
-          simpl in FUEL.
+          simpl in FUEL, FSTCHK. simpl.
+          rewrite FSTCHK in FUEL. rewrite FSTCHK.
           destruct is_strict_suffix; lia.
         * lia.
       + (* Read *) destruct read_char as [[c nextinp]|] eqn:READ; try discriminate.
@@ -410,14 +450,14 @@ Section MembershipProof.
             - eapply afr_pop_disj_l; eauto.
             - pose proof actions_fuel_notlast_le inp (Areg r1 :: cont) inpchk.
               specialize (H FSTCHK).
-              simpl in H. lia.
+              simpl in H. rewrite FSTCHK in FUEL, H. lia.
           }
           assert (IH2: compute_tree rer (Areg r2 :: cont) inp gm forward fuel <> None). {
             apply IHfuel.
             - eapply afr_pop_disj_r; eauto.
             - pose proof actions_fuel_notlast_le inp (Areg r2 :: cont) inpchk.
               specialize (H FSTCHK).
-              simpl in H. lia.
+              simpl in H. rewrite FSTCHK in FUEL, H. lia.
           }
           destruct (compute_tree rer (Areg r1 :: cont) inp gm forward fuel); try contradiction.
           destruct compute_tree; try contradiction. discriminate.
@@ -426,9 +466,9 @@ Section MembershipProof.
             apply IHfuel.
             - eapply afr_pop_disj_l; eauto.
             - unfold actions_fuel. simpl first_check_input. rewrite FSTCHK.
-              simpl last_chunk_size in *.
+              simpl chunk_size in *.
               unfold gt in FUEL. unfold gt.
-              assert ((1 + remaining_length inp forward) * (regex_size r1 + last_chunk_size cont) < (1 + remaining_length inp forward) * S (regex_size r1 + regex_size r2 + last_chunk_size cont)). {
+              assert ((1 + remaining_length inp forward) * (regex_size r1 + chunk_size cont) < (1 + remaining_length inp forward) * S (regex_size r1 + regex_size r2 + chunk_size cont)). {
                 apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
               }
               lia.
@@ -437,9 +477,9 @@ Section MembershipProof.
             apply IHfuel.
             - eapply afr_pop_disj_r; eauto.
             - unfold actions_fuel. simpl first_check_input. rewrite FSTCHK.
-              simpl last_chunk_size in *.
+              simpl chunk_size in *.
               unfold gt in FUEL. unfold gt.
-              assert ((1 + remaining_length inp forward) * (regex_size r1 + last_chunk_size cont) < (1 + remaining_length inp forward) * S (regex_size r1 + regex_size r2 + last_chunk_size cont)). {
+              assert ((1 + remaining_length inp forward) * (regex_size r1 + chunk_size cont) < (1 + remaining_length inp forward) * S (regex_size r1 + regex_size r2 + chunk_size cont)). {
                 apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
               }
               lia.
@@ -451,13 +491,13 @@ Section MembershipProof.
           apply IHfuel.
           1: apply afr_pop_sequence; auto.
           pose proof actions_fuel_notlast_le inp (Areg r1 :: Areg r2 :: cont) inpchk FSTCHK.
-          simpl in H. lia.
+          simpl in H. simpl first_check_input in FSTCHK. rewrite FSTCHK in FUEL, H. lia.
         * simpl last_chunk_size in FUEL.
           apply IHfuel. 1: apply afr_pop_sequence; auto.
           unfold actions_fuel. setoid_rewrite FSTCHK.
-          simpl last_chunk_size.
+          simpl chunk_size in *.
           unfold gt in FUEL. unfold gt.
-          assert ((1 + remaining_length inp forward) * (regex_size r1 + (regex_size r2 + last_chunk_size cont)) < (1 + remaining_length inp forward) * S (regex_size r1 + regex_size r2 + last_chunk_size cont)). {
+          assert ((1 + remaining_length inp forward) * (regex_size r1 + (regex_size r2 + chunk_size cont)) < (1 + remaining_length inp forward) * S (regex_size r1 + regex_size r2 + chunk_size cont)). {
             apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
           }
           lia.
@@ -472,13 +512,13 @@ Section MembershipProof.
             destruct (match r1 with Quantified _ _ _ _ => true | _ => false end) eqn:R1_QUANT.
             + destruct r1; try discriminate. simpl actions_fuel'.
               unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
-              destruct first_check_input as [inpchk | ].
+              destruct first_check_input as [inpchk | ] eqn:FSTCHK.
               * admit. (* HARD *)
-              * simpl in FUEL. lia.
+              * simpl in FUEL. simpl. rewrite FSTCHK. lia.
             + replace (match r1 with | Quantified _ _ _ r0 => _ | _ => _ end) with (actions_fuel' inp (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 +∞ r1) :: cont) false).
               2: { destruct r1; try discriminate; reflexivity. }
               unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
-              simpl. destruct first_check_input as [inpchk | ].
+              simpl. destruct first_check_input as [inpchk | ] eqn:FSTCHK.
               * admit. (* HARD *)
               * simpl in *. lia.
         }
@@ -490,6 +530,7 @@ Section MembershipProof.
             destruct first_check_input as [inpchk | ] eqn:FSTCHK.
             + pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK.
               assert ((if is_strict_suffix inp inpchk forward then 1 else 3 + regex_size r1) >= 1). { destruct (is_strict_suffix inp inpchk forward); lia. }
+              simpl in FUEL. rewrite FSTCHK in FUEL.
               lia.
             + simpl in FUEL. unfold actions_fuel. rewrite FSTCHK. simpl. lia.
         }
