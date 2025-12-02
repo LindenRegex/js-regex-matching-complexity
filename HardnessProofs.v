@@ -108,14 +108,20 @@ Section Proofs.
   Qed.
 
 
+  (* Lemma specifying the behavior of the regex checking a literal (either \i or \i x).*)
   Lemma check_literal_regex_spec:
+    (* Let lit be a well-formed literal and gm be a valid group map. *)
     forall (i: nat) (lit: literal) (inp: input) (gm: group_map),
       i < m -> wf_literal n lit ->
       inp = inp_of_idx (2*(n+i)) -> wf_gm gm ->
-        forall t, is_tree rer [Areg (check_literal_regex x_char lit)] inp gm forward t ->
-          forall lflist, lflist = tree_leaves t gm inp forward ->
-            (gm_satisfies_lit gm lit = true -> lflist = [(inp_of_idx (2*(n+i)+1), gm)]) /\
-            (gm_satisfies_lit gm lit = false -> lflist = [] \/ lflist = [(inp, gm)]).
+      (* Let t be the tree of r_lit with input inp(2*(n+i)) for some 0 ≤ i < m and group map gm. *)
+      forall t, is_tree rer [Areg (check_literal_regex x_char lit)] inp gm forward t ->
+        forall lflist, lflist = tree_leaves t gm inp forward ->
+          (* Then: *)
+          (* - if gm satisfies lit, then t has exactly one leaf, (inp(2*(n+i)+1), gm), *)
+          (gm_satisfies_lit gm lit = true -> lflist = [(inp_of_idx (2*(n+i)+1), gm)]) /\
+          (* - otherwise, t has either no leaf or exactly one leaf, (inp(2*(n+i)), gm). *)
+          (gm_satisfies_lit gm lit = false -> lflist = [] \/ lflist = [(inp, gm)]).
   Proof.
     intros i lit inp gm INB_i WF_lit EQ_inp WF_GM t TREE lflist EQ_lflist.
     destruct lit as [v|v]; simpl in *.
@@ -169,13 +175,19 @@ Section Proofs.
         left. reflexivity.
   Admitted.
 
+  (* Lemma specifying the behavior of the regex checking the validity of a clause, without the separator. *)
   Lemma check_clause_regex_aux_spec:
+    (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map and 0 <= i < m. *)
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
       i < m -> wf_clause n c ->
       inp = inp_of_idx (2*(n+i)) -> wf_gm gm ->
+      (* Let t be the tree of r with input inp(2*(n+i)) and group map gm. *)
       forall t, is_tree rer [Areg (check_clause_regex_aux x_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
+          (* Then: *)
+          (* - all the leaves of lf are either (inp(2*(n+i)+1), gm) or (inp(2*(n+i)), gm), *)
           (forall lf, In lf lflist -> lf = (inp_of_idx (2*(n+i)+1), gm) \/ lf = (inp, gm)) /\
+          (* - lf contains a leaf (inp(2*(n+i)+1), gm) iff gm satisfies c. *)
           (In (inp_of_idx (2*(n+i)+1), gm) lflist <-> gm_satisfies_clause gm c = true).
   Proof.
     induction c as [|l c IH]; intros inp gm INB_i WF_c EQ_inp WF_GM t TREE lflist EQ_lflist.
@@ -232,13 +244,19 @@ Section Proofs.
         * firstorder.
   Qed.
 
+  (* Lemma specifying the behavior of the regex that checks a clause. *)
   Lemma check_clause_regex_spec:
+    (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map, and 0 <= i < m. *)
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
       i < m -> wf_clause n c ->
       inp = inp_of_idx (2*(n+i)) -> wf_gm gm ->
+      (* Let t be the tree of r on input inp(2*(n+i)) and group map gm. *)
       forall t, is_tree rer [Areg (check_clause_regex x_char semicolon_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
+          (* Then: *)
+          (* - all the leaves of t, if any, are equal to (inp(2*(n+i+1)), gm), *)
           (forall lf, In lf lflist -> lf = (inp_of_idx (2*(n+i+1)), gm)) /\
+          (* - t has (at least) a leaf iff gm satisfies c. *)
           (lflist <> nil <-> gm_satisfies_clause gm c = true).
   Proof.
     intros i c inp gm INB_i WF_c EQ_inp WF_GM t TREE lflist EQ_lflist.
@@ -293,12 +311,18 @@ Section Proofs.
         * split; [auto|discriminate].
   Qed.
 
+  (* Lemma specifying the behavior of the regex checking the conjunction of clauses. *)
   Lemma check_conjunct_regex_spec:
+    (* Let r be the regex checking the validity of the conjunction of clauses, and gm a valid group map. *)
     forall (inp: input) (gm: group_map),
       inp = inp_of_idx (2*n) -> wf_gm gm ->
+      (* Let t be the tree of r on input inp(2*n) and group map gm. *)
       forall t, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev clauses))] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
+          (* Then: *)
+          (* - all the leaves of t (if any) are equal to (inp(2*(n+m)), gm), *)
           (forall lf, In lf lflist -> lf = (inp_of_idx (2*(n+m)), gm)) /\
+          (* - t has (at least) a leaf iff gm satisfies the conjunction of clauses. *)
           (lflist <> nil <-> gm_satisfies_conjunct gm clauses = true).
   Proof.
     intros inp gm EQ_inp WF_GM. unfold m. fold clauses.
@@ -408,13 +432,19 @@ Section Proofs.
           -- destruct SPEC_check_x as [_ SPEC_check_x]. tauto.
   Qed.
 
+  (* Lemma specifying the behavior of the regex that defines a variable. *)
   Lemma def_var_regex_spec:
+    (* Let 0 < i <= n be a variable and r be the regex that defines variable i, and gm a group map (not necessarily valid). *)
     forall (i: nat) (inp: input),
       i <> 0 -> i <= n -> inp = inp_of_idx (2*(i-1)) ->
       forall (t: tree) (gm: group_map),
+        (* Let t be the tree of r on input inp(2*(i-1)) and group map gm. *)
         is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward t ->
+        (* Then t has two leaves: *)
         tree_leaves t gm inp forward = [
+          (* - (inp(2*i), gm.add(i, range(i))), *)
           (inp_of_idx (2*i), GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm);
+          (* - (inp(2*i), gm). *)
           (inp_of_idx (2*i), gm)].
   Proof.
     intros i inp i_NEQ_0 i_INB EQ_inp t gm TREE.
