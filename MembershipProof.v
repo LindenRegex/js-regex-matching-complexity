@@ -203,7 +203,7 @@ Section MembershipProof.
       | None =>
           (* let bonus := if checks_pass then 1 else 0 in
           1 + (bonus + remaining_length inp forward) * last_chunk_size (Areg r :: l) *)
-          0
+          1
       end
     | Acheck _ :: _ => 0 (* should not happen *)
     | Areg r :: l => regex_size r + actions_fuel' inp l checks_pass
@@ -530,7 +530,7 @@ remaining_length nextinp forward) * last_chunk_size cont). {
             destruct first_check_input as [inpchk | ] eqn:FSTCHK.
             + pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK.
               assert ((if is_strict_suffix inp inpchk forward then 1 else 3 + regex_size r1) >= 1). { destruct (is_strict_suffix inp inpchk forward); lia. }
-              simpl in FUEL. rewrite FSTCHK in FUEL.
+              simpl last_chunk_size in FUEL. rewrite FSTCHK in FUEL.
               lia.
             + simpl in FUEL. unfold actions_fuel. rewrite FSTCHK. simpl. lia.
         }
@@ -545,10 +545,10 @@ remaining_length nextinp forward) * last_chunk_size cont). {
             destruct first_check_input as [inpchk|] eqn:FSTCHK.
             + simpl in FUEL.
               pose proof actions_fuel_notlast_le inp (Areg r0 :: Aclose id :: cont) inpchk FSTCHK.
-              simpl in H. lia.
+              simpl in H. rewrite FSTCHK in FUEL, H. lia.
             + unfold actions_fuel. setoid_rewrite FSTCHK.
               unfold gt in *.
-              simpl last_chunk_size in *. lia.
+              simpl chunk_size in *. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
       + (* Anchor *)
@@ -558,8 +558,8 @@ remaining_length nextinp forward) * last_chunk_size cont). {
           - apply afr_pop_anchor with (a := a). auto.
           - unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
             destruct first_check_input as [inpchk|] eqn:FSTCHK.
-            + simpl in FUEL. pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK. lia.
-            + unfold actions_fuel. rewrite FSTCHK. simpl last_chunk_size in FUEL. lia.
+            + simpl in FUEL. rewrite FSTCHK in FUEL. pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK. lia.
+            + unfold actions_fuel. rewrite FSTCHK. simpl chunk_size in FUEL. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
       + (* Backreference *)
@@ -590,7 +590,7 @@ remaining_length nextinp forward) * last_chunk_size cont). {
             + (* NON-TRIVIAL: is_strict_suffix inp inpcheck forward = true implies
               is_strict_suffix inp inpchknext forward = true *)
               replace (is_strict_suffix inp inpchknext forward) with true by admit. rewrite SS in FUEL. lia.
-            + rewrite SS in FUEL. simpl in *. lia. 
+            + rewrite SS in FUEL. simpl in *. rewrite SNDCHK in FUEL. simpl in *. lia. 
         }
         destruct compute_tree; try contradiction. discriminate.
       + assert (CONT: compute_tree rer cont inp (Groups.GroupMap.close (idx inp) gid gm) forward fuel <> None). {
@@ -598,7 +598,7 @@ remaining_length nextinp forward) * last_chunk_size cont). {
           - apply afr_pop_close with (gid := gid). auto.
           - unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
             destruct first_check_input as [inpchk|] eqn:FSTCHK.
-            + pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK. simpl in FUEL. lia.
+            + pose proof actions_fuel_notlast_le inp cont inpchk FSTCHK. simpl in FUEL. rewrite FSTCHK in FUEL. lia.
             + unfold actions_fuel. rewrite FSTCHK. simpl in *. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
