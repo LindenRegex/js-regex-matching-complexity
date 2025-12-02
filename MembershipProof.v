@@ -175,6 +175,14 @@ Section MembershipProof.
     | Acheck inp :: _ => Some inp
     end.
 
+  (* Getting the next regex that follows a check action. *)
+  Fixpoint next_check_regex (act: actions): option regex :=
+    match act with
+    | Acheck _ :: Areg r :: _ => Some r
+    | Acheck _ :: _ (* shouldn't happen*) | [] => None
+    | Aclose _ :: q | Areg _ :: q => next_check_regex q
+    end.
+
   (* Used to compute the size of the last chunk.
      Paradoxically (maybe), actually computes the size of the *first* chunk of the list of actions passed. *)
   Fixpoint chunk_size (act: actions): nat :=
@@ -228,6 +236,45 @@ Section MembershipProof.
         beginning_fuel + last
     end.
 
+
+
+  (* Invariant: the size of every chunk is less than the size of the next check regex, if any *)
+  Lemma chunk_size_lt:
+    forall r inp act, act_from_regex r inp act ->
+      forall i acttail, acttail = List.skipn i act ->
+        forall rchk, next_check_regex acttail = Some rchk ->
+          chunk_size acttail < regex_size rchk.
+  Proof.
+    induction 1; try solve[intros i acttail EQ_acttail; apply IHact_from_regex with (i := S i); auto].
+    - intros i acttail -> rchk EQ_rchk. destruct i as [|[|i]]; simpl in *; discriminate.
+    - intros i acttail EQ_acttail. destruct i as [|i]; simpl in *.
+      + specialize (IHact_from_regex 0 _ eq_refl). subst acttail. simpl in *.
+        intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
+      + apply IHact_from_regex with (i := S i). auto.
+    - intros i acttail EQ_acttail. destruct i as [|i]; simpl in *.
+      + specialize (IHact_from_regex 0 _ eq_refl). subst acttail. simpl in *.
+        intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
+      + apply IHact_from_regex with (i := S i). auto.
+    - intros i acttail EQ_acttail. destruct i as [|[|i]]; simpl in *.
+      + specialize (IHact_from_regex 0 _ eq_refl). subst acttail. simpl in *.
+        intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
+      + specialize (IHact_from_regex 0 _ eq_refl). subst acttail. simpl in *.
+        intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
+      + apply IHact_from_regex with (i := S i). auto.
+    - intros i acttail EQ_acttail. destruct i as [|[|i]]; simpl in *.
+      + subst acttail. simpl. intros rchk H0. injection H0 as <-. simpl. lia.
+      + subst acttail. simpl. intros rchk H0. injection H0 as <-. simpl. lia.
+      + specialize (IHact_from_regex i _ eq_refl). subst acttail. simpl in *.
+        destruct i as [|i]; simpl in *; intros rchk EQ_rchk; specialize (IHact_from_regex rchk EQ_rchk); lia.
+    - intros i acttail EQ_acttail. destruct i as [|[|i]]; simpl in *.
+      + subst acttail. specialize (IHact_from_regex 0 _ eq_refl).
+        simpl in *. intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
+      + subst acttail. specialize (IHact_from_regex 0 _ eq_refl).
+        simpl in *. intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
+      + specialize (IHact_from_regex (S i) _ eq_refl). simpl in *. subst acttail.
+        auto.
+  Qed.
+  
 
 
   Lemma is_strict_suffix_incr:
