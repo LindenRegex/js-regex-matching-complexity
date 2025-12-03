@@ -586,9 +586,45 @@ Section Proofs.
         rewrite orb_true_iff. split; [|split].
         * setoid_rewrite <- Heqgmpos. tauto.
         * intros inp' gm'. rewrite in_app_iff. intros [INl | INr].
-          -- admit.
-          -- admit.
-        * admit.
+          -- destruct IHpos as [_ [IHpos _]]. intros j ? ?. transitivity (GroupMap.find j gmpos).
+             ++ rewrite Heqgmpos. unfold GroupMap.find, GroupMap.add.
+                symmetry. apply GroupMap.Facts.add_neq_o. lia.
+             ++ apply IHpos with (inp' := inp'); auto.
+          -- destruct IHneg as [_ [IHneg _]]. intros j ? ?.
+             apply IHneg with (inp' := inp'); auto.
+        * simpl hd_error. intros _.
+          rewrite first_tree_leaf, <- H.
+          subst lmapped.
+          destruct ly as [|[inpres gmres] ly].
+          -- (* No result on left: prove False <-> False *)
+             transitivity False.
+             ++ split; try contradiction. simpl. rewrite app_nil_r.
+                intros [inpres [gmres [? ?]]].
+                destruct IHneg as [_ [IHneg _]].
+                specialize (IHneg inpres gmres).
+                specialize_prove IHneg. {
+                  destruct ly0; try discriminate. injection H0 as ->. left. reflexivity.
+                }
+                specialize (IHneg i).
+                do 2 specialize_prove IHneg by lia.
+                rewrite <- IHneg in H1.
+                rewrite UNDEF in H1 by lia. discriminate.
+             ++ split; try contradiction. destruct IHpos as [IHpos _].
+                intro. setoid_rewrite <- Heqgmpos in H0.
+                replace (i+1) with (S i) in H0 by lia.
+                rewrite <- IHpos in H0. contradiction.
+          -- (* A result on left: prove True <-> True *)
+             transitivity True; split; intro; try solve[split].
+             ++ simpl. exists inpres. exists gmres.
+                split; try reflexivity.
+                destruct IHpos as [_ [IHpos _]].
+                specialize (IHpos inpres gmres ltac:(left; reflexivity)).
+                specialize (IHpos i ltac:(lia) ltac:(lia)).
+                rewrite <- IHpos. rewrite Heqgmpos.
+                unfold GroupMap.find, GroupMap.add.
+                rewrite GroupMap.Facts.add_eq_o by reflexivity. reflexivity.
+             ++ setoid_rewrite <- Heqgmpos. destruct IHpos as [IHpos _].
+                replace (i+1) with (S i) by lia. apply IHpos. discriminate.
 
       + (* Not exists *)
         inversion TREE.
