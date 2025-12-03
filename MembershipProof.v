@@ -193,6 +193,28 @@ Section MembershipProof.
     - admit.
   Admitted.
 
+  Lemma first_check_input_nth_error2:
+    forall act: actions,
+      (exists inpcheck, first_check_input act = Some inpcheck) <->
+      (exists i inpcheck', nth_error act i = Some (Acheck inpcheck')).
+  Proof.
+    intro act.
+    transitivity (exists inpcheck': input, In (Acheck inpcheck') act).
+    - induction act.
+      + simpl. firstorder. discriminate.
+      + simpl. destruct a.
+        * firstorder. discriminate.
+        * split.
+          -- intros _. exists i. left. reflexivity.
+          -- intros _. exists i. reflexivity.
+        * firstorder. discriminate. 
+    - split.
+      + intros [inpcheck' IN]. apply In_nth_error in IN.
+        destruct IN as [i IN]. exists i. exists inpcheck'. auto.
+      + intros [i [inpcheck' NTH]].
+        exists inpcheck'. apply nth_error_In with (n := i). auto.
+  Qed.
+
   (* Getting the next regex that follows a check action. *)
   Fixpoint next_check_regex (act: actions): option regex :=
     match act with
@@ -200,6 +222,14 @@ Section MembershipProof.
     | Acheck _ :: _ (* shouldn't happen*) | [] => None
     | Aclose _ :: q | Areg _ :: q => next_check_regex q
     end.
+
+  Lemma next_check_regex_nth_error:
+    forall (i: nat) (act: actions) (inpchk: input) (rchk: regex),
+      nth_error act i = Some (Acheck inpchk) ->
+      (forall j, j < i -> ~is_some_check (nth_error act j)) ->
+      nth_error act (S i) = Some (Areg rchk) ->
+      next_check_regex act = Some rchk.
+  Admitted.
 
   (* Used to compute the size of the last chunk.
      Paradoxically (maybe), actually computes the size of the *first* chunk of the list of actions passed. *)
@@ -293,6 +323,45 @@ Section MembershipProof.
         auto.
   Qed.
 
+  Lemma last_chunk_size_skipn:
+    forall act i inpchk,
+      nth_error act i = Some (Acheck inpchk) ->
+      last_chunk_size (skipn (S i) act) = last_chunk_size act.
+  Proof.
+    induction act.
+    - intros i inpchk. replace (nth_error [] i) with (None (A := action)).
+      2: { destruct i; reflexivity. }
+      discriminate.
+    - intros i inpchk NTH.
+      destruct i as [|i].
+      + simpl in NTH. injection NTH as ->. simpl. reflexivity.
+      + change (skipn (S (S i)) (a :: act)) with (skipn (S i) act).
+        destruct a.
+        * simpl last_chunk_size at 2.
+          assert (exists inpchk', first_check_input act = Some inpchk'). {
+            apply first_check_input_nth_error2. firstorder.
+          }
+          destruct H as [inpchk' H]. rewrite H. apply IHact with (inpchk := inpchk). auto.
+        * simpl last_chunk_size at 2. apply IHact with (inpchk := inpchk). auto.
+        * simpl last_chunk_size at 2.
+          assert (exists inpchk', first_check_input act = Some inpchk'). {
+            apply first_check_input_nth_error2. firstorder.
+          }
+          destruct H as [inpchk' H]. rewrite H. apply IHact with (inpchk := inpchk). auto.
+  Qed.
+
+  Lemma last_chunk_size_skipn_last:
+    forall act i inpcheck,
+      nth_error act i = Some (Acheck inpcheck) ->
+      first_check_input (skipn (S i) act) = None ->
+      last_chunk_size act = chunk_size (skipn (S i) act).
+  Proof.
+    intros act i inpcheck NTH FSTCHK.
+    rewrite <- last_chunk_size_skipn with (i := i) (inpchk := inpcheck) by auto.
+    destruct (skipn (S i) act); simpl last_chunk_size; try reflexivity.
+    setoid_rewrite FSTCHK. reflexivity.
+  Qed.
+
   Lemma chunk_size_lt_last:
     forall r inp act, act_from_regex r inp act ->
       forall i acttail, acttail = skipn i act ->
@@ -325,14 +394,22 @@ Section MembershipProof.
         pose proof (proj1 (first_check_input_nth_error (Areg rsub :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
         specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
         specialize (CHKSZ_LT (Quantified greedy min delta rquant)).
-        specialize_prove CHKSZ_LT by admit.
+        specialize_prove CHKSZ_LT. { eauto using next_check_regex_nth_error. }
         specialize (IHact i _ eq_refl).
         destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
         * specialize (IHact _ eq_refl).
-          assert (last_chunk_size (skipn i act) = last_chunk_size act) by admit.
-          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)) by admit.
+          assert (last_chunk_size (skipn i act) = last_chunk_size act). { 
+            pose proof last_chunk_size_skipn (Areg rsub :: act) i inpchk FSTCHK_NTH1.
+            simpl in H. rewrite FSTCHK in H. auto.
+          }
+          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
+            admit.
+          }
           simpl in *. lia.
-        * assert (last_chunk_size act = chunk_size (skipn i act)) by admit.
+        * assert (last_chunk_size act = chunk_size (skipn i act)). {
+            pose proof last_chunk_size_skipn_last (Areg rsub :: act) i inpchk FSTCHK_NTH1 SNDCHK.
+            simpl in H. rewrite FSTCHK in H. auto.
+          }
           assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)) by admit.
           simpl in *. lia.
       + simpl.
@@ -347,7 +424,7 @@ Section MembershipProof.
         pose proof (proj1 (first_check_input_nth_error (Aclose gid :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
         specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
         specialize (CHKSZ_LT (Quantified greedy min delta rquant)).
-        specialize_prove CHKSZ_LT by admit.
+        specialize_prove CHKSZ_LT. { eauto using next_check_regex_nth_error. }
         specialize (IHact i _ eq_refl).
         destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
         * specialize (IHact _ eq_refl).
@@ -611,7 +688,8 @@ remaining_length nextinp forward) * last_chunk_size cont). {
                 destruct (is_strict_suffix inp inpchk forward) eqn:SS.
                 -- simpl in *.
                    assert (regex_size (Quantified greedy 0 +∞ (Quantified greedy0 min0 delta0 r1)) <= last_chunk_size cont). {
-                     admit.
+                     pose proof chunk_size_lt_last r inp _ AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
+                     rewrite FSTCHK in H. simpl. lia.
                    }
                    simpl in H.
                    lia.
@@ -625,7 +703,8 @@ remaining_length nextinp forward) * last_chunk_size cont). {
                 destruct (is_strict_suffix inp inpchk forward) eqn:SS.
                 -- simpl in *.
                    assert (regex_size (Quantified greedy 0 +∞ r1) <= last_chunk_size cont). {
-                     admit.
+                     pose proof chunk_size_lt_last r inp _ AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
+                     rewrite FSTCHK in H. simpl. lia.
                    }
                    simpl in H.
                    lia.
