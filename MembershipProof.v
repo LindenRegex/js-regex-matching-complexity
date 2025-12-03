@@ -610,7 +610,7 @@ remaining_length nextinp forward) * last_chunk_size cont). {
               * simpl last_chunk_size in *. rewrite FSTCHK in FUEL. rewrite FSTCHK.
                 destruct (is_strict_suffix inp inpchk forward) eqn:SS.
                 -- simpl in *.
-                   assert (regex_size (Quantified greedy 0 +∞ (Quantified greedy0 min0 delta0 r1)) < last_chunk_size cont). {
+                   assert (regex_size (Quantified greedy 0 +∞ (Quantified greedy0 min0 delta0 r1)) <= last_chunk_size cont). {
                      admit.
                    }
                    simpl in H.
@@ -624,11 +624,11 @@ remaining_length nextinp forward) * last_chunk_size cont). {
               * simpl last_chunk_size in *. rewrite FSTCHK in FUEL.
                 destruct (is_strict_suffix inp inpchk forward) eqn:SS.
                 -- simpl in *.
-                   assert (regex_size (Quantified greedy 0 +∞ r1) < last_chunk_size cont). {
+                   assert (regex_size (Quantified greedy 0 +∞ r1) <= last_chunk_size cont). {
                      admit.
                    }
                    simpl in H.
-                   lia. (* HARD *)
+                   lia.
                 -- simpl in *. lia.
               * simpl in *. lia.
         }
