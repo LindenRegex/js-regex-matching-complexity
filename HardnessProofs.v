@@ -495,6 +495,16 @@ Section Proofs.
       f_equal. f_equal. lia.
   Admitted.
 
+  Lemma negb_true_iff_not_true:
+    forall b: bool, negb b = true <-> ~(b = true).
+  Proof.
+    intros []; simpl; split.
+    - discriminate.
+    - contradiction.
+    - discriminate.
+    - reflexivity.
+  Qed.
+
   Theorem theRegex_aux_spec:
     (* We perform backwards induction on i ∈ {1, ..., n+1}. *)
     forall np1_minus_i i, i = n + 1 - np1_minus_i ->
@@ -633,7 +643,44 @@ Section Proofs.
           inversion TREECONT. subst inp0 gm0 dir treecont.
           inversion TREELK. subst r1 r2 cont inp0 gm0 dir t.
           rewrite app_nil_r in CONT. simpl seq_list in CONT.
-           admit.
+          assert (exists treelksub: tree, is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward treelksub). { eexists; apply compute_tr_is_tree. }
+          destruct H as [treelksub TREELKSUB].
+          pose proof leaves_concat rer inp gm forward [Areg (def_var_regex x_char semicolon_char i)] [Areg (theRegex_aux q x_char semicolon_char (S i) (skipn i quants))] treelk treelksub CONT TREELKSUB as CONCAT.
+          pose proof def_var_regex_spec i inp ltac:(auto) ltac:(lia) EQ_inp treelksub gm TREELKSUB as DEF_SPEC.
+          remember (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm) as gmpos.
+          rewrite DEF_SPEC in CONCAT.
+          inversion CONCAT. subst x lbase f.
+          inversion FM. subst x lbase f.
+          inversion FM0. subst f lmapped0 lmapped.
+          inversion HEAD. subst act dir l. simpl in H3, TREE0.
+          inversion HEAD0. subst act dir l. simpl in TREE1, H4.
+          unfold lk_result in RES_LK. simpl in RES_LK. rewrite first_tree_leaf in RES_LK.
+          assert (tree_leaves treelk gm inp forward = []). {
+            destruct (tree_leaves treelk gm inp forward); try discriminate. reflexivity.
+          }
+          rewrite <- H in H0.
+          replace ly with (nil (A := leaf)) in *. 2: { destruct ly; try discriminate; reflexivity. }
+          replace ly0 with (nil (A := leaf)) in *. 2: { destruct ly0; try discriminate; reflexivity. }
+          simpl. rewrite <- H. simpl in *.
+          pose proof (IHnp1_minus_i gmpos) as IHpos.
+          pose proof (IHnp1_minus_i gm) as IHneg.
+          specialize_prove IHpos by admit.
+          specialize_prove IHpos by admit.
+          simpl "-" in IHpos, IHneg.
+          specialize (IHpos (inp_of_idx (i + (i + 0))) (skipn i quants) t).
+          specialize_prove IHpos. { f_equal. lia. }
+          specialize_prove IHpos. { rewrite Nat.sub_0_r. reflexivity. }
+          specialize (IHpos ltac:(auto)).
+          specialize (IHneg WF_gm).
+          specialize_prove IHneg by admit.
+          specialize (IHneg (inp_of_idx (i + (i + 0))) (skipn i quants) t0).
+          specialize_prove IHneg. { f_equal. lia. }
+          specialize_prove IHneg. { rewrite Nat.sub_0_r. reflexivity. }
+          specialize (IHneg ltac:(auto)).
+          rewrite H3 in IHpos. rewrite H4 in IHneg.
+          split; [|split]; try discriminate.
+          -- split; try discriminate. intros _. apply andb_true_intro. do 2 rewrite negb_true_iff_not_true. setoid_rewrite <- Heqgmpos. tauto.
+          -- intros inp' gm' []; try contradiction. injection H1 as <- <-. reflexivity.
         * (* Negative lookahead fails, i.e. QBF is invalid, i.e. lookahead expression doesn't fail *)
           admit.
   Admitted.
