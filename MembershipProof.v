@@ -402,6 +402,24 @@ Section MembershipProof.
     setoid_rewrite FSTCHK. reflexivity.
   Qed.
 
+  Lemma nth_error_nil {A: Type}:
+    forall i, nth_error (nil (A := A)) i = None.
+  Proof.
+    intros i. destruct i; reflexivity.
+  Qed.
+
+  Lemma nth_error_skipn {A: Type}:
+    forall (l: list A) (a: A) (i: nat),
+      nth_error l i = Some a ->
+      skipn i l = a :: skipn (S i) l.
+  Proof.
+    induction l as [|x l IH].
+    - intros a i. rewrite nth_error_nil. discriminate.
+    - intros a i. destruct i as [|i].
+      + simpl. intro H. injection H as <-. reflexivity.
+      + simpl. auto.
+  Qed.
+
   Lemma chunk_size_lt_last:
     forall r inp act, act_from_regex r inp act ->
       forall i acttail, acttail = skipn i act ->
@@ -426,12 +444,23 @@ Section MembershipProof.
         apply IHact with (i := i) (inpchk := inpchk); auto.
       }
       simpl in EQ_acttail. subst acttail. simpl in FSTCHK.
-      destruct a as [rsub | inpchk0 | gid].
+      destruct (a is (Acheck _)) eqn:IS_CHECK.
+      (*destruct a as [rsub | inpchk0 | gid].*)
+      + destruct a as [rsub | inpchk0 | gid]; try discriminate. simpl.
+        unfold checks_fby_quant in CHK_FBY_QUANT.
+        specialize (CHK_FBY_QUANT 0 _ eq_refl).
+        destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
+        specialize (IHact 0 act eq_refl).
+        destruct (first_check_input act) eqn:SNDCHK.
+        * specialize (IHact i eq_refl). lia.
+        * destruct act as [|a act]; try discriminate. simpl in CHK_FBY_QUANT.
+          injection CHK_FBY_QUANT as ->.
+          simpl in SNDCHK. simpl. rewrite SNDCHK. lia.
       + simpl. rewrite FSTCHK.
         (* Idea: apply CHKSZ_LT to show that regex_size rsub + chunk_size act < regex_size rchk for some rchk, then apply IHact with acttail = the appropriate tail *)
-        specialize (CHKSZ_LT 0 (Areg rsub :: act) eq_refl).
+        specialize (CHKSZ_LT 0 (a :: act) eq_refl).
         unfold checks_fby_quant in CHK_FBY_QUANT.
-        pose proof (proj1 (first_check_input_nth_error (Areg rsub :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
+        pose proof (proj1 (first_check_input_nth_error (a :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
         specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
         specialize (CHKSZ_LT (Quantified greedy min delta rquant)).
         specialize_prove CHKSZ_LT. { eauto using next_check_regex_nth_error. }
@@ -439,42 +468,24 @@ Section MembershipProof.
         destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
         * specialize (IHact _ eq_refl).
           assert (last_chunk_size (skipn i act) = last_chunk_size act). { 
-            pose proof last_chunk_size_skipn (Areg rsub :: act) i inpchk FSTCHK_NTH1.
+            pose proof last_chunk_size_skipn (a :: act) i inpchk FSTCHK_NTH1.
             simpl in H. rewrite FSTCHK in H. auto.
           }
           assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
-            admit.
+            pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
+            rewrite H0. simpl. lia.
           }
           simpl in *. lia.
         * assert (last_chunk_size act = chunk_size (skipn i act)). {
-            pose proof last_chunk_size_skipn_last (Areg rsub :: act) i inpchk FSTCHK_NTH1 SNDCHK.
+            pose proof last_chunk_size_skipn_last (a :: act) i inpchk FSTCHK_NTH1 SNDCHK.
             simpl in H. rewrite FSTCHK in H. auto.
           }
-          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)) by admit.
+          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
+            pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
+            rewrite H0. simpl. lia.
+          }
           simpl in *. lia.
-      + simpl.
-        unfold checks_fby_quant in CHK_FBY_QUANT.
-        specialize (CHK_FBY_QUANT 0 _ eq_refl).
-        destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
-        admit.
-      + simpl. rewrite FSTCHK.
-        (* Idea: apply CHKSZ_LT to show that regex_size rsub + chunk_size act < regex_size rchk for some rchk, then apply IHact with acttail = the appropriate tail *)
-        specialize (CHKSZ_LT 0 (Aclose gid :: act) eq_refl).
-        unfold checks_fby_quant in CHK_FBY_QUANT.
-        pose proof (proj1 (first_check_input_nth_error (Aclose gid :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
-        specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
-        specialize (CHKSZ_LT (Quantified greedy min delta rquant)).
-        specialize_prove CHKSZ_LT. { eauto using next_check_regex_nth_error. }
-        specialize (IHact i _ eq_refl).
-        destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
-        * specialize (IHact _ eq_refl).
-          assert (last_chunk_size (skipn i act) = last_chunk_size act) by admit.
-          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)) by admit.
-          simpl in *. lia.
-        * assert (last_chunk_size act = chunk_size (skipn i act)) by admit.
-          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)) by admit.
-          simpl in *. lia.
-  Admitted.
+  Qed.
   
 
 
