@@ -161,9 +161,15 @@ Section MembershipProof.
     - intros i inpcheck EQ_CHECK. destruct i as [ | []]; try discriminate.
       specialize (IHact_from_regex (S n) inpcheck EQ_CHECK). auto.
     - (* Quantifier case: more interesting *)
-      admit. (* Either we consider the newly introduced check, in which case this is trivial, or we consider another check, in which case we apply IH *)
-    - admit. (* Apply IH *)
-  Admitted.
+      (* Either we consider the newly introduced check, in which case this is trivial, or we consider another check, in which case we apply IH *)
+      intros i inpcheck EQ_CHECK. destruct i as [|[|[|i]]]; try discriminate; simpl in EQ_CHECK.
+      + injection EQ_CHECK as <-.
+        exists greedy. exists 0. exists delta. exists r1. reflexivity.
+      + specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
+    - (* Apply IH *)
+      intros i inpcheck EQ_CHECK. destruct i as [|[|i]]; simpl in EQ_CHECK; try discriminate.
+      specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
+  Qed.
 
 
 
@@ -190,8 +196,26 @@ Section MembershipProof.
       intros [i [ABS _]]. replace (nth_error [] i) with (None (A := action)) in ABS.
       2: { destruct i; simpl; reflexivity. }
       discriminate.
-    - admit.
-  Admitted.
+    - destruct (match a with | Acheck _ => true | _ => false end) eqn:IS_CHECK.
+      + destruct a as [? | inp | ?]; try discriminate. intro inpcheck. simpl first_check_input. split.
+        * intro H. injection H as <-. exists 0. split; auto. intros j LT. inversion LT.
+        * intros [i [NTH OTHERS]]. destruct i as [|i]; simpl in NTH.
+          -- congruence.
+          -- exfalso. specialize (OTHERS 0 ltac:(lia)).
+             apply OTHERS. simpl. constructor.
+      + replace (first_check_input (a::act)) with (first_check_input act). 2: {
+          destruct a; try discriminate; reflexivity.
+        }
+        intro inpcheck. specialize (IHact inpcheck).
+        rewrite IHact. split; intros [i [NTH OTHERS]].
+        * exists (S i). split; auto. intros [|j].
+          -- intros _. simpl. intro H. destruct a; try discriminate; inversion H.
+          -- simpl. intro LT. apply OTHERS. lia.
+        * destruct i.
+          1: { simpl in NTH. destruct a; discriminate. }
+          simpl in NTH.
+          exists i. split; auto. intros j LT. apply OTHERS with (j := S j). lia.
+  Qed.
 
   Lemma first_check_input_nth_error2:
     forall act: actions,
@@ -229,7 +253,23 @@ Section MembershipProof.
       (forall j, j < i -> ~is_some_check (nth_error act j)) ->
       nth_error act (S i) = Some (Areg rchk) ->
       next_check_regex act = Some rchk.
-  Admitted.
+  Proof.
+    intros i act. revert i. induction act.
+    - simpl. discriminate.
+    - intros i inpchk rchk EQ_CHECK PREV EQ_RCHK.
+      destruct i as [|i]; simpl nth_error in *.
+      + injection EQ_CHECK as ->. destruct act; try discriminate.
+        injection EQ_RCHK as ->. reflexivity.
+      + assert (NOTCHK: match a with | Acheck _ => true | _ => false end = false). {
+          specialize (PREV 0 ltac:(lia)). destruct a; try reflexivity.
+          exfalso. apply PREV. constructor.
+        }
+        replace (next_check_regex (a::act)) with (next_check_regex act). 2: {
+          symmetry. destruct a; try discriminate; reflexivity.
+        }
+        apply IHact with (i := i) (inpchk := inpchk); auto.
+        intros j LT. apply PREV with (j := S j). lia.
+  Qed.
 
   (* Used to compute the size of the last chunk.
      Paradoxically (maybe), actually computes the size of the *first* chunk of the list of actions passed. *)
