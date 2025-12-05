@@ -496,6 +496,12 @@ Section MembershipProof.
       Bool.le (is_strict_suffix inp inpchk dir) (is_strict_suffix nextinp inpchk dir).
   Admitted.
 
+  Lemma is_strict_suffix_incr':
+    forall inp n nextinp inpchk dir,
+      advance_input_n inp n dir = nextinp ->
+      Bool.le (is_strict_suffix inp inpchk dir) (is_strict_suffix nextinp inpchk dir).
+  Admitted.
+
   Lemma actions_fuel'_monotonic_inp:
     forall inp nextinp cont,
       strict_suffix nextinp inp forward ->
@@ -545,7 +551,12 @@ Section MembershipProof.
       + lia.
   Qed.
 
-
+  (* TODO Move to Linden *)
+  Lemma remaining_length_current_str:
+    forall inp dir, remaining_length inp dir = length (current_str inp dir).
+  Proof.
+    intros [next pref] []; reflexivity.
+  Qed.
 
   Lemma read_decreases_fuel:
     forall inp cd nextinp cont,
@@ -566,7 +577,10 @@ remaining_length inp forward) * last_chunk_size cont >= ((if is_strict_suffix ne
 remaining_length nextinp forward) * last_chunk_size cont). {
         unfold ge.
         apply PeanoNat.Nat.mul_le_mono_r.
-        replace (remaining_length inp forward) with (S (remaining_length nextinp forward)) by admit.
+        replace (remaining_length inp forward) with (S (remaining_length nextinp forward)).
+        2: {
+          symmetry. do 2 rewrite remaining_length_current_str. apply advance_current_plus_one. auto.
+        }
         pose proof is_strict_suffix_incr inp nextinp inpchk forward EQ_nextinp.
         destruct is_strict_suffix; destruct is_strict_suffix; try discriminate; lia.
       }
@@ -578,9 +592,12 @@ remaining_length nextinp forward) * last_chunk_size cont). {
       lia.
     - simpl. unfold gt. apply le_lt_S.
       apply PeanoNat.Nat.add_le_mono_l.
-      replace (remaining_length inp forward) with (S (remaining_length nextinp forward)) by admit. (* Follows from EQ_nextinp *)
+      replace (remaining_length inp forward) with (S (remaining_length nextinp forward)).
+      2: {
+        symmetry. do 2 rewrite remaining_length_current_str. apply advance_current_plus_one. auto.
+      }
       simpl. lia.
-  Admitted.
+  Qed.
 
   Lemma read_backref_decreases_fuel:
     forall inp gid n nextinp cont,
@@ -601,7 +618,8 @@ remaining_length nextinp forward) * last_chunk_size cont). {
         apply PeanoNat.Nat.mul_le_mono_r.
         destruct (Chars.input_eq_dec inp nextinp).
         { rewrite <- e. reflexivity. }
-        assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit. (* Follows from EQ_nextinp *)
+        (*assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit. (* Follows from EQ_nextinp *)*)
+        pose proof is_strict_suffix_incr' inp n nextinp inpchk forward EQ_nextinp.
         assert (remaining_length nextinp forward < remaining_length inp forward) by admit. (* Follows from n0: inp <> nextinp and EQ_nextinp *)
         destruct is_strict_suffix; destruct is_strict_suffix; try discriminate; lia.
       }
