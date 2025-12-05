@@ -1,4 +1,4 @@
-From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps.
+From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
 From Linden Require Import Parameters Chars Groups Semantics Tree Tactics.
 From Linden.Rewriting Require Import ProofSetup.
 From Warblre Require Import Parameters RegExpRecord Base.
@@ -725,4 +725,51 @@ Section Proofs.
              tauto.
           -- contradiction.
   Admitted.
+
+
+
+  Definition regex_matches_string (rer: RegExpRecord) (r: regex) (s: LWParameters.string): Prop :=
+    forall t: tree, is_tree rer [Areg r] (init_input s) GroupMap.empty forward t ->
+      first_leaf t (init_input s) <> None.
+
+  Lemma emptygm_find: forall i, GroupMap.find i GroupMap.empty = None.
+  Proof.
+    intro i. unfold GroupMap.find, GroupMap.empty.
+    apply GroupMap.Facts.empty_o.
+  Qed.
+
+  Lemma emptygm_wf: wf_gm GroupMap.empty.
+  Proof.
+    unfold wf_gm. intro gid. left. apply emptygm_find. 
+  Qed.
+  
+
+  Theorem qbf_regex:
+    regex_matches_string rer (theRegex q x_char semicolon_char) str <->
+    qbf_valid q = true.
+  Proof.
+    pose proof theRegex_aux_spec n 1 ltac:(lia) ltac:(lia) ltac:(lia) GroupMap.empty ltac:(apply emptygm_wf).
+    specialize_prove H. {
+      intros j _ _. apply emptygm_find.
+    }
+    specialize (H (inp_of_idx 0) quants).
+    split.
+    - intro MATCHES. unfold regex_matches_string in MATCHES.
+      assert (exists t: tree, is_tree rer [Areg (theRegex q x_char semicolon_char)] (init_input str) GroupMap.empty forward t) as [t TREE]. {
+        eexists. apply compute_tr_is_tree.
+      }
+      specialize (MATCHES t TREE).
+      specialize (H t eq_refl eq_refl TREE).
+      destruct H as [H _].
+      unfold quants, clauses in H.
+      rewrite equiv_gm_env_valid with (q := q) in H.
+      apply H. setoid_rewrite first_tree_leaf in MATCHES.
+      rewrite hd_error_none_nil in MATCHES. auto.
+    - intro VALID. unfold regex_matches_string.
+      intros t TREE.
+      specialize (H t eq_refl eq_refl TREE).
+      destruct H as [H _].
+      setoid_rewrite first_tree_leaf. rewrite hd_error_none_nil.
+      apply H. unfold quants, clauses. rewrite equiv_gm_env_valid. auto.
+  Qed.
 End Proofs.
