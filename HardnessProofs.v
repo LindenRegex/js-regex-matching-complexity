@@ -37,12 +37,17 @@ Section Proofs.
     - simpl. rewrite IHn0. reflexivity.
   Qed.
 
+  Lemma concat_repeat_len {A: Type}:
+    forall (l: list A) n, length (concat (repeat l n)) = length l * n.
+  Proof.
+    clear n. intros l n.
+    rewrite concat_length, map_repeat, list_sum_repeat. apply Nat.mul_comm.
+  Qed.
+
   Lemma str_len: length str = 2*(n+m).
   Proof.
     unfold str, theString.
-    rewrite concat_length, map_repeat. simpl.
-    fold n m.
-    rewrite list_sum_repeat. lia.
+    rewrite concat_repeat_len. reflexivity.
   Qed.
 
   Lemma rev_concat_repeat {A: Type}:
@@ -114,6 +119,26 @@ Section Proofs.
         rewrite firstn_app_2. rewrite SKIPN, rev_app_distr. simpl. reflexivity.
   Qed.
 
+  Lemma skipn_concat_repeat {A: Type}:
+    forall (l: list A) n i,
+      skipn (i * length l) (concat (repeat l n)) = concat (repeat l (n - i)).
+  Proof.
+    clear n. intros l n i. induction i.
+    - rewrite Nat.sub_0_r. reflexivity.
+    - destruct (Nat.lt_decidable i n).
+      + replace (n - i) with (S (n - S i)) in IHi by lia.
+        simpl in *.
+        rewrite <- skipn_skipn, IHi, skipn_app, skipn_all, Nat.sub_diag. reflexivity.
+      + replace (n - S i) with 0 by lia. simpl.
+        rewrite skipn_all2. 2: {
+          rewrite concat_repeat_len.
+          rewrite (Nat.mul_comm (length l) n).
+          change (length l + i * length l) with ((S i) * length l).
+          apply Nat.mul_le_mono_r. lia.
+        }
+        reflexivity.
+  Qed.
+
   Lemma substr_var:
     forall v, wf_var n v ->
       forall i, substr (inp_of_idx i) (2*(v-1)) (2*(v-1)+1) = [x_char].
@@ -123,7 +148,11 @@ Section Proofs.
     setoid_rewrite input_str_inp_of_idx.
     unfold wf_var in WF_v. assert (WF_v': v - 1 < n) by lia.
     unfold str, theString.
-  Admitted.
+    rewrite (Nat.mul_comm 2 (v - 1)). change 2 with (length [x_char; semicolon_char]).
+    rewrite skipn_concat_repeat.
+    fold n m.
+    destruct (n + m - (v - 1)) eqn:?; try lia. reflexivity.
+  Qed.
 
   Lemma advance_input'_n:
     forall inp dir, advance_input_n inp 1 dir = advance_input' inp dir.
