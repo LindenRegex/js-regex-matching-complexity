@@ -45,13 +45,43 @@ Section Proofs.
     rewrite list_sum_repeat. lia.
   Qed.
 
+  Lemma rev_concat_repeat {A: Type}:
+    forall (l: list A) i, rev (concat (repeat l i)) = concat (repeat (rev l) i).
+  Proof.
+    induction i.
+    - reflexivity.
+    - replace (S i) with (i + 1) at 1 by lia. simpl.
+      rewrite repeat_app, concat_app, rev_app_distr. simpl.
+      rewrite app_nil_r. congruence.
+  Qed.
+
   Lemma inp_of_idx_even:
     forall i, i <= n + m ->
       inp_of_idx (2*i) = Input
         (List.concat (List.repeat [x_char; semicolon_char] (n+m-i)))
         (List.concat (List.repeat [semicolon_char; x_char] i)).
   Proof.
-  Admitted.
+    induction i.
+    - simpl. intros _. unfold inp_of_idx.
+      rewrite Nat.sub_0_r. reflexivity.
+    - intro LE. specialize (IHi ltac:(lia)).
+      replace (2 * S i) with (2 + 2 * i) by lia.
+      unfold inp_of_idx in *. injection IHi as IHnext IHprev.
+      f_equal.
+      + rewrite <- skipn_skipn. setoid_rewrite IHnext.
+        replace (n + m - i) with (S (n + m - S i)) by lia. simpl. reflexivity.
+      + rewrite PeanoNat.Nat.add_comm.
+        apply (f_equal (rev (A := Character))) in IHprev. rewrite rev_involutive, rev_concat_repeat in IHprev.
+        simpl in IHprev.
+        rewrite <- firstn_skipn with (n := 2*i) (l := str).
+        replace (2 * i) with (length (firstn (2 * i) str)) at 1. 2: {
+          apply firstn_length_le. rewrite str_len. lia.
+        }
+        rewrite firstn_app_2. rewrite rev_app_distr.
+        setoid_rewrite IHprev. rewrite rev_concat_repeat. simpl rev at 2.
+        setoid_rewrite IHnext. replace (n + m - i) with (S (n + m - S i)) by lia.
+        simpl. reflexivity.
+  Qed.
 
   Lemma input_str_inp_of_idx:
     forall i, input_str (inp_of_idx i) = str.
