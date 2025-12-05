@@ -100,7 +100,19 @@ Section Proofs.
   Lemma advance_input_inp_of_idx:
     forall i, i < length str ->
       advance_input' (inp_of_idx i) forward = inp_of_idx (S i).
-  Admitted.
+  Proof.
+    intros i LT. unfold advance_input', advance_input, inp_of_idx.
+    destruct (skipn i str) as [|h next] eqn:SKIPN.
+    - exfalso. apply skipn_nil_length in SKIPN. lia.
+    - f_equal.
+      + rewrite <- skipn_skipn with (x := 1) (y := i). rewrite SKIPN. simpl. reflexivity.
+      + rewrite <- firstn_skipn with (n := i) (l := str) at 2.
+        replace (S i) with (i + 1) by lia.
+        replace i with (length (firstn i str)) at 2. 2: {
+          apply firstn_length_le. lia.
+        }
+        rewrite firstn_app_2. rewrite SKIPN, rev_app_distr. simpl. reflexivity.
+  Qed.
 
   Lemma substr_var:
     forall v, wf_var n v ->
@@ -112,6 +124,14 @@ Section Proofs.
     unfold wf_var in WF_v. assert (WF_v': v - 1 < n) by lia.
     unfold str, theString.
   Admitted.
+
+  Lemma advance_input'_n:
+    forall inp dir, advance_input_n inp 1 dir = advance_input' inp dir.
+  Proof.
+    intros [next pref] []; unfold advance_input'; simpl.
+    - destruct next as [|x next]; simpl; reflexivity.
+    - destruct pref as [|x pref]; simpl; reflexivity.
+  Qed.
 
   Lemma read_backref_var_sat:
     forall (gm: group_map) (v: variable) (i: nat),
@@ -131,8 +151,10 @@ Section Proofs.
       symmetry. rewrite PeanoNat.Nat.leb_gt. lia.
     }
     replace (n+m-(n+i)) with (m-i) by lia.
-    rewrite substr_var.
-  Admitted.
+    rewrite substr_var. 2: auto.
+    destruct (m-i) eqn:?; try lia. rewrite advance_input'_n, advance_input_inp_of_idx. simpl.
+    rewrite EqDec.reflb. f_equal. f_equal. f_equal. lia. rewrite str_len. lia.
+  Qed.
 
   Lemma read_backref_var_unsat:
     forall (gm: group_map) (v: variable) (i: nat),
