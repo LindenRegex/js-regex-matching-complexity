@@ -55,11 +55,17 @@ Section Proofs.
 
   Lemma input_str_inp_of_idx:
     forall i, input_str (inp_of_idx i) = str.
-  Admitted.
+  Proof.
+    intro i. unfold input_str, inp_of_idx.
+    rewrite rev_involutive. apply firstn_skipn.
+  Qed.
 
   Lemma idx_inp_of_idx:
     forall i, i <= length str -> idx (inp_of_idx i) = i.
-  Admitted.
+  Proof.
+    intros i LE. unfold idx, inp_of_idx. rewrite rev_length.
+    apply firstn_length_le. auto.
+  Qed.
 
   Lemma advance_input_inp_of_idx:
     forall i, i < length str ->
