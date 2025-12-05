@@ -444,7 +444,7 @@ Section MembershipProof.
         apply IHact with (i := i) (inpchk := inpchk); auto.
       }
       simpl in EQ_acttail. subst acttail. simpl in FSTCHK.
-      destruct (a is (Acheck _)) eqn:IS_CHECK.
+      (*destruct (a is (Acheck _)) eqn:IS_CHECK.
       (*destruct a as [rsub | inpchk0 | gid].*)
       + destruct a as [rsub | inpchk0 | gid]; try discriminate. simpl.
         unfold checks_fby_quant in CHK_FBY_QUANT.
@@ -456,35 +456,36 @@ Section MembershipProof.
         * destruct act as [|a act]; try discriminate. simpl in CHK_FBY_QUANT.
           injection CHK_FBY_QUANT as ->.
           simpl in SNDCHK. simpl. rewrite SNDCHK. lia.
-      + simpl. rewrite FSTCHK.
-        (* Idea: apply CHKSZ_LT to show that regex_size rsub + chunk_size act < regex_size rchk for some rchk, then apply IHact with acttail = the appropriate tail *)
-        specialize (CHKSZ_LT 0 (a :: act) eq_refl).
-        unfold checks_fby_quant in CHK_FBY_QUANT.
-        pose proof (proj1 (first_check_input_nth_error (a :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
-        specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
-        specialize (CHKSZ_LT (Quantified greedy min delta rquant)).
-        specialize_prove CHKSZ_LT. { eauto using next_check_regex_nth_error. }
-        specialize (IHact i _ eq_refl).
-        destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
-        * specialize (IHact _ eq_refl).
-          assert (last_chunk_size (skipn i act) = last_chunk_size act). { 
-            pose proof last_chunk_size_skipn (a :: act) i inpchk FSTCHK_NTH1.
-            simpl in H. rewrite FSTCHK in H. auto.
-          }
-          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
-            pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
-            rewrite H0. simpl. lia.
-          }
-          simpl in *. lia.
-        * assert (last_chunk_size act = chunk_size (skipn i act)). {
-            pose proof last_chunk_size_skipn_last (a :: act) i inpchk FSTCHK_NTH1 SNDCHK.
-            simpl in H. rewrite FSTCHK in H. auto.
-          }
-          assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
-            pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
-            rewrite H0. simpl. lia.
-          }
-          simpl in *. lia.
+      + *)
+      simpl. rewrite FSTCHK.
+      (* Idea: apply CHKSZ_LT to show that regex_size rsub + chunk_size act < regex_size rchk for some rchk, then apply IHact with acttail = the appropriate tail *)
+      specialize (CHKSZ_LT 0 (a :: act) eq_refl).
+      unfold checks_fby_quant in CHK_FBY_QUANT.
+      pose proof (proj1 (first_check_input_nth_error (a :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
+      specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
+      specialize (CHKSZ_LT (Quantified greedy min delta rquant)).
+      specialize_prove CHKSZ_LT. { eauto using next_check_regex_nth_error. }
+      specialize (IHact i _ eq_refl).
+      destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
+      * specialize (IHact _ eq_refl).
+        assert (last_chunk_size (skipn i act) = last_chunk_size act). { 
+          pose proof last_chunk_size_skipn (a :: act) i inpchk FSTCHK_NTH1.
+          simpl in H. rewrite FSTCHK in H. auto.
+        }
+        assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
+          pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
+          rewrite H0. simpl. lia.
+        }
+        simpl in *. lia.
+      * assert (last_chunk_size act = chunk_size (skipn i act)). {
+          pose proof last_chunk_size_skipn_last (a :: act) i inpchk FSTCHK_NTH1 SNDCHK.
+          simpl in H. rewrite FSTCHK in H. auto.
+        }
+        assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
+          pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
+          rewrite H0. simpl. lia.
+        }
+        simpl in *. lia.
   Qed.
   
 
