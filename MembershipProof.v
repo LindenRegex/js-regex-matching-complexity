@@ -81,6 +81,38 @@ Section MembershipProof.
       act_from_regex r nextinp l.
 
 
+  (* A list of actions coming from a supported regex is a supported list of actions *)
+  Lemma suppregex_suppactions:
+    forall r, supported_regex r ->
+      forall inp l, act_from_regex r inp l -> supported_actions l.
+  Proof.
+    intros r SUPP inp l. induction 1; try solve[inversion IHact_from_regex; auto].
+    - constructor; constructor. auto.
+    - inversion IHact_from_regex. subst x l0.
+      inversion H2. subst r0.
+      inversion H1. subst r0 r3.
+      constructor; auto. constructor. auto.
+    - inversion IHact_from_regex. subst x l0.
+      inversion H2. subst r0.
+      inversion H1. subst r0 r3.
+      constructor; auto. constructor. auto.
+    - inversion IHact_from_regex. subst x l0.
+      inversion H2. subst r0.
+      inversion H1. subst r0 r3.
+      repeat (constructor; auto).
+    - inversion IHact_from_regex. subst x l0.
+      inversion H2. subst r0.
+      inversion H1. subst greedy0 r0. rewrite <- H5 in *.
+      assert (INF: delta = +∞). {
+        destruct delta; try discriminate. reflexivity.
+      }
+      rewrite INF.
+      repeat (constructor; auto).
+    - inversion IHact_from_regex. subst x l0.
+      inversion H2. subst r0. inversion H1. subst gid r0.
+      repeat (constructor; auto).
+  Qed.
+
   (** * In a valid list of actions, all checks are ordered (non-strictly) from more to less restrictive. *)
 
   Definition input_le (inp1 inp2: input): Prop :=
@@ -271,14 +303,19 @@ Section MembershipProof.
         intros j LT. apply PREV with (j := S j). lia.
   Qed.
 
-  (* Used to compute the size of the last chunk.
-     Paradoxically (maybe), actually computes the size of the *first* chunk of the list of actions passed. *)
+  (* Computes the size of the first chunk of the list of actions passed as argument. *)
   Fixpoint chunk_size (act: actions): nat :=
     match act with
     | Acheck _ :: _ => 0
     | Aclose gid :: l => 1 + chunk_size l
     | Areg r :: l => regex_size r + chunk_size l
     | [] => 0
+    end.
+
+  Fixpoint chunk_length (act: actions): nat :=
+    match act with
+    | Acheck _ :: _ | [] => 0
+    | Aclose _ :: l | Areg _ :: l => 1 + chunk_length l
     end.
   
   Fixpoint last_chunk_size (act: actions): nat :=
@@ -487,8 +524,174 @@ Section MembershipProof.
         }
         simpl in *. lia.
   Qed.
-  
 
+
+  (** * The size of a list of actions coming from a regex is bounded by a polynomial
+        in the size of the regex. *)
+
+  Lemma last_chunk_size_nocheck:
+    forall l, first_check_input l = None -> last_chunk_size l = chunk_size l.
+  Proof.
+    intros [] H.
+    - simpl. reflexivity.
+    - simpl in *. rewrite H. reflexivity.
+  Qed.
+  
+  Lemma last_chunk_size_lt_regex:
+    forall r inp act,
+      act_from_regex r inp act ->
+      last_chunk_size act <= regex_size r.
+  Proof.
+    induction 1.
+    - simpl. lia.
+    - simpl in IHact_from_regex. auto.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + simpl. rewrite FSTCHK. auto.
+      + simpl. rewrite FSTCHK. lia.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + simpl. rewrite FSTCHK. auto.
+      + simpl. rewrite FSTCHK. lia.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + simpl. rewrite FSTCHK. auto.
+      + simpl. rewrite FSTCHK. lia.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
+    - simpl in *. destruct (first_check_input l); assumption.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
+    - simpl in *. destruct (first_check_input l); lia.
+    - simpl in *. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
+    - simpl in *. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
+  Qed.
+
+  Fixpoint actions_size (act: actions) :=
+    match act with
+    | [] => 0
+    | Acheck _ :: l | Aclose _ :: l => 1 + actions_size l
+    | Areg r :: l => regex_size r + actions_size l
+    end.
+  
+  Fixpoint sum_to_n (n_min_i: nat) (n: nat) {struct n_min_i} :=
+    match n_min_i with
+    | 0 => n
+    | S n_min_i' => (n - n_min_i) + sum_to_n n_min_i' n
+    end.
+  
+  Definition num_checks (act: actions) := length (actions_checks act).
+
+  Lemma chunk_size_bound:
+    forall r inp act, act_from_regex r inp act ->
+      forall i acttail, acttail = skipn i act ->
+        chunk_size acttail <= regex_size r - num_checks acttail.
+  Proof.
+    induction 1; try solve[intros i acttail EQ_acttail; apply IHact_from_regex with (i := S i); auto].
+    - intros i acttail EQ_acttail. destruct i as [|i]; subst acttail; simpl.
+      + unfold num_checks. simpl. lia.
+      + rewrite skipn_nil. simpl. lia.
+    - (* Disjunction left *) admit.
+    - (* Disjunction right *) admit.
+    - (* Sequence *) admit.
+    - (* Quantifier iteration *)
+      intros i acttail EQ_acttail. destruct i as [|[|[|i]]]; simpl in *.
+      + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
+        simpl in IHact_from_regex. simpl. unfold num_checks in *. simpl in *. lia.
+      + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
+        simpl in IHact_from_regex. simpl. unfold num_checks in *. simpl in *. lia.
+      + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
+        simpl in IHact_from_regex. simpl. unfold num_checks in *. simpl in *. lia.
+      + apply IHact_from_regex with (i := S i). auto.
+    - (* Group *) admit.
+  Admitted.
+
+  Lemma actions_size_decomp_check:
+    forall act inpcheck,
+      first_check_input act = Some inpcheck ->
+      actions_size act = chunk_size act + 1 + actions_size (skipn (S (chunk_length act)) act).
+  Proof.
+    induction act as [|a act IH]; [|destruct a].
+    - simpl. discriminate.
+    - intros inpcheck EQ_inpcheck. simpl in *. rewrite IH with (inpcheck := inpcheck). lia. auto.
+    - simpl. reflexivity.
+    - intros inpcheck EQ_inpcheck. simpl in *. rewrite IH with (inpcheck := inpcheck). lia. auto.
+  Qed.
+
+  Lemma actions_size_decomp_nocheck:
+    forall act,
+      first_check_input act = None ->
+      actions_size act = chunk_size act.
+  Proof.
+    induction act.
+    - reflexivity.
+    - destruct a.
+      + simpl. intro H. specialize (IHact H). congruence.
+      + discriminate.
+      + simpl. intro H. specialize (IHact H). congruence.
+  Qed.
+  
+  Lemma num_checks_skipn_chunk_length:
+    forall act inpcheck,
+      first_check_input act = Some inpcheck ->
+      num_checks act = 1 + num_checks (skipn (S (chunk_length act)) act).
+  Proof.
+    induction act.
+  Admitted.
+
+  Theorem actions_size_bound:
+    forall r inp act, act_from_regex r inp act ->
+      forall i acttail, acttail = skipn i act ->
+        actions_size acttail <= num_checks acttail + sum_to_n (num_checks acttail) (regex_size r).
+  Proof.
+    intros r inp act AFR. pose proof chunk_size_bound r inp act AFR as CHK_BOUND.
+    clear AFR inp. induction act.
+    - intros i acttail. rewrite skipn_nil. intros ->. simpl. lia.
+    - specialize_prove IHact. {
+        intros i acttail EQ_acttail. apply CHK_BOUND with (i := S i). auto.
+      }
+      intros i acttail EQ_acttail. destruct i as [|i].
+      + simpl in EQ_acttail. subst acttail.
+        destruct a.
+        * unfold num_checks in *. destruct (first_check_input act) eqn:FSTCHK.
+          -- rewrite actions_size_decomp_check with (inpcheck := i) by auto.
+             (* replace (length (actions_checks (Areg r0 :: act))) with (1 + length (actions_checks (skipn (S (chunk_length (Areg r0 :: act))) (Areg r0 :: act)))) by admit. *)
+             setoid_rewrite num_checks_skipn_chunk_length with (act := Areg r0 :: act) (inpcheck := i); auto. unfold num_checks.
+             specialize (IHact (chunk_length (Areg r0 :: act)) _ eq_refl).
+             change (skipn (S (chunk_length (Areg r0 :: act))) (Areg r0 :: act)) with (skipn (chunk_length (Areg r0 :: act)) act).
+             specialize (CHK_BOUND 0 (Areg r0 :: act) eq_refl).
+             set (n := length (actions_checks _)). simpl sum_to_n. subst n.
+             setoid_rewrite <- num_checks_skipn_chunk_length with (act := Areg r0 :: act) (inpcheck := i) at 2; auto.
+             unfold num_checks. lia.
+          -- admit.
+
+        * unfold num_checks in *. simpl.
+          specialize (IHact 0 act eq_refl). lia.
+        * unfold num_checks in *. destruct (first_check_input act) eqn:FSTCHK.
+          -- rewrite actions_size_decomp_check with (inpcheck := i) by auto.
+             (* replace (length (actions_checks (Areg r0 :: act))) with (1 + length (actions_checks (skipn (S (chunk_length (Areg r0 :: act))) (Areg r0 :: act)))) by admit. *)
+             setoid_rewrite num_checks_skipn_chunk_length with (act := Aclose g :: act) (inpcheck := i); auto. unfold num_checks.
+             specialize (IHact (chunk_length (Aclose g :: act)) _ eq_refl).
+             change (skipn (S (chunk_length (Aclose g :: act))) (Aclose g :: act)) with (skipn (chunk_length (Aclose g :: act)) act).
+             specialize (CHK_BOUND 0 (Aclose g :: act) eq_refl).
+             set (n := length (actions_checks _)). simpl sum_to_n. subst n.
+             setoid_rewrite <- num_checks_skipn_chunk_length with (act := Aclose g :: act) (inpcheck := i) at 2; auto.
+             unfold num_checks. lia.
+          -- admit.
+      + simpl in EQ_acttail. apply IHact with (i := i). auto.
+  Admitted.
 
   Lemma is_strict_suffix_incr:
     forall inp nextinp inpchk dir,
@@ -742,8 +945,8 @@ remaining_length nextinp forward) * last_chunk_size cont). {
             apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
           }
           lia.
-      + replace min with 0 in * by admit. (* Follows from SUPP_REGEX and AFR *)
-        replace delta with +∞ in * by admit. (* Follows from SUPP_REGEX and AFR *)
+      + pose proof suppregex_suppactions r SUPP_REGEX inp _ AFR as SUPP_ACTIONS.
+        inversion SUPP_ACTIONS. subst x l. inversion H1. subst r0. inversion H0. subst greedy0 min delta r0.
         simpl noi_pred.
         assert (IHiter: compute_tree rer (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 +∞ r1) :: cont) inp (Groups.GroupMap.reset (def_groups r1) gm) forward fuel <> None). {
           apply IHfuel.
@@ -757,7 +960,7 @@ remaining_length nextinp forward) * last_chunk_size cont). {
               * simpl last_chunk_size in *. rewrite FSTCHK in FUEL. rewrite FSTCHK.
                 destruct (is_strict_suffix inp inpchk forward) eqn:SS.
                 -- simpl in *.
-                   assert (regex_size (Quantified greedy 0 +∞ (Quantified greedy0 min0 delta0 r1)) <= last_chunk_size cont). {
+                   assert (regex_size (Quantified greedy 0 +∞ (Quantified greedy0 min delta r1)) <= last_chunk_size cont). {
                      pose proof chunk_size_lt_last r inp _ AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
                      rewrite FSTCHK in H. simpl. lia.
                    }
@@ -795,7 +998,7 @@ remaining_length nextinp forward) * last_chunk_size cont). {
         }
         destruct compute_tree; try contradiction.
         destruct compute_tree; try contradiction. discriminate.
-      + (* No lookarounds *) exfalso. admit.
+      + (* No lookarounds *) exfalso. pose proof suppregex_suppactions r SUPP_REGEX inp _ AFR. inversion H. inversion H2. inversion H5.
       + (* Group *)
         assert (CONT: compute_tree rer (Areg r0 :: Aclose id :: cont) inp (Groups.GroupMap.open (idx inp) id gm) forward fuel <> None). {
           apply IHfuel.
