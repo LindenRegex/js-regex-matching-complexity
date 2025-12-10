@@ -603,9 +603,23 @@ Section MembershipProof.
     - intros i acttail EQ_acttail. destruct i as [|i]; subst acttail; simpl.
       + unfold num_checks. simpl. lia.
       + rewrite skipn_nil. simpl. lia.
-    - (* Disjunction left *) admit.
-    - (* Disjunction right *) admit.
-    - (* Sequence *) admit.
+    - (* Disjunction left *)
+      intros i acttail EQ_acttail. destruct i as [|i]; subst acttail; simpl.
+      + specialize (IHact_from_regex 0 (Areg (Disjunction r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
+        unfold num_checks in *. simpl in *. lia.
+      + apply IHact_from_regex with (i := S i). auto.
+    - (* Disjunction right *)
+      intros i acttail EQ_acttail. destruct i as [|i]; subst acttail; simpl.
+      + specialize (IHact_from_regex 0 (Areg (Disjunction r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
+        unfold num_checks in *. simpl in *. lia.
+      + apply IHact_from_regex with (i := S i). auto.
+    - (* Sequence *)
+      intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
+      + specialize (IHact_from_regex 0 (Areg (Sequence r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
+        unfold num_checks in *. simpl in *. lia.
+      + specialize (IHact_from_regex 0 (Areg (Sequence r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
+        unfold num_checks in *. simpl in *. lia.
+      + apply IHact_from_regex with (i := S i). auto.
     - (* Quantifier iteration *)
       intros i acttail EQ_acttail. destruct i as [|[|[|i]]]; simpl in *.
       + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
@@ -615,8 +629,14 @@ Section MembershipProof.
       + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
         simpl in IHact_from_regex. simpl. unfold num_checks in *. simpl in *. lia.
       + apply IHact_from_regex with (i := S i). auto.
-    - (* Group *) admit.
-  Admitted.
+    - (* Group *)
+      intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
+      + specialize (IHact_from_regex 0 (Areg (Group gid r1) :: l) eq_refl).
+        unfold num_checks in *. simpl in *. lia.
+      + specialize (IHact_from_regex 0 (Areg (Group gid r1) :: l) eq_refl).
+        unfold num_checks in *. simpl in *. lia.
+      + apply IHact_from_regex with (i := S i). auto.
+  Qed.
 
   Lemma actions_size_decomp_check:
     forall act inpcheck,
@@ -649,7 +669,26 @@ Section MembershipProof.
       num_checks act = 1 + num_checks (skipn (S (chunk_length act)) act).
   Proof.
     induction act.
-  Admitted.
+    - discriminate.
+    - destruct (a is (Acheck _)) eqn:IS_CHECK.
+      + destruct a; try discriminate. simpl. reflexivity.
+      + intros inpcheck FSTCHK.
+        replace (num_checks (a :: act)) with (num_checks act).
+        2: { destruct a; try discriminate; reflexivity. }
+        replace (chunk_length (a :: act)) with (S (chunk_length act)).
+        2: { destruct a; try discriminate; reflexivity. }
+        apply IHact with (inpcheck := inpcheck).
+        transitivity (first_check_input (a :: act)); auto.
+        destruct a; try discriminate; reflexivity.
+  Qed.
+
+  Lemma num_checks_no_check:
+    forall act, first_check_input act = None -> num_checks act = 0.
+  Proof.
+    induction act.
+    - reflexivity.
+    - intro H. destruct a; try discriminate; unfold num_checks in *; simpl in *; auto.
+  Qed.
 
   Theorem actions_size_bound:
     forall r inp act, act_from_regex r inp act ->
@@ -675,7 +714,11 @@ Section MembershipProof.
              set (n := length (actions_checks _)). simpl sum_to_n. subst n.
              setoid_rewrite <- num_checks_skipn_chunk_length with (act := Areg r0 :: act) (inpcheck := i) at 2; auto.
              unfold num_checks. lia.
-          -- admit.
+          -- rewrite actions_size_decomp_nocheck; auto.
+             specialize (CHK_BOUND 0 (Areg r0 :: act) eq_refl).
+             setoid_rewrite num_checks_no_check; auto.
+             setoid_rewrite num_checks_no_check in CHK_BOUND; auto.
+             simpl in *. lia.
 
         * unfold num_checks in *. simpl.
           specialize (IHact 0 act eq_refl). lia.
@@ -689,8 +732,66 @@ Section MembershipProof.
              set (n := length (actions_checks _)). simpl sum_to_n. subst n.
              setoid_rewrite <- num_checks_skipn_chunk_length with (act := Aclose g :: act) (inpcheck := i) at 2; auto.
              unfold num_checks. lia.
-          -- admit.
+          -- rewrite actions_size_decomp_nocheck; auto.
+             specialize (CHK_BOUND 0 (Aclose g :: act) eq_refl).
+             setoid_rewrite num_checks_no_check; auto.
+             setoid_rewrite num_checks_no_check in CHK_BOUND; auto.
+             simpl in *. lia.
       + simpl in EQ_acttail. apply IHact with (i := i). auto.
+  Qed.
+
+  Lemma sum_to_n_bound':
+    forall n_min_i k n, sum_to_n n_min_i n <= sum_to_n (k + n_min_i) n.
+  Proof.
+    intros n_min_i k n. induction k.
+    - reflexivity.
+    - simpl. lia.
+  Qed.
+
+  Lemma sum_to_n_overshoot:
+    forall k n, sum_to_n (k + n) n = sum_to_n n n.
+  Proof.
+    intros k n. induction k.
+    - reflexivity.
+    - simpl. replace (n - S (k + n)) with 0 by lia. auto.
+  Qed.
+
+  Lemma sum_to_n_bound:
+    forall n_min_i n, sum_to_n n_min_i n <= sum_to_n n n.
+  Proof.
+    intros n_min_i n. destruct (PeanoNat.Nat.le_decidable n_min_i n).
+    - set (k := n - n_min_i). replace n with (k + n_min_i) at 2 by lia. apply sum_to_n_bound'.
+    - set (k := n_min_i - n). replace n_min_i with (k + n) by lia. rewrite sum_to_n_overshoot. reflexivity.
+  Qed.
+  
+  Lemma sum_to_n_sum_seq:
+    forall n_min_i n, n_min_i <= n ->
+      sum_to_n n_min_i n = list_sum (seq (n - n_min_i) (S n_min_i)).
+  Proof.
+    intros n_min_i n LE. induction n_min_i.
+    - rewrite PeanoNat.Nat.sub_0_r. simpl. lia.
+    - simpl. f_equal.
+      specialize (IHn_min_i ltac:(lia)). rewrite IHn_min_i.
+      simpl. replace (S (S (n - S n_min_i))) with (S (n - n_min_i)) by lia. lia.
+  Qed.
+
+  Lemma sum_to_n_n_sum_seq:
+    forall n, sum_to_n n n = list_sum (seq 0 (S n)).
+  Proof.
+    intro n. rewrite sum_to_n_sum_seq by reflexivity.
+    f_equal. f_equal. apply PeanoNat.Nat.sub_diag.
+  Qed.
+
+  (* Classical formula... *)
+  Lemma sum_to_n_n_formula:
+    forall n, sum_to_n n n = PeanoNat.Nat.div2 (n * S n).
+  Proof.
+    intro n. rewrite sum_to_n_n_sum_seq. induction n.
+    - simpl. reflexivity.
+    - replace (S (S n)) with (S n + 1) at 1 by lia. rewrite seq_app.
+      rewrite list_sum_app, IHn. simpl list_sum.
+      rewrite PeanoNat.Nat.add_0_r.
+      destruct (PeanoNat.Nat.Even_Odd_dec n).
   Admitted.
 
   Lemma is_strict_suffix_incr:
