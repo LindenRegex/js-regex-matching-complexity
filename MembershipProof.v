@@ -597,12 +597,12 @@ Section MembershipProof.
   Lemma chunk_size_bound:
     forall r inp act, act_from_regex r inp act ->
       forall i acttail, acttail = skipn i act ->
-        chunk_size acttail <= regex_size r - num_checks acttail.
+        chunk_size acttail <= regex_size r - num_checks acttail /\ num_checks acttail <= regex_size r.
   Proof.
     induction 1; try solve[intros i acttail EQ_acttail; apply IHact_from_regex with (i := S i); auto].
     - intros i acttail EQ_acttail. destruct i as [|i]; subst acttail; simpl.
       + unfold num_checks. simpl. lia.
-      + rewrite skipn_nil. simpl. lia.
+      + rewrite skipn_nil. simpl. unfold num_checks. simpl. lia.
     - (* Disjunction left *)
       intros i acttail EQ_acttail. destruct i as [|i]; subst acttail; simpl.
       + specialize (IHact_from_regex 0 (Areg (Disjunction r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
@@ -792,7 +792,31 @@ Section MembershipProof.
       rewrite list_sum_app, IHn. simpl list_sum.
       rewrite PeanoNat.Nat.add_0_r.
       destruct (PeanoNat.Nat.Even_Odd_dec n).
-  Admitted.
+      + destruct e as [m e]. subst n.
+        replace (2 * m * S (2 * m)) with (2 * (m * S (2 * m))) by lia.
+        replace (S (S (2 * m))) with (2 * S m) by lia.
+        replace (S (2 * m) * (2 * S m)) with (2 * (S (2 * m) * S m)) by lia.
+        do 2 rewrite PeanoNat.Nat.div2_double. lia.
+      + destruct o as [m o]. subst n.
+        replace (S (2 * m + 1)) with (2 * S m) by lia.
+        replace ((2*m+1)*(2*S m)) with (2*((2*m+1)*S m)) by lia.
+        replace (2*S m*S (2*S m)) with (2*(S m*S (2*S m))) by lia.
+        do 2 rewrite PeanoNat.Nat.div2_double. lia.
+  Qed.
+
+  Corollary actions_size_bound':
+    forall r inp act, act_from_regex r inp act ->
+      forall n, n = regex_size r ->
+        actions_size act <= n + PeanoNat.Nat.div2 (n * S n).
+  Proof.
+    intros r inp act AFR n EQ_n.
+    pose proof actions_size_bound r inp act AFR 0 act eq_refl.
+    pose proof chunk_size_bound r inp act AFR 0 act eq_refl.
+    apply proj2 in H0.
+    pose proof sum_to_n_bound (num_checks act) (regex_size r).
+    pose proof sum_to_n_n_formula n.
+    rewrite <- EQ_n in *. lia.
+  Qed.
 
   Lemma is_strict_suffix_incr:
     forall inp nextinp inpchk dir,
