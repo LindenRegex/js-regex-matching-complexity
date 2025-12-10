@@ -804,6 +804,7 @@ Section MembershipProof.
         do 2 rewrite PeanoNat.Nat.div2_double. lia.
   Qed.
 
+  (* The main corollary for bounding the size of the list of actions *)
   Corollary actions_size_bound':
     forall r inp act, act_from_regex r inp act ->
       forall n, n = regex_size r ->
