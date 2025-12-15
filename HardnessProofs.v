@@ -162,6 +162,30 @@ Section Proofs.
     - destruct pref as [|x pref]; simpl; reflexivity.
   Qed.
 
+  Lemma char_match_semicolon:
+    char_match rer semicolon_char (CdSingle semicolon_char) = true.
+  Proof.
+    unfold char_match. simpl. apply EqDec.reflb.
+  Qed.
+
+  Lemma char_match_x_semicolon:
+    char_match rer x_char (CdSingle semicolon_char) = false.
+  Proof.
+    unfold char_match. simpl. apply EqDec_neqb. auto.
+  Qed.
+
+  Lemma char_match_semicolon_x:
+    char_match rer semicolon_char (CdSingle x_char) = false.
+  Proof.
+    unfold char_match. simpl. apply EqDec_neqb. auto.
+  Qed.
+
+  Lemma char_match_x:
+    char_match rer x_char (CdSingle x_char) = true.
+  Proof.
+    unfold char_match. simpl. apply EqDec.reflb.
+  Qed.
+
   Lemma read_backref_var_sat:
     forall (gm: group_map) (v: variable) (i: nat),
       i < m -> wf_var n v -> wf_gm gm ->
@@ -310,6 +334,20 @@ Section Proofs.
         left. reflexivity.
   Qed.
 
+  Lemma inp_of_idx_succ_diff:
+    forall i, i < m ->
+      inp_of_idx (2*(n+i)) <> inp_of_idx (2*(n+i)+1).
+  Proof.
+    intros i INB.
+    replace (2*(n+i)+1) with (S (2*(n+i))) by lia.
+    rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len; lia. }
+    rewrite inp_of_idx_even by lia.
+    assert (n + m - (n + i) <> 0) by lia.
+    unfold advance_input'.
+    destruct (n+m-(n+i)) eqn:?; try contradiction. simpl.
+    intro ABS. inversion ABS. rewrite H1 in x_semicolon_neq. contradiction.
+  Qed.
+
   (* Lemma specifying the behavior of the regex checking the validity of a clause, without the separator. *)
   Lemma check_clause_regex_aux_spec:
     (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map and 0 <= i < m. *)
@@ -329,7 +367,9 @@ Section Proofs.
     - simpl in TREE. inversion TREE; subst. inversion ISTREE; subst.
       simpl. split.
       + intros lf [EQ_lf|[]]. subst lf. right. reflexivity.
-      + split; try discriminate. intros [H|[]]. admit.
+      + split; try discriminate. intros [H|[]]. exfalso.
+        pose proof inp_of_idx_succ_diff i INB_i. simpl in H0.
+        inversion H. congruence. 
     - simpl in TREE. inversion TREE; subst r1 r2 cont inp0 gm0 dir t.
       unfold wf_clause in WF_c, IH. inversion WF_c as [|l' c' WF_l WF_c']; subst l' c'.
       specialize (IH inp gm INB_i WF_c' EQ_inp WF_GM t2 ISTREE2).
@@ -353,10 +393,14 @@ Section Proofs.
           - destruct l_SPEC as [l_SPEC _]. rewrite (l_SPEC eq_refl). split; auto. intro. left. reflexivity.
           - destruct l_SPEC as [_ l_SPEC]. destruct (l_SPEC eq_refl) as [l_SPEC'|l_SPEC'].
             + rewrite l_SPEC'. simpl. split; auto; discriminate.
-            + rewrite l_SPEC'. simpl. admit.
+            + rewrite l_SPEC'. simpl. split; try discriminate. intro ABS. destruct ABS as [ABS | []].
+              subst inp.
+              pose proof inp_of_idx_succ_diff i INB_i.
+              inversion ABS. simpl in H.
+              exfalso. apply H. unfold inp_of_idx. f_equal; auto.
         }
         tauto.
-  Admitted.
+  Qed.
 
   Lemma FlatMap_in_r {X Y: Type}:
     forall (lx: list X) (f: X -> list Y -> Prop) (ly: list Y),
@@ -377,6 +421,53 @@ Section Proofs.
       + destruct H1 as [x0 [fx0 [[<- | H1] [H2 H3]]]].
         * specialize (DETERM x ly fx0 HEAD H2). subst fx0. auto.
         * firstorder.
+  Qed.
+
+  Lemma read_char_semicolon_odd:
+    forall i, i < n+m -> read_char rer (CdSingle semicolon_char) (inp_of_idx (2*i+1)) forward = Some (semicolon_char, inp_of_idx (2*(i+1))).
+  Proof.
+    intros i INB.
+    rewrite Nat.add_comm, <- advance_input_inp_of_idx, inp_of_idx_even.
+    2: lia. 2: rewrite str_len; lia.
+    assert (n+m-i <> 0) by lia.
+    destruct (n+m-i) eqn:?; try contradiction. simpl.
+    rewrite char_match_semicolon. f_equal. f_equal.
+    setoid_rewrite inp_of_idx_even; try lia.
+    f_equal.
+    - f_equal. f_equal. lia.
+    - rewrite Nat.add_comm. reflexivity.
+  Qed.
+
+  Lemma read_char_semicolon_even:
+    forall i, i < n + m -> read_char rer (CdSingle semicolon_char) (inp_of_idx (2*i)) forward = None.
+  Proof.
+    intros i INB.
+    rewrite inp_of_idx_even by lia. simpl.
+    assert (n+m-i <> 0) by lia.
+    destruct (n+m-i) eqn:?; try contradiction. simpl.
+    rewrite char_match_x_semicolon. reflexivity.
+  Qed.
+
+
+  Lemma FlatMap_empty_iff {X Y: Type}:
+    forall (lx: list X) (f: X -> list Y -> Prop) (ly: list Y),
+      FlatMap.determ f -> FlatMap.FlatMap lx f ly ->
+      (ly <> [] <-> exists (x: X) (fx: list Y), In x lx /\ f x fx /\ fx <> []).
+  Proof.
+    intros lx f ly DETERM. induction 1.
+    - simpl. firstorder.
+    - specialize (IHFlatMap DETERM).
+      destruct ly as [|y ly].
+      + simpl. rewrite IHFlatMap. split; try solve[firstorder].
+        intros [x0 [fx H0]].
+        destruct H0. destruct H0.
+        * subst x0. exfalso. specialize (DETERM x [] fx).
+          rewrite <- DETERM in H1 by tauto. destruct H1. contradiction.
+        * firstorder.
+      + split. 2: rewrite <- app_comm_cons; discriminate.
+        intros _. exists x. exists (y :: ly). split.
+        * left. reflexivity.
+        * split; [auto|discriminate].
   Qed.
 
   (* Lemma specifying the behavior of the regex that checks a clause. *)
@@ -415,35 +506,37 @@ Section Proofs.
       inversion ACT_FROM_LEAF_x; subst act dir l fx.
       specialize (AUX_FORM x IN_x). destruct AUX_FORM as [AUX_FORM | AUX_FORM]; subst x.
       - simpl in *. inversion TREE0; subst.
-        2: { (* Read never fails *) exfalso. admit. }
+        2: { (* Read never fails *) exfalso. setoid_rewrite read_char_semicolon_odd in READ; try lia. discriminate. }
         inversion TREECONT; subst. simpl in IN_lf.
-        destruct IN_lf as [IN_lf|[]]. subst lf. f_equal. admit.
+        destruct IN_lf as [IN_lf|[]]. subst lf. f_equal.
+        rewrite advance_input_inp_of_idx. 2: { rewrite str_len; lia. }
+        f_equal. lia.
       - simpl in *. inversion TREE0; subst.
-        1: { (* Read never succeeds *) exfalso. admit. }
+        1: { (* Read never succeeds *) exfalso. setoid_rewrite read_char_semicolon_even in READ; try lia. discriminate. }
         simpl in IN_lf. destruct IN_lf.
     }
     split; auto.
-  Admitted.
-
-  Lemma FlatMap_empty_iff {X Y: Type}:
-    forall (lx: list X) (f: X -> list Y -> Prop) (ly: list Y),
-      FlatMap.determ f -> FlatMap.FlatMap lx f ly ->
-      (ly <> [] <-> exists (x: X) (fx: list Y), In x lx /\ f x fx /\ fx <> []).
-  Proof.
-    intros lx f ly DETERM. induction 1.
-    - simpl. firstorder.
-    - specialize (IHFlatMap DETERM).
-      destruct ly as [|y ly].
-      + simpl. rewrite IHFlatMap. split; try solve[firstorder].
-        intros [x0 [fx H0]].
-        destruct H0. destruct H0.
-        * subst x0. exfalso. specialize (DETERM x [] fx).
-          rewrite <- DETERM in H1 by tauto. destruct H1. contradiction.
-        * firstorder.
-      + split. 2: rewrite <- app_comm_cons; discriminate.
-        intros _. exists x. exists (y :: ly). split.
-        * left. reflexivity.
-        * split; [auto|discriminate].
+    split.
+    - intro HAS_LEAF. rewrite EQ_lflist in HAS_LEAF.
+      apply (FlatMap_empty_iff _ _ _ ltac:(apply act_from_leaf_determ) CONCAT) in HAS_LEAF.
+      destruct HAS_LEAF as [x [fx [IN_x [AFL HAS_LEAF_fx]]]].
+      pose proof AUX_FORM x IN_x as EQ_x. destruct EQ_x as [EQ_x | EQ_x].
+      + subst x. tauto.
+      + subst x. exfalso. inversion AFL. simpl in *. subst act dir l fx.
+        subst inp.
+        inversion TREE0.
+        * subst cd cont inp gm0 dir t0. setoid_rewrite read_char_semicolon_even in READ; try lia. discriminate.
+        * subst cd cont inp gm0 dir t0. contradiction.
+    - intro SAT. apply AUX_SUCC_IFF in SAT. rewrite EQ_lflist.
+      apply (FlatMap_empty_iff _ _ _ ltac:(apply act_from_leaf_determ) CONCAT).
+      exists (inp_of_idx (2*(n+i)+1), gm). eexists. split; auto.
+      split.
+      + constructor. simpl. apply compute_tr_is_tree.
+      + simpl. pose proof compute_tr_is_tree rer (actions := [Areg (Regex.Character (CdSingle semicolon_char))]) (i := (inp_of_idx (n+i+(n+i+0)+1))) (gm := gm) (dir := forward) as TREE_semicolon.
+        remember (compute_tr _ _ _ _ _) as tsemicolon. clear Heqtsemicolon.
+        inversion TREE_semicolon.
+        2: { setoid_rewrite read_char_semicolon_odd in READ; try lia. discriminate. }
+        inversion TREECONT. simpl. discriminate.
   Qed.
 
   (* Lemma specifying the behavior of the regex checking the conjunction of clauses. *)
