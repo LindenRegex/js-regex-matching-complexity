@@ -739,6 +739,72 @@ Section Proofs.
     - reflexivity.
   Qed.
 
+  Lemma skipn_head {A: Type}:
+    forall (l: list A) (a: A) (i: nat), i < length l ->
+      skipn i l = nth i l a :: skipn (S i) l.
+  Proof.
+    induction l.
+    - intros a i. simpl. lia.
+    - intros a' i. simpl. destruct i as [|i].
+      + simpl. reflexivity.
+      + intro INB. assert (i < length l) by lia.
+        simpl. rewrite IHl with (a := a') by auto.
+        reflexivity.
+  Qed.
+
+  Lemma wf_gm_add:
+    forall gm, wf_gm gm ->
+      forall i, wf_gm (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm).
+  Proof.
+    intros gm WF_gm i.
+    unfold wf_gm in *. intro gid.
+    destruct (Nat.eq_dec gid i).
+    - subst gid. unfold GroupMap.find, GroupMap.add.
+      right. apply GroupMap.Facts.add_eq_o. reflexivity.
+    - setoid_rewrite GroupMap.Facts.add_neq_o; try congruence. apply WF_gm.
+  Qed.
+
+  Lemma undef_gm_add:
+    forall gm i gmpos range,
+      (forall j, i <= j -> j <= n -> GroupMap.find j gm = None) ->
+      gmpos = GroupMap.add i range gm ->
+      forall j, S i <= j -> j <= n -> GroupMap.find j gmpos = None.
+  Proof.
+    intros gm i gmpos range UNDEF -> j GE LE.
+    assert (j <> i) by lia.
+    unfold GroupMap.find, GroupMap.add.
+    rewrite GroupMap.Facts.add_neq_o by auto.
+    apply UNDEF; lia.
+  Qed.
+
+  Lemma undef_gm_unchanged:
+    forall gm i,
+      (forall j, i <= j -> j <= n -> GroupMap.find j gm = None) ->
+      forall j, S i <= j -> j <= n -> GroupMap.find j gm = None.
+  Proof.
+    intros gm i UNDEF j GE LE. apply UNDEF; lia.
+  Qed.
+
+  Lemma app_empty_iff {A: Type}:
+    forall l1 l2: list A, l1 ++ l2 = [] <-> l1 = [] /\ l2 = [].
+  Proof.
+    intros l1 l2. split.
+    - intro EMPTY. destruct l1; try discriminate. auto.
+    - intros [-> ->]. reflexivity.
+  Qed.
+
+  Lemma app_nonempty_iff {A: Type}:
+    forall l1 l2: list A, l1 ++ l2 <> [] <-> l1 <> [] \/ l2 <> [].
+  Proof.
+    intros l1 l2. split.
+    - intro NONEMPTY. destruct l1 as [|x l1].
+      + right. auto.
+      + left. discriminate.
+    - intros [NONEMPTY1 | NONEMPTY2].
+      + destruct l1 as [|x l1]; try contradiction; discriminate.
+      + destruct l1 as [|x l1]; try discriminate; auto.
+  Qed.
+
   Theorem theRegex_aux_spec:
     (* We perform backwards induction on i ∈ {1, ..., n+1}. *)
     forall np1_minus_i i, i = n + 1 - np1_minus_i ->
@@ -784,7 +850,7 @@ Section Proofs.
       specialize_prove IHnp1_minus_i by discriminate.
       specialize_prove IHnp1_minus_i. { rewrite EQ_i. lia. }
       assert (EQ'_qtail: qtail = List.nth (i-1) quants Qbf.Exists :: List.skipn i quants). {
-        rewrite EQ_qtail. admit.
+        rewrite EQ_qtail. replace i with (S (i-1)) at 3 by lia. apply skipn_head. unfold quants. fold n. lia.
       }
       rewrite EQ'_qtail. rewrite EQ'_qtail in TREE.
       simpl gm_satisfies_qbf_aux.
@@ -811,20 +877,24 @@ Section Proofs.
         clear HEAD HEAD0.
         specialize (IHnp1_minus_i gmpos) as IHpos. specialize (IHnp1_minus_i gm) as IHneg.
         clear IHnp1_minus_i.
-        specialize_prove IHpos by admit.
-        specialize_prove IHpos by admit.
+        specialize_prove IHpos. {
+          rewrite Heqgmpos. apply wf_gm_add. auto.
+        }
+        specialize_prove IHpos. {
+          eapply undef_gm_add with (gm := gm); eauto.
+        }
         simpl "-" in IHpos, IHneg.
         specialize (IHpos (inp_of_idx (i + (i + 0))) (skipn i quants) t0).
         specialize_prove IHpos. { f_equal. lia. }
         specialize_prove IHpos. { rewrite Nat.sub_0_r. reflexivity. }
         specialize (IHpos ltac:(auto)).
         specialize (IHneg WF_gm).
-        specialize_prove IHneg by admit.
+        specialize_prove IHneg. { apply undef_gm_unchanged; auto. }
         specialize (IHneg (inp_of_idx (i + (i + 0))) (skipn i quants) t1).
         specialize_prove IHneg. { f_equal. lia. }
         specialize_prove IHneg. { rewrite Nat.sub_0_r. reflexivity. }
         specialize (IHneg ltac:(auto)).
-        assert (ly ++ ly0 <> [] <-> ly <> [] \/ ly0 <> []) by admit.
+        pose proof app_nonempty_iff ly ly0.
         rewrite H0. clear H0.
         rewrite H4 in IHpos. rewrite H5 in IHneg.
         rewrite orb_true_iff. split; [|split].
@@ -898,15 +968,19 @@ Section Proofs.
           simpl. rewrite <- H. simpl in *.
           pose proof (IHnp1_minus_i gmpos) as IHpos.
           pose proof (IHnp1_minus_i gm) as IHneg.
-          specialize_prove IHpos by admit.
-          specialize_prove IHpos by admit.
+          specialize_prove IHpos. {
+            rewrite Heqgmpos. apply wf_gm_add. auto.
+          }
+          specialize_prove IHpos. {
+            eapply undef_gm_add with (gm := gm); eauto.
+          }
           simpl "-" in IHpos, IHneg.
           specialize (IHpos (inp_of_idx (i + (i + 0))) (skipn i quants) t).
           specialize_prove IHpos. { f_equal. lia. }
           specialize_prove IHpos. { rewrite Nat.sub_0_r. reflexivity. }
           specialize (IHpos ltac:(auto)).
           specialize (IHneg WF_gm).
-          specialize_prove IHneg by admit.
+          specialize_prove IHneg. { apply undef_gm_unchanged; auto. }
           specialize (IHneg (inp_of_idx (i + (i + 0))) (skipn i quants) t0).
           specialize_prove IHneg. { f_equal. lia. }
           specialize_prove IHneg. { rewrite Nat.sub_0_r. reflexivity. }
@@ -935,18 +1009,23 @@ Section Proofs.
           assert (tree_leaves treelk gm inp forward <> []). {
             destruct (tree_leaves treelk gm inp forward); discriminate.
           }
-          rewrite <- H in H0. assert (ly <> [] \/ ly0 <> []) by admit.
+          rewrite <- H in H0. rewrite app_nil_r in H0.
+          apply app_nonempty_iff in H0.
           pose proof (IHnp1_minus_i gmpos) as IHpos.
           pose proof (IHnp1_minus_i gm) as IHneg.
-          specialize_prove IHpos by admit.
-          specialize_prove IHpos by admit.
+          specialize_prove IHpos. {
+            rewrite Heqgmpos. apply wf_gm_add. auto.
+          }
+          specialize_prove IHpos. {
+            eapply undef_gm_add with (gm := gm); eauto.
+          }
           simpl "-" in IHpos, IHneg.
           specialize (IHpos (inp_of_idx (i + (i + 0))) (skipn i quants) t).
           specialize_prove IHpos. { f_equal. lia. }
           specialize_prove IHpos. { rewrite Nat.sub_0_r. reflexivity. }
           specialize (IHpos ltac:(auto)).
           specialize (IHneg WF_gm).
-          specialize_prove IHneg by admit.
+          specialize_prove IHneg. { apply undef_gm_unchanged; auto. }
           specialize (IHneg (inp_of_idx (i + (i + 0))) (skipn i quants) t0).
           specialize_prove IHneg. { f_equal. lia. }
           specialize_prove IHneg. { rewrite Nat.sub_0_r. reflexivity. }
@@ -954,11 +1033,11 @@ Section Proofs.
           rewrite H3 in IHpos. rewrite H4 in IHneg.
           split; [|split]; try discriminate.
           -- split; try contradiction; intro.
-             exfalso. apply andb_true_iff in H2.
-             do 2 rewrite negb_true_iff_not_true in H2. setoid_rewrite <- Heqgmpos in H2.
+             exfalso. apply andb_true_iff in H1.
+             do 2 rewrite negb_true_iff_not_true in H1. setoid_rewrite <- Heqgmpos in H1.
              tauto.
           -- contradiction.
-  Admitted.
+  Qed.
 
 
 
