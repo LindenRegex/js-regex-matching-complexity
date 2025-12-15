@@ -706,7 +706,6 @@ Section MembershipProof.
         destruct a.
         * unfold num_checks in *. destruct (first_check_input act) eqn:FSTCHK.
           -- rewrite actions_size_decomp_check with (inpcheck := i) by auto.
-             (* replace (length (actions_checks (Areg r0 :: act))) with (1 + length (actions_checks (skipn (S (chunk_length (Areg r0 :: act))) (Areg r0 :: act)))) by admit. *)
              setoid_rewrite num_checks_skipn_chunk_length with (act := Areg r0 :: act) (inpcheck := i); auto. unfold num_checks.
              specialize (IHact (chunk_length (Areg r0 :: act)) _ eq_refl).
              change (skipn (S (chunk_length (Areg r0 :: act))) (Areg r0 :: act)) with (skipn (chunk_length (Areg r0 :: act)) act).
@@ -724,7 +723,6 @@ Section MembershipProof.
           specialize (IHact 0 act eq_refl). lia.
         * unfold num_checks in *. destruct (first_check_input act) eqn:FSTCHK.
           -- rewrite actions_size_decomp_check with (inpcheck := i) by auto.
-             (* replace (length (actions_checks (Areg r0 :: act))) with (1 + length (actions_checks (skipn (S (chunk_length (Areg r0 :: act))) (Areg r0 :: act)))) by admit. *)
              setoid_rewrite num_checks_skipn_chunk_length with (act := Aclose g :: act) (inpcheck := i); auto. unfold num_checks.
              specialize (IHact (chunk_length (Aclose g :: act)) _ eq_refl).
              change (skipn (S (chunk_length (Aclose g :: act))) (Aclose g :: act)) with (skipn (chunk_length (Aclose g :: act)) act).
@@ -823,13 +821,26 @@ Section MembershipProof.
     forall inp nextinp inpchk dir,
       advance_input inp dir = Some nextinp ->
       Bool.le (is_strict_suffix inp inpchk dir) (is_strict_suffix nextinp inpchk dir).
-  Admitted.
+  Proof.
+    intros inp nextinp inpchk dir ADV.
+    apply Bool.le_implb, Bool.implb_true_iff.
+    intro SS. apply is_strict_suffix_correct. apply is_strict_suffix_correct in SS.
+    eapply ss_next; eauto.
+  Qed.
 
   Lemma is_strict_suffix_incr':
     forall inp n nextinp inpchk dir,
       advance_input_n inp n dir = nextinp ->
       Bool.le (is_strict_suffix inp inpchk dir) (is_strict_suffix nextinp inpchk dir).
-  Admitted.
+  Proof.
+    intros inp n nextinp inpchk dir ADV.
+    apply Bool.le_implb, Bool.implb_true_iff.
+    intro SS. apply is_strict_suffix_correct. apply is_strict_suffix_correct in SS.
+    symmetry in ADV.
+    destruct (advance_input_n_suffix _ _ _ nextinp ADV).
+    - rewrite H. auto.
+    - eapply strict_suffix_trans; eauto.
+  Qed.
 
   Lemma actions_fuel'_monotonic_inp:
     forall inp nextinp cont,
@@ -885,6 +896,20 @@ Section MembershipProof.
     forall inp dir, remaining_length inp dir = length (current_str inp dir).
   Proof.
     intros [next pref] []; reflexivity.
+  Qed.
+
+  Lemma remaining_length_advance_input_n_diff:
+    forall inp n nextinp,
+      advance_input_n inp n forward = nextinp -> nextinp <> inp ->
+      remaining_length nextinp forward < remaining_length inp forward.
+  Proof.
+    intros inp n nextinp ADV NEQ.
+    unfold advance_input_n in ADV. destruct inp as [next pref].
+    subst nextinp.
+    simpl.
+    destruct n as [|n]; try contradiction.
+    destruct next as [|x next]; try contradiction.
+    simpl. rewrite skipn_length. lia.
   Qed.
 
   Lemma read_decreases_fuel:
@@ -947,9 +972,9 @@ remaining_length nextinp forward) * last_chunk_size cont). {
         apply PeanoNat.Nat.mul_le_mono_r.
         destruct (Chars.input_eq_dec inp nextinp).
         { rewrite <- e. reflexivity. }
-        (*assert (Bool.le (is_strict_suffix inp inpchk forward) (is_strict_suffix nextinp inpchk forward)) by admit. (* Follows from EQ_nextinp *)*)
         pose proof is_strict_suffix_incr' inp n nextinp inpchk forward EQ_nextinp.
-        assert (remaining_length nextinp forward < remaining_length inp forward) by admit. (* Follows from n0: inp <> nextinp and EQ_nextinp *)
+        pose proof remaining_length_advance_input_n_diff inp n nextinp EQ_nextinp.
+        specialize_prove H1. { symmetry. auto. }
         destruct is_strict_suffix; destruct is_strict_suffix; try discriminate; lia.
       }
       destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
@@ -960,9 +985,13 @@ remaining_length nextinp forward) * last_chunk_size cont). {
       lia.
     - simpl. unfold gt. apply le_lt_S.
       apply PeanoNat.Nat.add_le_mono_l.
-      assert (remaining_length nextinp forward <= remaining_length inp forward) by admit. (* Follows from EQ_nextinp *)
+      assert (remaining_length nextinp forward <= remaining_length inp forward). {
+        destruct (input_eq_dec nextinp inp).
+        - rewrite e. auto.
+        - pose proof remaining_length_advance_input_n_diff inp n nextinp EQ_nextinp n0. lia.
+      } (* Follows from EQ_nextinp *)
       apply PeanoNat.Nat.mul_le_mono_nonneg; lia.
-  Admitted.
+  Qed.
 
   Lemma actions_fuel_notlast_le:
     forall inp act inpchk,
@@ -976,6 +1005,40 @@ remaining_length nextinp forward) * last_chunk_size cont). {
     destruct act as [|[r | ? | ?] l]; try reflexivity.
     destruct r; try reflexivity.
     destruct is_strict_suffix; simpl; lia.
+  Qed.
+
+  Lemma strict_suffix_irrefl:
+    forall dir inp, ~strict_suffix inp inp dir.
+  Proof.
+    intros dir inp SS.
+    apply ss_neq in SS. contradiction.
+  Qed.
+
+  Lemma actions_checks_first_check_input:
+    forall cont inpchk, first_check_input cont = Some inpchk ->
+      exists tl, actions_checks cont = inpchk :: tl.
+  Proof.
+    intros cont inpchk. induction cont.
+    - discriminate.
+    - destruct a as [r | i | g]; simpl; auto.
+      intro H. injection H as ->. eexists. reflexivity.
+  Qed.
+
+  Lemma read_backref_advance_input_n:
+    forall rer gm gid inp br_str nextinp,
+      read_backref rer gm gid inp forward = Some (br_str, nextinp) ->
+      exists n, nextinp = advance_input_n inp n forward.
+  Proof.
+    intros rer gm gid inp br_str nextinp H.
+    unfold read_backref in H.
+    destruct (Groups.GroupMap.find gid gm) as [range |].
+    2: { injection H as <- <-. exists 0. destruct inp; reflexivity. }
+    destruct range as [startIdx [endIdx |]].
+    2: { injection H as <- <-. exists 0. destruct inp; reflexivity. }
+    destruct inp as [next pref].
+    destruct Nat.leb; try discriminate.
+    destruct EqDec.eqb; try discriminate.
+    injection H as <- <-. exists (endIdx - startIdx). reflexivity.
   Qed.
 
   Theorem functional_terminates':
@@ -1078,7 +1141,11 @@ remaining_length nextinp forward) * last_chunk_size cont). {
           apply IHfuel.
           - apply afr_pop_quant_free_iter. auto.
           - unfold actions_fuel. simpl first_check_input. cbv match.
-            replace (is_strict_suffix inp inp forward) with false by admit.
+            replace (is_strict_suffix inp inp forward) with false.
+            2: {
+              symmetry. apply is_strict_suffix_inv_false.
+              apply strict_suffix_irrefl.
+            }
             destruct (match r1 with Quantified _ _ _ _ => true | _ => false end) eqn:R1_QUANT.
             + destruct r1; try discriminate. simpl actions_fuel'.
               unfold actions_fuel in FUEL. simpl first_check_input in FUEL.
@@ -1153,11 +1220,9 @@ remaining_length nextinp forward) * last_chunk_size cont). {
       + (* Backreference *)
         destruct read_backref as [[br_str nextinp]| ] eqn:READ; try discriminate.
         assert (CONT: compute_tree rer cont nextinp gm forward fuel <> None). {
-          apply IHfuel.
-          - eapply afr_pop_backref. + eauto. + admit. (* The backreference read succeeds, hence nextinp = advance_input n inp for some n *)
-          - assert (exists n: nat, advance_input_n inp n forward = nextinp) by admit.
-            destruct H as [n ADV].
-            pose proof read_backref_decreases_fuel inp id n nextinp cont ADV.
+          pose proof read_backref_advance_input_n rer gm id inp br_str nextinp READ as [n H]. apply IHfuel.
+          - eapply afr_pop_backref. + eauto. + symmetry. apply H. (* The backreference read succeeds, hence nextinp = advance_input n inp for some n *)
+          - symmetry in H. pose proof read_backref_decreases_fuel inp id n nextinp cont H.
             lia.
         }
         destruct compute_tree; try contradiction. discriminate.
@@ -1170,14 +1235,31 @@ remaining_length nextinp forward) * last_chunk_size cont). {
             cbv match in FUEL.
             unfold actions_fuel. simpl in FUEL.
             (* AFR implies that cont must start with a quantifier *)
+            pose proof afr_checks_fby_quant r inp (Acheck inpcheck :: cont) AFR as CHK_FBY_QUANT.
+            unfold checks_fby_quant in CHK_FBY_QUANT. specialize (CHK_FBY_QUANT 0 inpcheck eq_refl).
+            destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
             destruct cont as [|a cont].
-            1: exfalso; admit.
-            destruct a as [rsub | ? | ?]. 2,3: exfalso; admit.
-            destruct rsub. 1-4,6-9: exfalso; admit.
+            1: { exfalso. discriminate. }
+            destruct a as [rsub | ? | ?]. 2,3: exfalso; discriminate.
+            destruct rsub. 1-4,6-9: exfalso; discriminate.
             simpl first_check_input. destruct first_check_input as [inpchknext | ] eqn:SNDCHK.
             + (* NON-TRIVIAL: is_strict_suffix inp inpcheck forward = true implies
               is_strict_suffix inp inpchknext forward = true *)
-              replace (is_strict_suffix inp inpchknext forward) with true by admit. rewrite SS in FUEL. lia.
+              replace (is_strict_suffix inp inpchknext forward) with true.
+              2: {
+                symmetry. apply is_strict_suffix_correct.
+                apply is_strict_suffix_correct in SS.
+                pose proof afr_checks_ordered r inp _ AFR as ORDERED. simpl in ORDERED.
+                pose proof actions_checks_first_check_input cont inpchknext SNDCHK. destruct H as [tl H].
+                rewrite H in ORDERED.
+                inversion ORDERED. subst a l.
+                inversion H2. subst a l.
+                inversion H5. subst b l.
+                unfold input_le in H1. destruct H1 as [H1 | H1].
+                - rewrite <- H1. auto.
+                - eauto using strict_suffix_trans.
+              }
+              rewrite SS in FUEL. lia.
             + rewrite SS in FUEL. simpl in *. rewrite SNDCHK in FUEL. simpl in *. lia. 
         }
         destruct compute_tree; try contradiction. discriminate.
@@ -1190,7 +1272,7 @@ remaining_length nextinp forward) * last_chunk_size cont). {
             + unfold actions_fuel. rewrite FSTCHK. simpl in *. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-  Admitted.
+  Qed.
 
 
 End MembershipProof.
