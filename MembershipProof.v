@@ -1,5 +1,5 @@
 From Linden Require Import Regex Parameters Semantics Chars StrictSuffix
-  FunctionalSemantics Tactics.
+  FunctionalSemantics Tactics Tree FunctionalUtils ComputeIsTree.
 From Warblre Require Import Base.
 Require Import List Lia Sorted.
 Import ListNotations.
@@ -1274,5 +1274,114 @@ remaining_length nextinp forward) * last_chunk_size cont). {
         destruct compute_tree; try contradiction. discriminate.
   Qed.
 
+
+  (** * Any fuel depth is a bound on the tree depth *)
+  (* Definition of tree depth *)
+  Fixpoint tree_depth (t: tree) :=
+    match t with
+    | Mismatch | Match => 1
+    | Choice t1 t2 => 1 + max (tree_depth t1) (tree_depth t2)
+    | Read _ t | ReadBackRef _ t | Progress t | AnchorPass _ t 
+    | GroupAction _ t => 1 + tree_depth t
+    | LK _ tlk t => 1 + max (tree_depth tlk) (tree_depth t)
+    | LKFail _ tlk => 1 + tree_depth tlk
+    end.
+
+  Lemma fuel_depth_bound:
+    forall rer act inp gm dir fuel t,
+      compute_tree rer act inp gm dir fuel = Some t ->
+      tree_depth t <= 2 * fuel.
+  Proof.
+    intros rer act inp gm dir fuel. revert rer act inp gm dir. induction fuel.
+    - discriminate.
+    - intros rer act inp gm dir t. simpl.
+      destruct act as [|[r | i | g] act].
+      + intro H. injection H as <-. simpl. lia.
+      + destruct r.
+        * intro H. transitivity (2 * fuel). -- eapply IHfuel; eauto. -- lia.
+        * destruct read_char.
+          -- destruct p as [c nextinp].
+             destruct compute_tree as [treecont|] eqn:CONT; try discriminate.
+             intro H. injection H as <-. simpl.
+             specialize (IHfuel _ _ _ _ _ _ CONT). lia.
+          -- intro H. injection H as <-. simpl. lia.
+        * destruct compute_tree as [t1|] eqn:CONT1; try discriminate.
+          destruct (compute_tree rer (Areg r2 :: act) inp gm dir fuel) as [t2|] eqn:CONT2; try discriminate.
+          intro H. injection H as <-. simpl.
+          pose proof IHfuel _ _ _ _ _ _ CONT1 as IH1.
+          pose proof IHfuel _ _ _ _ _ _ CONT2 as IH2. lia.
+        * intro H. pose proof IHfuel _ _ _ _ _ _ H. lia.
+        * destruct min as [|min].
+          -- destruct (match delta with NoI.N 0 => true | _ => false end) eqn:DELTA_0.
+             ++ destruct delta as [[]|]; try discriminate.
+                intro H. pose proof IHfuel _ _ _ _ _ _ H. lia.
+             ++ set (x := match compute_tree rer (Areg r :: _ :: _ :: act) inp _ dir fuel with Some titer => _ | None => None end).
+                replace (match delta with NoI.N 0 => _ | _ => x end) with x.
+                2: { destruct delta as [[]|]; try discriminate; reflexivity. }
+                subst x.
+                destruct compute_tree as [titer|] eqn:ITER; try discriminate.
+                destruct (compute_tree rer act inp gm dir fuel) as [tskip|] eqn:SKIP; try discriminate.
+                intro H. injection H as <-.
+                pose proof IHfuel _ _ _ _ _ _ ITER as IHiter.
+                pose proof IHfuel _ _ _ _ _ _ SKIP as IHskip.
+                destruct greedy; simpl; try lia.
+                destruct (tree_depth tskip); lia.
+          -- destruct compute_tree as [titer|] eqn:ITER; try discriminate.
+             intro H. injection H as <-.
+             pose proof IHfuel _ _ _ _ _ _ ITER. simpl. lia.
+        * destruct compute_tree as [treelk|] eqn:LK; try discriminate.
+          destruct lk_result.
+          -- destruct (compute_tree rer act inp g dir fuel) as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
+             simpl. pose proof IHfuel _ _ _ _ _ _ LK as IHlk. pose proof IHfuel _ _ _ _ _ _ CONT as IHcont. lia.
+          -- intro H. injection H as <-.
+             pose proof IHfuel _ _ _ _ _ _ LK as IHlk. simpl. lia.
+        * destruct compute_tree as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
+          pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
+        * destruct anchor_satisfied.
+          -- destruct compute_tree as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
+             pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
+          -- intro H. injection H as <-. simpl. lia.
+        * destruct read_backref as [[br_str nextinp]|].
+          -- destruct compute_tree as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
+             pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
+          -- intro H. injection H as <-. simpl. lia.
+      + destruct is_strict_suffix.
+        * destruct compute_tree as [treecont|] eqn:CONT; try discriminate.
+          intro H. injection H as <-.
+          pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
+        * intro H. injection H as <-. simpl. lia.
+      + destruct compute_tree as [treecont|] eqn:CONT; try discriminate.
+        intro H. injection H as <-.
+        pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
+  Qed.
+
+  Corollary tree_depth_bound_act:
+    forall (r: regex) (inp: input) (act: actions),
+      supported_regex r -> act_from_regex r inp act ->
+      forall gm rer t, is_tree rer act inp gm forward t ->
+        tree_depth t <= 2*(S (actions_fuel inp act)).
+  Proof.
+    intros r inp act SUPP_REGEX AFR gm rer t TREE.
+    pose proof functional_terminates' r inp act SUPP_REGEX AFR (S (actions_fuel inp act)) ltac:(lia) gm rer.
+    destruct compute_tree as [t'|] eqn:COMPUTE; try congruence.
+    pose proof compute_is_tree _ _ _ _ _ _ _ COMPUTE.
+    assert (t = t'). {
+      eapply is_tree_determ; eauto.
+    }
+    subst t'.
+    eapply fuel_depth_bound; eauto.
+  Qed.
+
+  Corollary tree_depth_bound_regex:
+    forall r: regex, supported_regex r ->
+      forall rer inp gm t, is_tree rer [Areg r] inp gm forward t ->
+        tree_depth t <= 2*(S ((1 + remaining_length inp forward) * regex_size r)).
+  Proof.
+    intros r SUPP_REGEX rer inp gm t TREE.
+    pose proof tree_depth_bound_act r inp [Areg r] SUPP_REGEX.
+    specialize_prove H. { constructor. }
+    specialize (H gm rer t TREE).
+    unfold actions_fuel in H. simpl in H. simpl. lia.
+  Qed.
 
 End MembershipProof.
