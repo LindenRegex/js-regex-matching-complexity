@@ -219,28 +219,28 @@ Section Proofs.
   Qed.
 
   Lemma read_char_x_even:
-    forall i, i < m -> read_char rer (CdSingle x_char) (inp_of_idx (2*(n+i))) forward = Some (x_char, inp_of_idx (2*(n+i)+1)).
+    forall i, i < n+m -> read_char rer (CdSingle x_char) (inp_of_idx (2*i)) forward = Some (x_char, inp_of_idx (2*i+1)).
   Proof.
     intros i INB. rewrite inp_of_idx_even by lia.
-    simpl. assert (n + m - (n + i) <> 0) by lia.
-    destruct (n + m - (n + i)) eqn:?; try contradiction. simpl.
-    unfold char_match. simpl. rewrite EqDec.reflb.
+    simpl. assert (n + m - i <> 0) by lia.
+    destruct (n + m - i) eqn:?; try contradiction. simpl.
+    rewrite char_match_x.
     f_equal. f_equal.
-    replace (n + i + (n + i + 0) + 1) with (S (n + i + (n + i + 0))) by lia.
+    replace (i + (i + 0) + 1) with (S (i + (i + 0))) by lia.
     rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len; lia. }
     setoid_rewrite inp_of_idx_even; try lia.
     rewrite Heqn0. simpl. unfold advance_input'. simpl. reflexivity.
   Qed.
 
   Lemma read_char_x_odd:
-    forall i, i < m -> read_char rer (CdSingle x_char) (inp_of_idx (2*(n+i)+1)) forward = None.
+    forall i, i < n+m -> read_char rer (CdSingle x_char) (inp_of_idx (2*i+1)) forward = None.
   Proof.
-    intros i INB. replace (2 * (n + i) + 1) with (S (2 * (n + i))) by lia.
+    intros i INB. replace (2 * i + 1) with (S (2 * i)) by lia.
     rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len. lia. }
     rewrite inp_of_idx_even by lia. unfold read_char, advance_input'.
     unfold advance_input.
-    assert (n+m-(n+i) <> 0) by lia.
-    destruct (n+m-(n+i)) eqn:?; try contradiction. simpl.
+    assert (n+m-i <> 0) by lia.
+    destruct (n+m-i) eqn:?; try contradiction. simpl.
     unfold char_match. simpl. replace (_ ==? _)%wt with false; try reflexivity.
     symmetry. apply EqDec_neqb. auto.
   Qed.
@@ -682,20 +682,25 @@ Section Proofs.
     inversion CONT. subst r1 r2 cont inp0 gm0 dir t.
     inversion ISTREE1. subst gid r1 cont inp0 gm0 dir t1.
     inversion TREECONT.
-    2: { subst cd cont inp0 gm0 dir treecont. exfalso. admit. }
+    2: { subst cd cont inp0 gm0 dir treecont. exfalso. subst inp.
+    rewrite read_char_x_even in READ by lia. discriminate. }
     subst cd cont inp0 gm0 dir treecont.
     inversion TREECONT0. subst gid cont inp0 gm0 dir tcont.
-    inversion TREECONT1. 2: { subst cd cont inp0 gm0 dir treecont. exfalso. admit. }
+    inversion TREECONT1. 2: { subst cd cont inp0 gm0 dir treecont. exfalso.
+    subst inp. rewrite read_char_x_even in READ by lia. injection READ as <- <-.
+    setoid_rewrite read_char_semicolon_odd in READ0; try lia. discriminate. }
     subst cd cont inp0 gm0 dir treecont.
     inversion TREECONT2. subst inp0 gm0 dir tcont.
-    inversion ISTREE2. 2: { subst cd cont inp0 gm0 dir t2. exfalso. admit. }
+    inversion ISTREE2. 2: { subst cd cont inp0 gm0 dir t2. exfalso. subst inp. rewrite read_char_x_even in READ1 by lia. discriminate. }
     subst cd cont inp0 gm0 dir t2.
-    inversion TREECONT3. 2: { subst cd cont inp0 gm0 dir tcont. exfalso. admit. }
+    inversion TREECONT3. 2: { subst cd cont inp0 gm0 dir tcont. exfalso.
+    subst inp. rewrite read_char_x_even in READ1 by lia. injection READ1 as <- <-.
+    setoid_rewrite read_char_semicolon_odd in READ2; try lia. discriminate. }
     subst cd cont inp0 gm0 dir tcont.
     inversion TREECONT4. subst inp0 gm0 dir tcont0.
     simpl tree_leaves. f_equal; f_equal.
-    - subst inp. rewrite advance_input_inp_of_idx. 2: admit.
-      rewrite advance_input_inp_of_idx. 2: admit.
+    - subst inp. rewrite advance_input_inp_of_idx. 2: rewrite str_len; lia.
+      rewrite advance_input_inp_of_idx. 2: rewrite str_len; lia.
       f_equal. lia.
     - apply GroupMap.MapS.Equal_eq.
       intro i'. destruct (PeanoNat.Nat.eq_dec i' i).
@@ -703,25 +708,26 @@ Section Proofs.
         unfold GroupMap.close. unfold GroupMap.open at 1.
         unfold GroupMap.find.
         rewrite GroupMap.Facts.add_eq_o. 2: reflexivity.
-        subst inp. rewrite idx_inp_of_idx. 2: admit.
-        rewrite advance_input_inp_of_idx. 2: admit.
-        rewrite idx_inp_of_idx. 2: admit.
+        subst inp. rewrite idx_inp_of_idx. 2: rewrite str_len; lia.
+        rewrite advance_input_inp_of_idx. 2: rewrite str_len; lia.
+        rewrite idx_inp_of_idx. 2: rewrite str_len; lia.
         replace (_ <=? _) with true. 2: { symmetry. apply PeanoNat.Nat.leb_le. lia. }
         rewrite GroupMap.Facts.add_eq_o. 2: reflexivity.
         rewrite GroupMap.Facts.add_eq_o. 2: reflexivity.
         f_equal. f_equal. f_equal. lia.
       + unfold GroupMap.close, GroupMap.add, GroupMap.open at 1, GroupMap.find.
         rewrite GroupMap.Facts.add_eq_o with (x := i) (y := i). 2: reflexivity.
-        subst inp. rewrite advance_input_inp_of_idx, idx_inp_of_idx, idx_inp_of_idx by admit.
+        subst inp. rewrite advance_input_inp_of_idx, idx_inp_of_idx, idx_inp_of_idx.
+        2-4: rewrite str_len; lia.
         replace (_ <=? _) with true. 2: { symmetry. apply PeanoNat.Nat.leb_le. lia. }
         rewrite GroupMap.Facts.add_neq_o. 2: auto.
         rewrite GroupMap.Facts.add_neq_o. 2: auto.
         unfold GroupMap.open. rewrite GroupMap.Facts.add_neq_o. 2: auto.
         reflexivity.
-    - subst inp. rewrite advance_input_inp_of_idx. 2: admit.
-      rewrite advance_input_inp_of_idx. 2: admit.
+    - subst inp. rewrite advance_input_inp_of_idx. 2: rewrite str_len; lia.
+      rewrite advance_input_inp_of_idx. 2: rewrite str_len; lia.
       f_equal. f_equal. lia.
-  Admitted.
+  Qed.
 
   Lemma negb_true_iff_not_true:
     forall b: bool, negb b = true <-> ~(b = true).
