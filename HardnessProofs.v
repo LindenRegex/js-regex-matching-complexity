@@ -194,6 +194,43 @@ Section Proofs.
     unfold read_backref. destruct GroupMap.find; try discriminate. reflexivity.
   Qed.
 
+  Lemma read_char_x_even:
+    forall i, i < m -> read_char rer (CdSingle x_char) (inp_of_idx (2*(n+i))) forward = Some (x_char, inp_of_idx (2*(n+i)+1)).
+  Proof.
+    intros i INB. rewrite inp_of_idx_even by lia.
+    simpl. assert (n + m - (n + i) <> 0) by lia.
+    destruct (n + m - (n + i)) eqn:?; try contradiction. simpl.
+    unfold char_match. simpl. rewrite EqDec.reflb.
+    f_equal. f_equal.
+    replace (n + i + (n + i + 0) + 1) with (S (n + i + (n + i + 0))) by lia.
+    rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len; lia. }
+    setoid_rewrite inp_of_idx_even; try lia.
+    rewrite Heqn0. simpl. unfold advance_input'. simpl. reflexivity.
+  Qed.
+
+  Lemma read_char_x_odd:
+    forall i, i < m -> read_char rer (CdSingle x_char) (inp_of_idx (2*(n+i)+1)) forward = None.
+  Proof.
+    intros i INB. replace (2 * (n + i) + 1) with (S (2 * (n + i))) by lia.
+    rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len. lia. }
+    rewrite inp_of_idx_even by lia. unfold read_char, advance_input'.
+    unfold advance_input.
+    assert (n+m-(n+i) <> 0) by lia.
+    destruct (n+m-(n+i)) eqn:?; try contradiction. simpl.
+    unfold char_match. simpl. replace (_ ==? _)%wt with false; try reflexivity.
+    symmetry. apply EqDec_neqb. auto.
+  Qed.
+
+  Lemma firstn_app_firstn_skipn {A: Type}:
+    forall (l: list A) (n m: nat),
+      firstn n l ++ firstn m (skipn n l) = firstn (n+m) l.
+  Proof.
+    clear n m. induction l.
+    - intros n m. do 2 rewrite firstn_nil. rewrite skipn_nil, firstn_nil. reflexivity.
+    - intros n m. destruct n as [|n'].
+      + simpl. reflexivity.
+      + simpl. f_equal. apply IHl.
+  Qed.
 
   (* Lemma specifying the behavior of the regex checking a literal (either \i or \i x).*)
   Lemma check_literal_regex_spec:
@@ -236,7 +273,15 @@ Section Proofs.
         rewrite read_backref_var_sat with (i := i) in READ_BACKREF; auto.
         2: { inversion WF_lit; subst. auto. }
         injection READ_BACKREF as <- <-.
-        inversion TREECONT; subst. simpl. f_equal. admit.
+        inversion TREECONT; subst. simpl. f_equal.
+        replace (match skipn _ str with | [] => _ | _ :: l => _ end) with (skipn 1 (skipn (n + i + (n + i + 0)) str)).
+        2: {
+          destruct (skipn (n+i+(n+i+0)) str); reflexivity.
+        }
+        rewrite <- rev_app_distr.
+        change (match skipn _ str with | [] => _ | _::l => _ end) with (firstn 1 (skipn (n+i+(n+i+0)) str)).
+        rewrite skipn_skipn. rewrite firstn_app_firstn_skipn.
+        unfold inp_of_idx. f_equal. f_equal. f_equal. lia.
     - (* Negative variable *)
       destruct (WF_GM v) as [NOTFOUND|FOUND].
       + (* Variable not found *)
@@ -247,8 +292,11 @@ Section Proofs.
         2: { rewrite read_backref_var_unsat with (i := i) in READ_BACKREF; auto. discriminate. }
         rewrite read_backref_var_unsat with (i := i) in READ_BACKREF; auto. injection READ_BACKREF as <- <-.
         inversion TREECONT; subst.
-        2: { (* The read cannot fail *) exfalso. admit. }
-        inversion TREECONT0; subst. simpl. f_equal. admit.
+        2: { (* The read cannot fail *) exfalso. setoid_rewrite read_char_x_even in READ; try lia. discriminate. }
+        inversion TREECONT0; subst. simpl. f_equal. f_equal.
+        replace (n + i + (n + i + 0) + 1) with (S (n + i + (n + i + 0))) by lia.
+        rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len; lia. }
+        f_equal.
       + (* Variable found *)
         destruct gm_satisfies_var eqn:SAT.
         2: { unfold gm_satisfies_var in SAT. rewrite FOUND in SAT. discriminate. }
@@ -258,9 +306,9 @@ Section Proofs.
         rewrite read_backref_var_sat with (i := i) in READ_BACKREF; auto. 2: { inversion WF_lit; subst. auto. }
         injection READ_BACKREF as <- <-.
         inversion TREECONT; subst.
-        1: { (* The read cannot succeed *) exfalso. admit. }
+        1: { (* The read cannot succeed *) exfalso. setoid_rewrite read_char_x_odd in READ; try lia. discriminate. }
         left. reflexivity.
-  Admitted.
+  Qed.
 
   (* Lemma specifying the behavior of the regex checking the validity of a clause, without the separator. *)
   Lemma check_clause_regex_aux_spec:
