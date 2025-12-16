@@ -1107,6 +1107,14 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       injection H as <- <-. exists (endIdx - startIdx). reflexivity.
   Qed.
 
+  Lemma remaining_le_full_length:
+    forall inp dir, remaining_length inp dir <= length (input_str inp).
+  Proof.
+    intros [next pref] []; simpl.
+    - rewrite app_length. lia.
+    - rewrite app_length, rev_length. lia.
+  Qed.
+
   Theorem functional_terminates':
     forall (r: regex) (inp: input) (act: actions) (dir: Direction),
       supported_regex r -> act_from_regex r inp act dir ->
@@ -1270,7 +1278,18 @@ remaining_length nextinp dir) * last_chunk_size cont). {
         }
         destruct compute_tree; try contradiction.
         destruct compute_tree; try contradiction. discriminate.
-      + (* Lookaround *) admit.
+      + (* Lookaround *)
+        assert (LKCONT: compute_tree rer [Areg r0] inp gm (lk_dir lk) fuel <> None). {
+          apply IHfuel.
+          1: eapply afr_pop_lk_lk; eauto.
+          unfold actions_fuel in *. simpl actions_lookaround_fuel in *.
+          unfold actions_fuel_nolk. simpl.
+          rewrite PeanoNat.Nat.max_0_r, PeanoNat.Nat.add_0_r.
+          pose proof remaining_le_full_length inp (lk_dir lk).
+          unfold actions_fuel_nolk in FUEL. simpl in FUEL.
+          destruct (first_check_input cont).
+          - 
+        }
       + (* Group *)
         assert (CONT: compute_tree rer (Areg r0 :: Aclose id :: cont) inp (Groups.GroupMap.open (idx inp) id gm) dir fuel <> None). {
           apply IHfuel.
