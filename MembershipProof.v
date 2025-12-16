@@ -14,7 +14,7 @@ Section MembershipProof.
   | s_Disjunction: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Disjunction r1 r2)
   | s_Sequence: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Sequence r1 r2)
   | s_Quantified: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 +∞ r) (* only the star (greedy or lazy) *)
-  (* No lookaround *)
+  | s_Lookaround: forall lk r, supported_regex r -> supported_regex (Lookaround lk r)
   | s_Group: forall gid r, supported_regex r -> supported_regex (Group gid r)
   | s_Anchor: forall a, supported_regex (Anchor a)
   | s_Backreference: forall gid, supported_regex (Backreference gid).
@@ -36,57 +36,63 @@ Section MembershipProof.
   | Anchor _ | Backreference _ => 1
   end.
 
-  (* Formalizing when an input and list of actions come from a supported regex (forward direction only) *)
-  Inductive act_from_regex (r: regex): input -> actions -> Prop :=
-  | afr_refl: forall inp, act_from_regex r inp [Areg r]
-  | afr_pop_check: forall inp inpcheck l,
-      strict_suffix inp inpcheck forward ->
-      act_from_regex r inp (Acheck inpcheck :: l) ->
-      act_from_regex r inp l
-  | afr_pop_close: forall inp gid l,
-      act_from_regex r inp (Aclose gid :: l) -> act_from_regex r inp l
-  | afr_pop_epsilon: forall inp l,
-      act_from_regex r inp (Areg Epsilon :: l) -> act_from_regex r inp l
-  | afr_pop_char: forall inp nextinp cd l,
-      act_from_regex r inp (Areg (Regex.Character cd) :: l) ->
-      advance_input inp forward = Some nextinp ->
-      act_from_regex r nextinp l
-  | afr_pop_disj_l: forall inp r1 r2 l,
-      act_from_regex r inp (Areg (Disjunction r1 r2) :: l) ->
-      act_from_regex r inp (Areg r1 :: l)
-  | afr_pop_disj_r: forall inp r1 r2 l,
-      act_from_regex r inp (Areg (Disjunction r1 r2) :: l) ->
-      act_from_regex r inp (Areg r2 :: l)
-  | afr_pop_sequence: forall inp r1 r2 l,
-      act_from_regex r inp (Areg (Sequence r1 r2) :: l) ->
-      act_from_regex r inp (Areg r1 :: Areg r2 :: l)
-  | afr_pop_quant_done: forall inp greedy r1 l,
-      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 0) r1) :: l) ->
-      act_from_regex r inp l
-  | afr_pop_quant_free_iter: forall greedy delta r1 inp l,
-      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) ->
-      act_from_regex r inp (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 delta r1) :: l)
-  | afr_pop_quant_free_skip: forall inp greedy delta r1 l,
-      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) ->
-      act_from_regex r inp l
-  | afr_pop_group: forall inp gid r1 l,
-      act_from_regex r inp (Areg (Group gid r1) :: l) ->
-      act_from_regex r inp (Areg r1 :: Aclose gid :: l)
-  | afr_pop_anchor: forall inp a l,
-      act_from_regex r inp (Areg (Anchor a) :: l) ->
-      act_from_regex r inp l
-  | afr_pop_backref: forall inp n nextinp gid l,
-      act_from_regex r inp (Areg (Backreference gid) :: l) ->
-      advance_input_n inp n forward = nextinp ->
-      act_from_regex r nextinp l.
+  (* Formalizing when an input, list of actions and direction come from a supported regex *)
+  Inductive act_from_regex (r: regex): input -> actions -> Direction -> Prop :=
+  | afr_refl: forall inp, act_from_regex r inp [Areg r] forward
+  | afr_pop_check: forall inp inpcheck l dir,
+      strict_suffix inp inpcheck dir ->
+      act_from_regex r inp (Acheck inpcheck :: l) dir ->
+      act_from_regex r inp l dir
+  | afr_pop_close: forall inp gid l dir,
+      act_from_regex r inp (Aclose gid :: l) dir -> act_from_regex r inp l dir
+  | afr_pop_epsilon: forall inp l dir,
+      act_from_regex r inp (Areg Epsilon :: l) dir -> act_from_regex r inp l dir
+  | afr_pop_char: forall inp nextinp cd l dir,
+      act_from_regex r inp (Areg (Regex.Character cd) :: l) dir ->
+      advance_input inp dir = Some nextinp ->
+      act_from_regex r nextinp l dir
+  | afr_pop_disj_l: forall inp r1 r2 l dir,
+      act_from_regex r inp (Areg (Disjunction r1 r2) :: l) dir ->
+      act_from_regex r inp (Areg r1 :: l) dir
+  | afr_pop_disj_r: forall inp r1 r2 l dir,
+      act_from_regex r inp (Areg (Disjunction r1 r2) :: l) dir ->
+      act_from_regex r inp (Areg r2 :: l) dir
+  | afr_pop_sequence: forall inp r1 r2 l dir,
+      act_from_regex r inp (Areg (Sequence r1 r2) :: l) dir ->
+      act_from_regex r inp (seq_list r1 r2 dir ++ l) dir
+  | afr_pop_quant_done: forall inp greedy r1 l dir,
+      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 0) r1) :: l) dir ->
+      act_from_regex r inp l dir
+  | afr_pop_quant_free_iter: forall greedy delta r1 inp l dir,
+      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) dir ->
+      act_from_regex r inp (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 delta r1) :: l) dir
+  | afr_pop_quant_free_skip: forall inp greedy delta r1 l dir,
+      act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) dir ->
+      act_from_regex r inp l dir
+  | afr_pop_group: forall inp gid r1 l dir,
+      act_from_regex r inp (Areg (Group gid r1) :: l) dir ->
+      act_from_regex r inp (Areg r1 :: Aclose gid :: l) dir
+  | afr_pop_lk_lk: forall inp lk rlk l dir,
+      act_from_regex r inp (Areg (Lookaround lk rlk) :: l) dir ->
+      act_from_regex r inp [Areg rlk] (lk_dir lk)
+  | afr_pop_lk_cont: forall inp lk rlk l dir,
+      act_from_regex r inp (Areg (Lookaround lk rlk) :: l) dir ->
+      act_from_regex r inp l dir
+  | afr_pop_anchor: forall inp a l dir,
+      act_from_regex r inp (Areg (Anchor a) :: l) dir ->
+      act_from_regex r inp l dir
+  | afr_pop_backref: forall inp n nextinp gid l dir,
+      act_from_regex r inp (Areg (Backreference gid) :: l) dir ->
+      advance_input_n inp n dir = nextinp ->
+      act_from_regex r nextinp l dir.
 
 
   (* A list of actions coming from a supported regex is a supported list of actions *)
   Lemma suppregex_suppactions:
     forall r, supported_regex r ->
-      forall inp l, act_from_regex r inp l -> supported_actions l.
+      forall inp l dir, act_from_regex r inp l dir -> supported_actions l.
   Proof.
-    intros r SUPP inp l. induction 1; try solve[inversion IHact_from_regex; auto].
+    intros r SUPP inp l dir. induction 1; try solve[inversion IHact_from_regex; auto].
     - constructor; constructor. auto.
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0.
@@ -99,7 +105,7 @@ Section MembershipProof.
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0.
       inversion H1. subst r0 r3.
-      repeat (constructor; auto).
+      destruct dir; repeat (constructor; auto).
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0.
       inversion H1. subst greedy0 r0. rewrite <- H5 in *.
@@ -111,21 +117,25 @@ Section MembershipProof.
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0. inversion H1. subst gid r0.
       repeat (constructor; auto).
+    - inversion IHact_from_regex. subst x l0.
+      inversion H2. subst r0.
+      inversion H1. subst lk0 r0.
+      constructor; constructor; auto.
   Qed.
 
   (** * In a valid list of actions, all checks are ordered (non-strictly) from more to less restrictive. *)
 
-  Definition input_le (inp1 inp2: input): Prop :=
-    inp1 = inp2 \/ strict_suffix inp1 inp2 forward.
+  Definition input_le (dir: Direction) (inp1 inp2: input): Prop :=
+    inp1 = inp2 \/ strict_suffix inp1 inp2 dir.
 
-  Lemma input_le_refl: Relations_1.Reflexive input input_le.
+  Lemma input_le_refl: forall dir, Relations_1.Reflexive input (input_le dir).
   Proof.
-    unfold Relations_1.Reflexive. intro x. left. reflexivity.
+    unfold Relations_1.Reflexive. intros dir x. left. reflexivity.
   Qed.
 
-  Lemma input_le_trans: Relations_1.Transitive input_le.
+  Lemma input_le_trans: forall dir, Relations_1.Transitive (input_le dir).
   Proof.
-    unfold Relations_1.Transitive. intros x y z XY YZ.
+    unfold Relations_1.Transitive. intros dir x y z XY YZ.
     destruct XY as [-> | XY]; destruct YZ as [-> | YZ].
     - apply input_le_refl.
     - right. auto.
@@ -133,9 +143,9 @@ Section MembershipProof.
     - right. eapply strict_suffix_trans; eauto.
   Qed.
 
-  #[global] Add Relation input input_le
-    reflexivity proved by input_le_refl
-    transitivity proved by input_le_trans
+  #[global] Add Parametric Relation (dir: Direction): input (input_le dir)
+    reflexivity proved by (input_le_refl dir)
+    transitivity proved by (input_le_trans dir)
     as input_le_rel.
 
   Fixpoint actions_checks (act: actions): list input :=
@@ -146,8 +156,8 @@ Section MembershipProof.
     end.
   
   Lemma afr_checks_ordered:
-    forall r inp act,
-      act_from_regex r inp act -> Sorted input_le (inp :: actions_checks act).
+    forall r inp act dir,
+      act_from_regex r inp act dir -> Sorted (input_le dir) (inp :: actions_checks act).
   Proof.
     induction 1; try solve[simpl in IHact_from_regex; auto].
     - simpl. constructor; constructor.
@@ -161,6 +171,7 @@ Section MembershipProof.
       destruct actions_checks as [|inpcheck q]; constructor.
       inversion H4. subst b l0. transitivity inp; auto.
       right. apply read_suffix. auto.
+    - simpl in *. inversion IHact_from_regex. subst a l0. constructor; destruct dir; simpl; auto.
     - simpl in *. constructor; auto.
       constructor. reflexivity.
     - simpl in *. inversion IHact_from_regex. subst a l0. constructor; auto.
@@ -178,7 +189,7 @@ Section MembershipProof.
         List.nth_error act (S i) = Some (Areg (Quantified greedy min delta r)).
   
   Lemma afr_checks_fby_quant:
-    forall r inp act, act_from_regex r inp act -> checks_fby_quant act.
+    forall r inp act dir, act_from_regex r inp act dir -> checks_fby_quant act.
   Proof.
     induction 1; unfold checks_fby_quant; try solve[
       intros i inpcheck0 EQ_CHECK;
@@ -190,8 +201,8 @@ Section MembershipProof.
       specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
     - intros i inpcheck EQ_CHECK. destruct i; try discriminate.
       specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
-    - intros i inpcheck EQ_CHECK. destruct i as [ | []]; try discriminate.
-      specialize (IHact_from_regex (S n) inpcheck EQ_CHECK). auto.
+    - intros i inpcheck EQ_CHECK. destruct dir; destruct i as [ | []]; try discriminate;
+      specialize (IHact_from_regex (S n) inpcheck EQ_CHECK); auto.
     - (* Quantifier case: more interesting *)
       (* Either we consider the newly introduced check, in which case this is trivial, or we consider another check, in which case we apply IH *)
       intros i inpcheck EQ_CHECK. destruct i as [|[|[|i]]]; try discriminate; simpl in EQ_CHECK.
@@ -201,6 +212,7 @@ Section MembershipProof.
     - (* Apply IH *)
       intros i inpcheck EQ_CHECK. destruct i as [|[|i]]; simpl in EQ_CHECK; try discriminate.
       specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
+    - intros i inpcheck. destruct i as [|[|i]]; discriminate.
   Qed.
 
 
@@ -325,6 +337,29 @@ Section MembershipProof.
     | None, _ => chunk_size act
     end.
 
+
+
+  (** * Extending the bound to lookarounds *)
+  Fixpoint regex_lookaround_fuel (inp: input) (r: regex): nat :=
+    match r with
+    | Epsilon | Regex.Character _ => 0
+    | Disjunction r1 r2 | Sequence r1 r2 => max (regex_lookaround_fuel inp r1) (regex_lookaround_fuel inp r2)
+    | Quantified _ _ _ r => regex_lookaround_fuel inp r
+    | Lookaround lk r =>
+        let dir := lk_dir lk in
+        let this_lk_fuel := (1 + remaining_length (worst_input inp dir) dir) * regex_size r in
+        this_lk_fuel + regex_lookaround_fuel inp r
+    | Group _ r => regex_lookaround_fuel inp r
+    | Anchor _ | Backreference _ => 0
+    end.
+
+  Fixpoint actions_lookaround_fuel (inp: input) (act: actions): nat :=
+    match act with
+    | [] => 0
+    | Areg r :: act => max (regex_lookaround_fuel inp r) (actions_lookaround_fuel inp act)
+    | Acheck _ :: act | Aclose _ :: act => actions_lookaround_fuel inp act
+    end.
+
   (* Computes the actions fuel after taking the first regex into account, but before arriving to the last chunk. *)
   Fixpoint actions_fuel' (inp: input) (act: actions) {struct act}: nat :=
     match act with
@@ -345,7 +380,7 @@ Section MembershipProof.
     end.
   
   (* The actual actions fuel, which starts by treating the first regex specially if there are at least two chunks *)
-  Definition actions_fuel (inp: input) (act: actions): nat :=
+  Definition actions_fuel_nolk (inp: input) (act: actions): nat :=
     match first_check_input act with
     (* Only one (last) chunk: bonus is one *)
     | None => (1 + remaining_length inp forward) * chunk_size act
@@ -361,11 +396,14 @@ Section MembershipProof.
         beginning_fuel + last
     end.
 
+  Definition actions_fuel (inp: input) (act: actions): nat :=
+    actions_fuel_nolk inp act + actions_lookaround_fuel inp act.
+
 
 
   (* Invariant: the size of every chunk is less than the size of the next check regex, if any *)
   Lemma chunk_size_lt:
-    forall r inp act, act_from_regex r inp act ->
+    forall r inp act dir, act_from_regex r inp act dir ->
       forall i acttail, acttail = List.skipn i act ->
         forall rchk, next_check_regex acttail = Some rchk ->
           chunk_size acttail < regex_size rchk.
@@ -382,10 +420,10 @@ Section MembershipProof.
       + apply IHact_from_regex with (i := S i). auto.
     - intros i acttail EQ_acttail. destruct i as [|[|i]]; simpl in *.
       + specialize (IHact_from_regex 0 _ eq_refl). subst acttail. simpl in *.
-        intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
+        intros rchk EQ_rchk. destruct dir; specialize (IHact_from_regex rchk EQ_rchk); simpl in *; lia.
       + specialize (IHact_from_regex 0 _ eq_refl). subst acttail. simpl in *.
-        intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
-      + apply IHact_from_regex with (i := S i). auto.
+        intros rchk EQ_rchk. destruct dir; specialize (IHact_from_regex rchk EQ_rchk); simpl in *; lia.
+      + apply IHact_from_regex with (i := S i). destruct dir; auto.
     - intros i acttail EQ_acttail. destruct i as [|[|i]]; simpl in *.
       + subst acttail. simpl. intros rchk H0. injection H0 as <-. simpl. lia.
       + subst acttail. simpl. intros rchk H0. injection H0 as <-. simpl. lia.
@@ -398,6 +436,7 @@ Section MembershipProof.
         simpl in *. intros rchk EQ_rchk. specialize (IHact_from_regex rchk EQ_rchk). lia.
       + specialize (IHact_from_regex (S i) _ eq_refl). simpl in *. subst acttail.
         auto.
+    - intros i acttail -> rchk. destruct i as [|[|i]]; discriminate.
   Qed.
 
   Lemma last_chunk_size_skipn:
@@ -458,13 +497,13 @@ Section MembershipProof.
   Qed.
 
   Lemma chunk_size_lt_last:
-    forall r inp act, act_from_regex r inp act ->
+    forall r inp act dir, act_from_regex r inp act dir ->
       forall i acttail, acttail = skipn i act ->
         forall inpchk, first_check_input acttail = Some inpchk ->
         chunk_size acttail < last_chunk_size acttail.
   Proof.
-    intros r inp act AFR.
-    pose proof chunk_size_lt r inp act AFR as CHKSZ_LT.
+    intros r inp act dir AFR.
+    pose proof chunk_size_lt r inp act dir AFR as CHKSZ_LT.
     apply afr_checks_fby_quant in AFR as CHK_FBY_QUANT.
     clear AFR. induction act.
     - intros i acttail EQ_acttail. rewrite skipn_nil in EQ_acttail. subst acttail. discriminate.
@@ -538,8 +577,8 @@ Section MembershipProof.
   Qed.
   
   Lemma last_chunk_size_lt_regex:
-    forall r inp act,
-      act_from_regex r inp act ->
+    forall r inp act dir,
+      act_from_regex r inp act dir ->
       last_chunk_size act <= regex_size r.
   Proof.
     induction 1.
@@ -561,8 +600,8 @@ Section MembershipProof.
       + simpl. rewrite FSTCHK. auto.
       + simpl. rewrite FSTCHK. lia.
     - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
-      + simpl. rewrite FSTCHK. auto.
-      + simpl. rewrite FSTCHK. lia.
+      + destruct dir; simpl; rewrite FSTCHK; auto.
+      + destruct dir; simpl; rewrite FSTCHK; lia.
     - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
       + auto.
       + rewrite last_chunk_size_nocheck by assumption. lia.
@@ -571,6 +610,15 @@ Section MembershipProof.
       + auto.
       + rewrite last_chunk_size_nocheck by assumption. lia.
     - simpl in *. destruct (first_check_input l); lia.
+    - simpl. destruct (first_check_input l) as [inpchk|] eqn:FSTCHK.
+      + pose proof chunk_size_lt_last _ _ _ _ H 0 (Areg (Lookaround lk rlk) :: l) eq_refl inpchk FSTCHK.
+        simpl in H0. rewrite FSTCHK in H0.
+        unfold last_chunk_size in IHact_from_regex. simpl in IHact_from_regex.
+        rewrite FSTCHK in IHact_from_regex. fold last_chunk_size in IHact_from_regex. lia.
+      + unfold last_chunk_size in IHact_from_regex. simpl in IHact_from_regex. rewrite FSTCHK in IHact_from_regex. lia.
+    - simpl in *. destruct (first_check_input l) eqn:FSTCHK.
+      + auto.
+      + rewrite last_chunk_size_nocheck by assumption. lia.
     - simpl in *. destruct (first_check_input l) eqn:FSTCHK.
       + auto.
       + rewrite last_chunk_size_nocheck by assumption. lia.
@@ -595,7 +643,7 @@ Section MembershipProof.
   Definition num_checks (act: actions) := length (actions_checks act).
 
   Lemma chunk_size_bound:
-    forall r inp act, act_from_regex r inp act ->
+    forall r inp act dir, act_from_regex r inp act dir ->
       forall i acttail, acttail = skipn i act ->
         chunk_size acttail <= regex_size r - num_checks acttail /\ num_checks acttail <= regex_size r.
   Proof.
@@ -616,10 +664,10 @@ Section MembershipProof.
     - (* Sequence *)
       intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
       + specialize (IHact_from_regex 0 (Areg (Sequence r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
-        unfold num_checks in *. simpl in *. lia.
+        unfold num_checks in *. destruct dir; simpl in *; lia.
       + specialize (IHact_from_regex 0 (Areg (Sequence r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
-        unfold num_checks in *. simpl in *. lia.
-      + apply IHact_from_regex with (i := S i). auto.
+        unfold num_checks in *. destruct dir; simpl in *; lia.
+      + apply IHact_from_regex with (i := S i). destruct dir; auto.
     - (* Quantifier iteration *)
       intros i acttail EQ_acttail. destruct i as [|[|[|i]]]; simpl in *.
       + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
@@ -636,6 +684,9 @@ Section MembershipProof.
       + specialize (IHact_from_regex 0 (Areg (Group gid r1) :: l) eq_refl).
         unfold num_checks in *. simpl in *. lia.
       + apply IHact_from_regex with (i := S i). auto.
+    - intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; unfold num_checks; simpl in *; try lia.
+      split; try lia.
+      specialize (IHact_from_regex 0 (Areg (Lookaround lk rlk) :: l) eq_refl). simpl in IHact_from_regex. lia.
   Qed.
 
   Lemma actions_size_decomp_check:
@@ -691,11 +742,11 @@ Section MembershipProof.
   Qed.
 
   Theorem actions_size_bound:
-    forall r inp act, act_from_regex r inp act ->
+    forall r inp act dir, act_from_regex r inp act dir ->
       forall i acttail, acttail = skipn i act ->
         actions_size acttail <= num_checks acttail + sum_to_n (num_checks acttail) (regex_size r).
   Proof.
-    intros r inp act AFR. pose proof chunk_size_bound r inp act AFR as CHK_BOUND.
+    intros r inp act dir AFR. pose proof chunk_size_bound r inp act dir AFR as CHK_BOUND.
     clear AFR inp. induction act.
     - intros i acttail. rewrite skipn_nil. intros ->. simpl. lia.
     - specialize_prove IHact. {
@@ -804,13 +855,13 @@ Section MembershipProof.
 
   (* The main corollary for bounding the size of the list of actions *)
   Corollary actions_size_bound':
-    forall r inp act, act_from_regex r inp act ->
+    forall r inp act dir, act_from_regex r inp act dir ->
       forall n, n = regex_size r ->
         actions_size act <= n + PeanoNat.Nat.div2 (n * S n).
   Proof.
-    intros r inp act AFR n EQ_n.
-    pose proof actions_size_bound r inp act AFR 0 act eq_refl.
-    pose proof chunk_size_bound r inp act AFR 0 act eq_refl.
+    intros r inp act dir AFR n EQ_n.
+    pose proof actions_size_bound r inp act dir AFR 0 act eq_refl.
+    pose proof chunk_size_bound r inp act dir AFR 0 act eq_refl.
     apply proj2 in H0.
     pose proof sum_to_n_bound (num_checks act) (regex_size r).
     pose proof sum_to_n_n_formula n.
@@ -842,7 +893,7 @@ Section MembershipProof.
     - eapply strict_suffix_trans; eauto.
   Qed.
 
-  Lemma actions_fuel'_monotonic_inp:
+  (* Lemma actions_fuel'_monotonic_inp:
     forall inp nextinp cont,
       strict_suffix nextinp inp forward ->
       actions_fuel' inp cont >= actions_fuel' nextinp cont.
@@ -854,7 +905,7 @@ Section MembershipProof.
       destruct first_check_input.
       + simpl in IHcont. lia.
       + lia.
-  Qed.
+  Qed. *)
 
   Lemma read_decreases_fuel':
     forall inp cd nextinp cont,
