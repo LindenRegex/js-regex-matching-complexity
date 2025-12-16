@@ -893,20 +893,6 @@ Section MembershipProof.
     - eapply strict_suffix_trans; eauto.
   Qed.
 
-  (* Lemma actions_fuel'_monotonic_inp:
-    forall inp nextinp cont,
-      strict_suffix nextinp inp forward ->
-      actions_fuel' inp cont >= actions_fuel' nextinp cont.
-  Proof.
-    intros inp nextinp cont SS. induction cont.
-    - simpl. lia.
-    - destruct a; simpl; try lia.
-      destruct cont as [ | [r | ? | ?] l]; simpl; try lia.
-      destruct first_check_input.
-      + simpl in IHcont. lia.
-      + lia.
-  Qed. *)
-
   (* TODO Move to Linden *)
   Lemma remaining_length_current_str:
     forall inp dir, remaining_length inp dir = length (current_str inp dir).
@@ -1004,7 +990,6 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     - rewrite app_assoc, <- rev_app_distr, firstn_skipn. reflexivity.
   Qed.
 
-  (* TODO Adapt *)
   Lemma read_backref_decreases_fuel_nolk:
     forall inp gid n nextinp cont dir,
       advance_input_n inp n dir = nextinp ->
@@ -1286,10 +1271,26 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           unfold actions_fuel_nolk. simpl.
           rewrite PeanoNat.Nat.max_0_r, PeanoNat.Nat.add_0_r.
           pose proof remaining_le_full_length inp (lk_dir lk).
+          assert (remaining_length inp (lk_dir lk) * regex_size r0 <= length (input_str inp) * regex_size r0). {
+            apply PeanoNat.Nat.mul_le_mono_r. auto.
+          }
           unfold actions_fuel_nolk in FUEL. simpl in FUEL.
-          destruct (first_check_input cont).
-          - 
+          destruct first_check_input; lia.
         }
+        destruct compute_tree as [treelk|]; try contradiction.
+        destruct lk_result as [gmlk|]; try discriminate.
+        assert (compute_tree rer cont inp gmlk dir fuel <> None). {
+          apply IHfuel.
+          1: eapply afr_pop_lk_cont; eauto.
+          unfold actions_fuel in *. simpl actions_lookaround_fuel in FUEL.
+          unfold actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
+          destruct (first_check_input cont) as [inpchk|] eqn:FSTCHK.
+          - pose proof actions_fuel_nolk_notlast_le inp cont inpchk dir FSTCHK.
+            simpl in FUEL. rewrite FSTCHK in FUEL.
+            lia.
+          - unfold actions_fuel_nolk. rewrite FSTCHK. simpl in FUEL. lia.
+        }
+        destruct compute_tree; try contradiction. discriminate.
       + (* Group *)
         assert (CONT: compute_tree rer (Areg r0 :: Aclose id :: cont) inp (Groups.GroupMap.open (idx inp) id gm) dir fuel <> None). {
           apply IHfuel.
@@ -1460,13 +1461,13 @@ remaining_length nextinp dir) * last_chunk_size cont). {
   Qed.
 
   Corollary tree_depth_bound_act:
-    forall (r: regex) (inp: input) (act: actions),
-      supported_regex r -> act_from_regex r inp act ->
-      forall gm rer t, is_tree rer act inp gm forward t ->
-        tree_depth t <= 2*(S (actions_fuel inp act)).
+    forall (r: regex) (inp: input) (act: actions) (dir: Direction),
+      supported_regex r -> act_from_regex r inp act dir ->
+      forall gm rer t, is_tree rer act inp gm dir t ->
+        tree_depth t <= 2*(S (actions_fuel inp act dir)).
   Proof.
-    intros r inp act SUPP_REGEX AFR gm rer t TREE.
-    pose proof functional_terminates' r inp act SUPP_REGEX AFR (S (actions_fuel inp act)) ltac:(lia) gm rer.
+    intros r inp act dir SUPP_REGEX AFR gm rer t TREE.
+    pose proof functional_terminates' r inp act dir SUPP_REGEX AFR (S (actions_fuel inp act dir)) ltac:(lia) gm rer.
     destruct compute_tree as [t'|] eqn:COMPUTE; try congruence.
     pose proof compute_is_tree _ _ _ _ _ _ _ COMPUTE.
     assert (t = t'). {
@@ -1476,16 +1477,26 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     eapply fuel_depth_bound; eauto.
   Qed.
 
+  Lemma regex_lookaround_fuel_bound:
+    forall r str, regex_lookaround_fuel str r <= (1 + length str) * regex_size r * regex_size r.
+  Proof.
+    intros r str. induction r; simpl; lia.
+  Qed.
+
   Corollary tree_depth_bound_regex:
     forall r: regex, supported_regex r ->
       forall rer inp gm t, is_tree rer [Areg r] inp gm forward t ->
-        tree_depth t <= 2*(S ((1 + remaining_length inp forward) * regex_size r)).
+        tree_depth t <= 2*(S ((1 + remaining_length inp forward) * regex_size r + (1 + length (input_str inp)) * regex_size r * regex_size r)).
   Proof.
     intros r SUPP_REGEX rer inp gm t TREE.
-    pose proof tree_depth_bound_act r inp [Areg r] SUPP_REGEX.
+    pose proof tree_depth_bound_act r inp [Areg r] forward SUPP_REGEX.
     specialize_prove H. { constructor. }
     specialize (H gm rer t TREE).
-    unfold actions_fuel in H. simpl in H. simpl. lia.
+    unfold actions_fuel in H. simpl actions_lookaround_fuel in H.
+    rewrite PeanoNat.Nat.max_0_r in H.
+    pose proof regex_lookaround_fuel_bound r (input_str inp).
+    unfold actions_fuel_nolk in H. simpl first_check_input in H.
+    cbv match in H. simpl chunk_size in H. lia.
   Qed.
 
 End MembershipProof.
