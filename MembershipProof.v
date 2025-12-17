@@ -1217,7 +1217,15 @@ remaining_length nextinp dir) * last_chunk_size cont). {
         inversion H0. subst min delta0 r0 greedy0.
         destruct (delta is (NoI.N 0)) eqn:ZERO.
         * destruct delta as [[]|]; try discriminate.
-          admit.
+          apply IHfuel.
+          1: eapply afr_pop_quant_done; eauto.
+          unfold actions_fuel, actions_fuel_nolk in FUEL. unfold actions_fuel.
+          simpl actions_lookaround_fuel in FUEL.
+          simpl in FUEL.
+          destruct (first_check_input cont) as [inpchk|] eqn:FSTCHK.
+          -- pose proof actions_fuel_nolk_notlast_le inp cont inpchk dir FSTCHK.
+             destruct (is_strict_suffix inp inpchk dir); lia.
+          -- unfold actions_fuel_nolk. rewrite FSTCHK. lia.
         (* subst greedy0 min delta r0. *)
         * (* simplifying the expression without duplication *)
           set (x := match compute_tree rer _ inp _ dir fuel with | Some titer => _ | None => _ end).
@@ -1397,7 +1405,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             + unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl in *. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-  Admitted.
+  Qed.
 
 
   (** * Any fuel depth is a bound on the tree depth *)
