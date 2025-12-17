@@ -13,7 +13,9 @@ Section MembershipProof.
   | s_Character: forall cd, supported_regex (Regex.Character cd)
   | s_Disjunction: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Disjunction r1 r2)
   | s_Sequence: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Sequence r1 r2)
-  | s_Quantified: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 +∞ r) (* only the star (greedy or lazy) *)
+  | s_Star: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 +∞ r) (* the star (greedy or lazy) *)
+  | s_QuestionMark: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 (NoI.N 1) r) (* the question mark *)
+  | s_QuantDone: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 (NoI.N 0) r) (* done quantifier *)
   | s_Lookaround: forall lk r, supported_regex r -> supported_regex (Lookaround lk r)
   | s_Group: forall gid r, supported_regex r -> supported_regex (Group gid r)
   | s_Anchor: forall a, supported_regex (Anchor a)
@@ -108,12 +110,20 @@ Section MembershipProof.
       destruct dir; repeat (constructor; auto).
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0.
-      inversion H1. subst greedy0 r0. rewrite <- H5 in *.
-      assert (INF: delta = +∞). {
-        destruct delta; try discriminate. reflexivity.
-      }
-      rewrite INF.
-      repeat (constructor; auto).
+      inversion H1.
+      + subst greedy0 r0. rewrite <- H5 in *.
+        assert (INF: delta = +∞). {
+          destruct delta; try discriminate. reflexivity.
+        }
+        rewrite INF.
+        repeat (constructor; auto).
+      + subst greedy0 r0. rewrite <- H5 in *.
+        assert (ZERO: delta = NoI.N 0). {
+          destruct delta; try discriminate. injection H5 as <-. reflexivity.
+        }
+        rewrite ZERO.
+        repeat (constructor; auto).
+      + subst greedy0 r0. destruct delta; discriminate.
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0. inversion H1. subst gid r0.
       repeat (constructor; auto).
@@ -1134,7 +1144,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
         }
         specialize (IHfuel gm rer).
         destruct compute_tree as [treecont|]. * discriminate. * contradiction.
-      + unfold actions_fuel, actions_fuel_nolk in FUEL.
+      + (* Disjunction *)
+        unfold actions_fuel, actions_fuel_nolk in FUEL.
         destruct first_check_input as [inpchk|] eqn:FSTCHK.
         * simpl in FSTCHK, FUEL.
           assert (IH1: compute_tree rer (Areg r1 :: cont) inp gm dir fuel <> None). {
@@ -1205,64 +1216,80 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
           }
           destruct dir; simpl; lia.
-      + pose proof suppregex_suppactions r SUPP_REGEX inp _ dir AFR as SUPP_ACTIONS.
-        inversion SUPP_ACTIONS. subst x l. inversion H1. subst r0. inversion H0. subst greedy0 min delta r0.
-        simpl noi_pred.
-        assert (IHiter: compute_tree rer (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 +∞ r1) :: cont) inp (Groups.GroupMap.reset (def_groups r1) gm) dir fuel <> None). {
-          apply IHfuel.
-          - apply afr_pop_quant_free_iter. auto.
-          - unfold actions_fuel, actions_fuel_nolk. simpl first_check_input. cbv match.
-            replace (is_strict_suffix inp inp dir) with false.
-            2: {
-              symmetry. apply is_strict_suffix_inv_false.
-              apply strict_suffix_irrefl.
-            }
-            destruct (match r1 with Quantified _ _ _ _ => true | _ => false end) eqn:R1_QUANT.
-            + destruct r1; try discriminate. simpl actions_fuel'.
-              unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
+      + (* Quantified *)
+        pose proof suppregex_suppactions r SUPP_REGEX inp _ dir AFR as SUPP_ACTIONS.
+        inversion SUPP_ACTIONS. subst x l. inversion H1. subst r0.
+        replace min with 0 in *. 2: {
+          inversion H0; reflexivity.
+        }
+        destruct (delta is (NoI.N 0)) eqn:ZERO.
+        * destruct delta as [[]|]; try discriminate.
+          admit.
+        (* subst greedy0 min delta r0. *)
+        * (* simplifying the expression without duplication *)
+          set (x := match compute_tree rer _ inp _ dir fuel with | Some titer => _ | None => _ end).
+          replace (match delta with | NoI.N 0 => _ | _ => x end) with x.
+          2: {
+            destruct delta as [[]|]; try discriminate; reflexivity.
+          }
+          subst x.
+          (* simpl noi_pred. *)
+          assert (IHiter: compute_tree rer (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (Groups.GroupMap.reset (def_groups r1) gm) dir fuel <> None). {
+            apply IHfuel.
+            - apply afr_pop_quant_free_iter.
+              (* TODO: NoI.N 1 + noi_pred delta = delta because delta is not 0 *) admit.
+            - unfold actions_fuel, actions_fuel_nolk. simpl first_check_input. cbv match.
+              replace (is_strict_suffix inp inp dir) with false.
+              2: {
+                symmetry. apply is_strict_suffix_inv_false.
+                apply strict_suffix_irrefl.
+              }
+              destruct (match r1 with Quantified _ _ _ _ => true | _ => false end) eqn:R1_QUANT.
+              + destruct r1; try discriminate. simpl actions_fuel'.
+                unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
+                destruct first_check_input as [inpchk | ] eqn:FSTCHK.
+                * simpl last_chunk_size in *. rewrite FSTCHK in FUEL. rewrite FSTCHK.
+                  destruct (is_strict_suffix inp inpchk dir) eqn:SS.
+                  -- simpl in *.
+                    assert (regex_size (Quantified greedy 0 delta (Quantified greedy0 min0 delta0 r1)) <= last_chunk_size cont). {
+                      pose proof chunk_size_lt_last r inp _ dir AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
+                      rewrite FSTCHK in H. simpl. lia.
+                    }
+                    simpl in H.
+                    lia.
+                  -- simpl in *. lia.
+                * simpl in FUEL. simpl. rewrite FSTCHK. lia.
+              + replace (match r1 with | Quantified _ _ _ r0 => _ | _ => _ end) with (actions_fuel' (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont)).
+                2: { destruct r1; try discriminate; reflexivity. }
+                unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
+                simpl. destruct first_check_input as [inpchk | ] eqn:FSTCHK.
+                * simpl last_chunk_size in *. rewrite FSTCHK in FUEL.
+                  destruct (is_strict_suffix inp inpchk dir) eqn:SS.
+                  -- simpl in *.
+                    assert (regex_size (Quantified greedy 0 delta r1) <= last_chunk_size cont). {
+                      pose proof chunk_size_lt_last r inp _ dir AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
+                      rewrite FSTCHK in H. simpl. lia.
+                    }
+                    simpl in H.
+                    lia.
+                  -- simpl in *. lia.
+                * simpl in *. lia.
+          }
+          assert (IHskip: compute_tree rer cont inp gm dir fuel <> None). {
+            apply IHfuel.
+            - eapply afr_pop_quant_free_skip with (greedy := greedy) (delta := noi_pred delta). admit.
+            - unfold actions_fuel, actions_fuel_nolk in FUEL.
+              simpl first_check_input in FUEL.
               destruct first_check_input as [inpchk | ] eqn:FSTCHK.
-              * simpl last_chunk_size in *. rewrite FSTCHK in FUEL. rewrite FSTCHK.
-                destruct (is_strict_suffix inp inpchk dir) eqn:SS.
-                -- simpl in *.
-                   assert (regex_size (Quantified greedy 0 +∞ (Quantified greedy0 min delta r1)) <= last_chunk_size cont). {
-                     pose proof chunk_size_lt_last r inp _ dir AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
-                     rewrite FSTCHK in H. simpl. lia.
-                   }
-                   simpl in H.
-                   lia.
-                -- simpl in *. lia.
-              * simpl in FUEL. simpl. rewrite FSTCHK. lia.
-            + replace (match r1 with | Quantified _ _ _ r0 => _ | _ => _ end) with (actions_fuel' (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 +∞ r1) :: cont)).
-              2: { destruct r1; try discriminate; reflexivity. }
-              unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
-              simpl. destruct first_check_input as [inpchk | ] eqn:FSTCHK.
-              * simpl last_chunk_size in *. rewrite FSTCHK in FUEL.
-                destruct (is_strict_suffix inp inpchk dir) eqn:SS.
-                -- simpl in *.
-                   assert (regex_size (Quantified greedy 0 +∞ r1) <= last_chunk_size cont). {
-                     pose proof chunk_size_lt_last r inp _ dir AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
-                     rewrite FSTCHK in H. simpl. lia.
-                   }
-                   simpl in H.
-                   lia.
-                -- simpl in *. lia.
-              * simpl in *. lia.
-        }
-        assert (IHskip: compute_tree rer cont inp gm dir fuel <> None). {
-          apply IHfuel.
-          - eapply afr_pop_quant_free_skip with (greedy := greedy) (delta := +∞). apply AFR.
-          - unfold actions_fuel, actions_fuel_nolk in FUEL.
-            simpl first_check_input in FUEL.
-            destruct first_check_input as [inpchk | ] eqn:FSTCHK.
-            + pose proof actions_fuel_nolk_notlast_le inp cont inpchk dir FSTCHK.
-              assert ((if is_strict_suffix inp inpchk dir then 1 else 3 + regex_size r1) >= 1). { destruct (is_strict_suffix inp inpchk dir); lia. }
-              simpl last_chunk_size in FUEL. rewrite FSTCHK in FUEL.
-              unfold actions_fuel. simpl actions_lookaround_fuel in FUEL.
-              lia.
-            + simpl in FUEL. unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl. lia.
-        }
-        destruct compute_tree; try contradiction.
-        destruct compute_tree; try contradiction. discriminate.
+              + pose proof actions_fuel_nolk_notlast_le inp cont inpchk dir FSTCHK.
+                assert ((if is_strict_suffix inp inpchk dir then 1 else 3 + regex_size r1) >= 1). { destruct (is_strict_suffix inp inpchk dir); lia. }
+                simpl last_chunk_size in FUEL. rewrite FSTCHK in FUEL.
+                unfold actions_fuel. simpl actions_lookaround_fuel in FUEL.
+                lia.
+              + simpl in FUEL. unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl. lia.
+          }
+          destruct compute_tree; try contradiction.
+          destruct compute_tree; try contradiction. discriminate.
       + (* Lookaround *)
         assert (LKCONT: compute_tree rer [Areg r0] inp gm (lk_dir lk) fuel <> None). {
           apply IHfuel.
