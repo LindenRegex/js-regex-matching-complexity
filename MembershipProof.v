@@ -13,9 +13,7 @@ Section MembershipProof.
   | s_Character: forall cd, supported_regex (Regex.Character cd)
   | s_Disjunction: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Disjunction r1 r2)
   | s_Sequence: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Sequence r1 r2)
-  | s_Star: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 +∞ r) (* the star (greedy or lazy) *)
-  | s_QuestionMark: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 (NoI.N 1) r) (* the question mark *)
-  | s_QuantDone: forall greedy r, supported_regex r -> supported_regex (Quantified greedy 0 (NoI.N 0) r) (* done quantifier *)
+  | s_QuantNonForced: forall greedy delta r, supported_regex r -> supported_regex (Quantified greedy 0 delta r) (* any non-forced quantifier, including done, star and question mark *)
   | s_Lookaround: forall lk r, supported_regex r -> supported_regex (Lookaround lk r)
   | s_Group: forall gid r, supported_regex r -> supported_regex (Group gid r)
   | s_Anchor: forall a, supported_regex (Anchor a)
@@ -110,20 +108,8 @@ Section MembershipProof.
       destruct dir; repeat (constructor; auto).
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0.
-      inversion H1.
-      + subst greedy0 r0. rewrite <- H5 in *.
-        assert (INF: delta = +∞). {
-          destruct delta; try discriminate. reflexivity.
-        }
-        rewrite INF.
-        repeat (constructor; auto).
-      + subst greedy0 r0. rewrite <- H5 in *.
-        assert (ZERO: delta = NoI.N 0). {
-          destruct delta; try discriminate. injection H5 as <-. reflexivity.
-        }
-        rewrite ZERO.
-        repeat (constructor; auto).
-      + subst greedy0 r0. destruct delta; discriminate.
+      inversion H1. subst greedy0 r0. rewrite <- H5 in *.
+      repeat (constructor; auto).
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0. inversion H1. subst gid r0.
       repeat (constructor; auto).
@@ -1110,6 +1096,15 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     - rewrite app_length, rev_length. lia.
   Qed.
 
+  Lemma succ_noi_pred:
+    forall ninf, (ninf is (NoI.N 0)) = false ->
+      (NoI.N 1 + noi_pred ninf)%NoI = ninf.
+  Proof.
+    intros ninf NON_ZERO.
+    destruct ninf as [[|]|]; try discriminate; simpl; try reflexivity.
+    rewrite PeanoNat.Nat.sub_0_r. reflexivity.
+  Qed.
+
   Theorem functional_terminates':
     forall (r: regex) (inp: input) (act: actions) (dir: Direction),
       supported_regex r -> act_from_regex r inp act dir ->
@@ -1219,9 +1214,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       + (* Quantified *)
         pose proof suppregex_suppactions r SUPP_REGEX inp _ dir AFR as SUPP_ACTIONS.
         inversion SUPP_ACTIONS. subst x l. inversion H1. subst r0.
-        replace min with 0 in *. 2: {
-          inversion H0; reflexivity.
-        }
+        inversion H0. subst min delta0 r0 greedy0.
         destruct (delta is (NoI.N 0)) eqn:ZERO.
         * destruct delta as [[]|]; try discriminate.
           admit.
@@ -1237,7 +1230,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           assert (IHiter: compute_tree rer (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (Groups.GroupMap.reset (def_groups r1) gm) dir fuel <> None). {
             apply IHfuel.
             - apply afr_pop_quant_free_iter.
-              (* TODO: NoI.N 1 + noi_pred delta = delta because delta is not 0 *) admit.
+              rewrite succ_noi_pred by auto. auto.
             - unfold actions_fuel, actions_fuel_nolk. simpl first_check_input. cbv match.
               replace (is_strict_suffix inp inp dir) with false.
               2: {
@@ -1251,7 +1244,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
                 * simpl last_chunk_size in *. rewrite FSTCHK in FUEL. rewrite FSTCHK.
                   destruct (is_strict_suffix inp inpchk dir) eqn:SS.
                   -- simpl in *.
-                    assert (regex_size (Quantified greedy 0 delta (Quantified greedy0 min0 delta0 r1)) <= last_chunk_size cont). {
+                    assert (regex_size (Quantified greedy 0 delta (Quantified greedy0 min delta0 r1)) <= last_chunk_size cont). {
                       pose proof chunk_size_lt_last r inp _ dir AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
                       rewrite FSTCHK in H. simpl. lia.
                     }
@@ -1277,7 +1270,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           }
           assert (IHskip: compute_tree rer cont inp gm dir fuel <> None). {
             apply IHfuel.
-            - eapply afr_pop_quant_free_skip with (greedy := greedy) (delta := noi_pred delta). admit.
+            - eapply afr_pop_quant_free_skip with (greedy := greedy) (delta := noi_pred delta). rewrite succ_noi_pred by auto. apply AFR.
             - unfold actions_fuel, actions_fuel_nolk in FUEL.
               simpl first_check_input in FUEL.
               destruct first_check_input as [inpchk | ] eqn:FSTCHK.
@@ -1404,7 +1397,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             + unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl in *. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-  Qed.
+  Admitted.
 
 
   (** * Any fuel depth is a bound on the tree depth *)
