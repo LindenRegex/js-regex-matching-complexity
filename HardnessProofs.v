@@ -1047,7 +1047,7 @@ Section Proofs.
   Qed.
 
 
-
+  (* TODO Move to Linden *)
   Definition regex_matches_string (rer: RegExpRecord) (r: regex) (s: LWParameters.string): Prop :=
     forall t: tree, is_tree rer [Areg r] (init_input s) GroupMap.empty forward t ->
       first_leaf t (init_input s) <> None.
