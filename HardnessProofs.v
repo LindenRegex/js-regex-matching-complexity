@@ -10,13 +10,13 @@ Section Proofs.
   Context (q: qbf).
   Hypothesis (WF_q: wf_qbf q).
 
-  Context (x_char semicolon_char: Parameters.Character).
+  Context (x_char semicolon_char n_char: Parameters.Character).
   Context (rer: RegExpRecord).
   Hypothesis (x_semicolon_neq: Character.canonicalize rer x_char <>
     Character.canonicalize rer semicolon_char).
 
   (* The string *)
-  Let str := theString q x_char semicolon_char.
+  Let str := theString q x_char semicolon_char n_char.
   (* Number of variables *)
   Let n := List.length (fst q).
   (* The quantifiers *)
@@ -44,10 +44,10 @@ Section Proofs.
     rewrite concat_length, map_repeat, list_sum_repeat. apply Nat.mul_comm.
   Qed.
 
-  Lemma str_len: length str = 2*(n+m).
+  Lemma str_len: length str = 2*(n+m)+1.
   Proof.
     unfold str, theString.
-    rewrite concat_repeat_len. reflexivity.
+    rewrite app_length, concat_repeat_len. reflexivity.
   Qed.
 
   Lemma rev_concat_repeat {A: Type}:
@@ -63,7 +63,7 @@ Section Proofs.
   Lemma inp_of_idx_even:
     forall i, i <= n + m ->
       inp_of_idx (2*i) = Input
-        (List.concat (List.repeat [x_char; semicolon_char] (n+m-i)))
+        (List.concat (List.repeat [x_char; semicolon_char] (n+m-i)) ++ [n_char])
         (List.concat (List.repeat [semicolon_char; x_char] i)).
   Proof.
     induction i.
@@ -149,7 +149,7 @@ Section Proofs.
     unfold wf_var in WF_v. assert (WF_v': v - 1 < n) by lia.
     unfold str, theString.
     rewrite (Nat.mul_comm 2 (v - 1)). change 2 with (length [x_char; semicolon_char]).
-    rewrite skipn_concat_repeat.
+    rewrite skipn_app, skipn_concat_repeat.
     fold n m.
     destruct (n + m - (v - 1)) eqn:?; try lia. reflexivity.
   Qed.
@@ -201,7 +201,7 @@ Section Proofs.
     }
     unfold read_backref. rewrite NOTFOUND.
     rewrite inp_of_idx_even at 1. 2: lia.
-    rewrite concat_length, map_repeat, list_sum_repeat. simpl length.
+    rewrite app_length, concat_length, map_repeat, list_sum_repeat. simpl length.
     replace (2*(v-1)+1-2*(v-1)) with 1 by lia.
     replace (S _ <=? 1) with false. 2: {
       symmetry. rewrite PeanoNat.Nat.leb_gt. lia.
@@ -441,7 +441,7 @@ Section Proofs.
     rewrite char_match_semicolon. f_equal. f_equal.
     setoid_rewrite inp_of_idx_even; try lia.
     f_equal.
-    - f_equal. f_equal. lia.
+    - f_equal. f_equal. f_equal. lia.
     - rewrite Nat.add_comm. reflexivity.
   Qed.
 
