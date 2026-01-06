@@ -750,6 +750,7 @@ Section Proofs.
     forall (l: list A) (a: A) (i: nat), i < length l ->
       skipn i l = nth i l a :: skipn (S i) l.
   Proof.
+    clear q WF_q str n quants m clauses x_char semicolon_char n_char x_semicolon_neq params rer.
     induction l.
     - intros a i. simpl. lia.
     - intros a' i. simpl. destruct i as [|i].

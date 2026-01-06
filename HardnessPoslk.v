@@ -1,4 +1,5 @@
-From Linden Require Import Regex Chars Parameters Groups Tree Semantics Tactics.
+From Linden Require Import Regex Chars Parameters Groups Tree Semantics Tactics
+  FunctionalUtils Equivalence.
 From JsRegexOptp Require Import Qbf RegexEncoding RegexEncodingPoslk GroupMaps
   HardnessProofs.
 From Warblre Require Import RegExpRecord Parameters Base.
@@ -339,6 +340,33 @@ Section HardnessPoslk.
       simpl. do 2 rewrite <- app_assoc. simpl. reflexivity.
   Qed.
 
+  Lemma wf_gm_poslk_add:
+    forall gm, wf_gm_poslk (length str) gm ->
+      forall i, i <= n ->
+        wf_gm_poslk (length str)
+          (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm).
+  Proof.
+    intros gm WF_gm i i_INB. split.
+    - apply wf_gm_add. + apply WF_gm. + auto.
+    - unfold wf_gm_n. destruct WF_gm as [_ WF_gm]. unfold wf_gm_n in WF_gm.
+      intros i' i'_INB.
+      unfold GroupMap.find, GroupMap.add.
+      rewrite GroupMap.Facts.add_neq_o by lia.
+      apply WF_gm. auto.
+  Qed.
+
+  Lemma undef'_gm_add:
+    forall gm i x gmpos k,
+      gmpos = GroupMap.add i x gm -> i <= n ->
+      (forall j, S n <= j -> j <= k + n -> GroupMap.find j gm = None) ->
+      forall j, S n <= j -> j <= k + n -> GroupMap.find j gmpos = None.
+  Proof.
+    intros gm i x gmpos k -> i_INB UNDEF' j j_GE j_LE.
+    unfold GroupMap.find, GroupMap.add.
+    rewrite GroupMap.Facts.add_neq_o by lia.
+    apply UNDEF'; auto.
+  Qed.
+
   Theorem theRegex_aux_spec:
     (* We perform backwards induction on i ∈ {1, ..., n+1}. *)
     forall np1_minus_i i, i = n + 1 - np1_minus_i ->
@@ -371,7 +399,61 @@ Section HardnessPoslk.
       pose proof check_conjunct_regex_spec q WF_q x_char semicolon_char n_char rer x_semicolon_neq inp gm EQ_inp.
       unfold wf_gm_poslk in WF_gm. destruct WF_gm as [WF_gm WF_gm_supp].
       specialize (H WF_gm t TREE _ eq_refl). destruct H. auto.
-    - 
+    - intros i EQ_i i_NEQ_0 _ qtail EQ_qtail gm WF_gm UNDEF UNDEF' inp t EQ_inp TREE.
+      specialize (IHnp1_minus_i (S i) ltac:(lia) ltac:(lia) ltac:(lia)).
+      replace (S i - 1) with i in IHnp1_minus_i by lia.
+      assert (EQ'_qtail: qtail = List.nth (i-1) quants Qbf.Exists :: List.skipn i quants). {
+        rewrite EQ_qtail. replace i with (S (i-1)) at 3 by lia. apply skipn_head. fold n. lia.
+      }
+      rewrite EQ'_qtail. rewrite EQ'_qtail in TREE, UNDEF'.
+      specialize (IHnp1_minus_i _ eq_refl).
+      simpl gm_satisfies_qbf_aux.
+      simpl theRegex_aux in TREE.
+      destruct nth eqn:EQ_quant.
+      + (* Exists *)
+        inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
+        rewrite app_nil_r in CONT. simpl in CONT.
+        assert (exists tsub: tree, is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward tsub) as [tsub TREE_sub]. {
+          eexists. apply compute_tr_is_tree.
+        }
+        pose proof leaves_concat rer inp gm forward [Areg (def_var_regex x_char semicolon_char i)] [Areg (theRegex_aux x_char semicolon_char n_char q (S i) (skipn i quants))] t tsub CONT TREE_sub as CONCAT.
+        pose proof def_var_regex_spec q x_char semicolon_char n_char rer i inp i_NEQ_0 as DEF_SPEC.
+        specialize_prove DEF_SPEC. { fold quants. fold n. lia. }
+        specialize (DEF_SPEC EQ_inp tsub gm TREE_sub).
+        rewrite DEF_SPEC in CONCAT. clear DEF_SPEC.
+        remember (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm) as gmpos.
+        inversion CONCAT. subst x lbase f.
+        inversion FM. subst x lbase f.
+        inversion FM0. subst f lmapped0.
+        inversion HEAD. subst act dir l.
+        inversion HEAD0. subst act dir l.
+        rewrite H4. rewrite H5.
+        rewrite app_nil_r.
+        simpl snd in H4, H5, TREE0, TREE1. simpl fst in H4, H5, TREE0, TREE1.
+        clear HEAD HEAD0.
+        specialize (IHnp1_minus_i gmpos) as IHpos. specialize (IHnp1_minus_i gm) as IHneg.
+        clear IHnp1_minus_i.
+        specialize_prove IHpos. {
+          rewrite Heqgmpos. apply wf_gm_poslk_add. - auto. - lia.
+        }
+        specialize_prove IHpos. {
+          eapply undef_gm_add with (gm := gm); eauto.
+        }
+        specialize_prove IHpos. {
+          eapply undef'_gm_add with (gm := gm); eauto. lia.
+        }
+        specialize (IHpos (inp_of_idx (i + (i + 0))) t0 ltac:(reflexivity) ltac:(auto)).
+        specialize (IHneg WF_gm).
+        specialize_prove IHneg. { apply undef_gm_unchanged; auto. }
+        specialize (IHneg ltac:(auto)).
+        specialize (IHneg (inp_of_idx (i + (i + 0))) t1 ltac:(reflexivity) ltac:(auto)).
+        pose proof app_nonempty_iff ly ly0.
+        rewrite H0. clear H0.
+        setoid_rewrite H4 in IHpos. setoid_rewrite H5 in IHneg.
+        rewrite orb_true_iff.
+        setoid_rewrite <- Heqgmpos. tauto.
+      + (* Not exists *)
+        
   Admitted.
 
   Theorem qbf_regex:
