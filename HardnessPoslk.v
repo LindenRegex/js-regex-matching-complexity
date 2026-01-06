@@ -10,6 +10,7 @@ Section HardnessPoslk.
   Context (x_char semicolon_char n_char: Parameters.Character).
   Context (rer: RegExpRecord).
   Context (q: qbf).
+  Hypothesis (WF_q: wf_qbf q).
 
   Hypothesis (x_semicolon_neq: Character.canonicalize rer x_char <>
     Character.canonicalize rer semicolon_char).
@@ -20,13 +21,14 @@ Section HardnessPoslk.
   Hypothesis (n_not_lineterminator: ~In n_char Character.line_terminators).
   Hypothesis (x_not_lineterminator: ~In x_char Character.line_terminators).
 
-  Let str := theString x_char semicolon_char n_char q.
+  Let str := theString q x_char semicolon_char n_char.
   Let quants := fst q.
   Let clauses := snd q.
   Let n := length quants.
 
-  Definition inp_of_idx (i: nat) :=
-    Input (List.skipn i str) (List.rev (List.firstn i str)).
+  (* Definition inp_of_idx (i: nat) :=
+    Input (List.skipn i str) (List.rev (List.firstn i str)). *)
+  Definition inp_of_idx (i: nat) := inp_of_idx q x_char semicolon_char n_char i.
 
   Definition wf_gm_n (strlen: nat) (gm: group_map): Prop :=
     forall i, i >= S n ->
@@ -72,8 +74,8 @@ Section HardnessPoslk.
       forward.
   Proof.
     intros k pref. apply StrictSuffix.ss_next with (inp2 := Input (semicolon_char :: concat (repeat [x_char; semicolon_char] k) ++ [n_char]) (x_char :: pref)).
-      - simpl. reflexivity.
-      - constructor. reflexivity.
+    - simpl. reflexivity.
+    - constructor. reflexivity.
   Qed.
 
   Lemma capture_n_regex_spec:
@@ -360,6 +362,16 @@ Section HardnessPoslk.
           (* - t has a leaf iff gm satisfies F_i. *)
           (tree_leaves t gm inp forward <> [] <-> gm_satisfies_qbf_aux gm i qtail clauses = true).
   Proof.
+    induction np1_minus_i.
+    - rewrite PeanoNat.Nat.sub_0_r. intros i -> _ _ qtail EQ_qtail.
+      rewrite PeanoNat.Nat.add_sub in EQ_qtail. unfold n in EQ_qtail. rewrite skipn_all in EQ_qtail. subst qtail.
+      intros gm WF_gm _ _.
+      rewrite PeanoNat.Nat.add_sub.
+      intros inp t EQ_inp TREE.
+      pose proof check_conjunct_regex_spec q WF_q x_char semicolon_char n_char rer x_semicolon_neq inp gm EQ_inp.
+      unfold wf_gm_poslk in WF_gm. destruct WF_gm as [WF_gm WF_gm_supp].
+      specialize (H WF_gm t TREE _ eq_refl). destruct H. auto.
+    - 
   Admitted.
 
   Theorem qbf_regex:

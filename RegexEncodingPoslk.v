@@ -51,8 +51,8 @@ Section RegexEncodingPoslk.
   
   Definition theRegex := theRegex_aux 1 (fst q).
 
-  (* The string *)
-  Definition theString: LWParameters.string :=
-    List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + List.length (snd q))) ++ [n_char].
+  (* The string: same as "normal" regex encoding *)
+  (* Definition theString: LWParameters.string :=
+    List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + List.length (snd q))) ++ [n_char]. *)
 
 End RegexEncodingPoslk.
