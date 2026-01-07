@@ -68,7 +68,15 @@ Section HardnessPoslk.
       forall gm gid, GroupMap.close endIdx gid (GroupMap.open startIdx gid gm) =
         GroupMap.add gid (GroupMap.Range startIdx (Some endIdx)) gm.
   Proof.
-  Admitted.
+    intros startIdx endIdx IDX_LE gm gid.
+    unfold GroupMap.close, GroupMap.open.
+    setoid_rewrite GroupMap.Facts.add_eq_o; try reflexivity.
+    rewrite leb_correct by auto.
+    apply GroupMap.MapS.Equal_eq. unfold GroupMap.MapS.Equal.
+    intro y. destruct (GroupId.eq_dec y gid).
+    - rewrite GroupMap.Facts.add_eq_o; auto. rewrite GroupMap.Facts.add_eq_o; auto.
+    - rewrite GroupMap.Facts.add_neq_o; auto. rewrite GroupMap.Facts.add_neq_o; auto. rewrite GroupMap.Facts.add_neq_o; auto.
+  Qed.
 
   Lemma ss_xsemicolon:
     forall k pref, StrictSuffix.strict_suffix
