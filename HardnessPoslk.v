@@ -1,7 +1,7 @@
 From Linden Require Import Regex Chars Parameters Groups Tree Semantics Tactics
   FunctionalUtils Equivalence.
 From JsRegexOptp Require Import Qbf RegexEncoding RegexEncodingPoslk GroupMaps
-  HardnessProofs.
+  HardnessProofs GroupMapQbfEquiv.
 From Warblre Require Import RegExpRecord Parameters Base.
 Require Import List Lia.
 Import ListNotations.
@@ -81,6 +81,22 @@ Section HardnessPoslk.
     - constructor. reflexivity.
   Qed.
 
+  Lemma concat_repeat_oncemore {A: Type}:
+    forall (l: list A) k, concat (repeat l k) ++ l = l ++ concat (repeat l k).
+  Proof.
+    intro l. induction k; simpl.
+    - rewrite app_nil_r. reflexivity.
+    - rewrite <- app_assoc, IHk. reflexivity.
+  Qed.
+
+  Lemma concat_repeat_oncemore_spec:
+    forall k pref, concat (repeat [semicolon_char; x_char] k) ++ semicolon_char :: x_char :: pref = semicolon_char :: x_char :: concat (repeat [semicolon_char; x_char] k) ++ pref.
+  Proof.
+    intros k pref.
+    change (concat (repeat [semicolon_char; x_char] k) ++ [semicolon_char; x_char] ++ pref = [semicolon_char; x_char] ++ concat (repeat [semicolon_char; x_char] k) ++ pref).
+    rewrite app_assoc. rewrite app_assoc. f_equal. apply concat_repeat_oncemore.
+  Qed.
+
   Lemma capture_n_regex_spec:
     forall gid k inp pref,
       inp = Input ((List.concat (List.repeat [x_char; semicolon_char] k)) ++ [n_char]) pref ->
@@ -155,11 +171,11 @@ Section HardnessPoslk.
       simpl. unfold advance_input'. simpl.
       rewrite IHk.
       f_equal. f_equal.
-      + admit.
+      + f_equal. f_equal. apply concat_repeat_oncemore_spec.
       + f_equal. f_equal.
-        * simpl. admit.
-        * f_equal. simpl. admit.
-  Admitted.
+        * simpl. f_equal. rewrite <- app_assoc, <- app_assoc. simpl. reflexivity.
+        * f_equal. simpl. do 2 rewrite <- app_assoc. simpl. reflexivity.
+  Qed.
 
   Lemma substr_last:
     forall pref, substr (Input [n_char] pref) (length (rev pref ++ [n_char]) - 1) (length (rev pref ++ [n_char])) = [n_char].
@@ -211,7 +227,16 @@ Section HardnessPoslk.
       l = length (rev pref ++ next ++ [n_char]) ->
       substr (Input (next ++ [n_char]) pref) (l-1) l = [n_char].
   Proof.
-  Admitted.
+    intros next pref l Heql.
+    unfold substr.
+    assert (L_GEQ_1: l >= 1). {
+      do 2 rewrite app_length in Heql. simpl in Heql. lia.
+    }
+    replace (l-(l-1)) with 1 by lia. simpl.
+    rewrite app_assoc. rewrite app_assoc, app_length in Heql. simpl in Heql.
+    assert (LM1: length (rev pref ++ next) = l-1) by lia.
+    rewrite skipn_app, <- LM1, skipn_all, Nat.sub_diag. simpl. reflexivity.
+  Qed.
 
   Lemma read_backref_n_notend:
     forall gm gid len inp k pref,
@@ -237,13 +262,13 @@ Section HardnessPoslk.
 
   Lemma check_n_before_end:
     forall gm gid k inp pref,
-      gid >= S n -> wf_gm_n (length (input_str (Input (concat (repeat [x_char; semicolon_char] (S k)) ++ [n_char]) pref))) gm ->
+      gid >= S n -> wf_gm_n_i (length (input_str (Input (concat (repeat [x_char; semicolon_char] (S k)) ++ [n_char]) pref))) gm gid ->
       inp = (Input (x_char :: semicolon_char :: concat (repeat [x_char; semicolon_char] k) ++ [n_char]) pref) ->
       forall t, is_tree rer [Areg (Backreference gid); Areg (Anchor EndInput)] inp gm forward t ->
         tree_leaves t gm inp forward = [].
   Proof.
     intros gm gid k inp pref VALID_gid WF_gm -> t TREE.
-    unfold wf_gm_n in WF_gm. specialize (WF_gm gid VALID_gid). destruct WF_gm as [NONE | SOME].
+    unfold wf_gm_n_i in WF_gm. destruct WF_gm as [NONE | SOME].
     - inversion TREE; rewrite read_backref_None in READ_BACKREF by auto; try discriminate.
       injection READ_BACKREF as <- <-. subst gid0 cont inp gm0 dir t. clear TREE.
       inversion TREECONT; rewrite anchor_satisfied_EndInput_notend in ANCHOR by auto; try discriminate.
@@ -353,8 +378,8 @@ Section HardnessPoslk.
       split.
       + simpl. do 2 rewrite <- app_assoc. simpl. reflexivity.
       + intros lf IN_lf. specialize (IHk2 lf IN_lf). rewrite IHk2.
-        f_equal. f_equal. admit.
-  Admitted.
+        f_equal. f_equal. f_equal. apply concat_repeat_oncemore_spec.
+  Qed.
 
   Lemma wf_gm_poslk_add:
     forall gm, wf_gm_poslk (length str) gm ->
@@ -672,10 +697,39 @@ Section HardnessPoslk.
              rewrite H0. simpl. discriminate. 
   Qed.
 
+  Lemma emptygm_wf:
+    forall len, wf_gm_poslk len GroupMap.empty.
+  Proof.
+    intro len. unfold wf_gm_poslk. split.
+    - apply emptygm_wf.
+    - unfold wf_gm_n, wf_gm_n_i. intros i _. left. apply GroupMap.Facts.empty_o.
+  Qed.
+
   Theorem qbf_regex:
     regex_matches_string rer (theRegex x_char semicolon_char n_char q) str <->
     qbf_valid q = true.
   Proof.
-  Admitted.
+    unfold regex_matches_string, theRegex.
+    pose proof theRegex_aux_spec n 1 ltac:(lia) ltac:(lia) ltac:(lia) quants.
+    specialize_prove H. { rewrite Nat.sub_diag. reflexivity. }
+    specialize (H GroupMap.empty ltac:(apply emptygm_wf)).
+    specialize_prove H. { intros j _ _. apply GroupMap.Facts.empty_o. }
+    specialize_prove H. { intros j _ _. apply GroupMap.Facts.empty_o. }
+    rewrite Nat.sub_diag in H. simpl in H.
+    assert (init_input str = inp_of_idx 0) by reflexivity.
+    specialize H with (inp := init_input str) (1 := H0).
+    split.
+    - assert (exists t: tree, is_tree rer [Areg (theRegex_aux x_char semicolon_char n_char q 1 (fst q))] (init_input str) GroupMap.empty forward t). { eexists. apply compute_tr_is_tree. }
+      destruct H1 as [t TREE].
+      intro H'. specialize (H' t TREE). specialize (H t TREE).
+      unfold first_leaf in H'. rewrite first_tree_leaf in H'.
+      rewrite hd_error_none_nil in H'.
+      apply proj1 in H. unfold quants, clauses in H.
+      rewrite equiv_gm_env_valid with (q := q) in H. apply H. auto.
+    - intros VALID t TREE.
+      specialize (H t TREE). apply proj1 in H.
+      setoid_rewrite first_tree_leaf. rewrite hd_error_none_nil.
+      apply H. unfold quants, clauses. rewrite equiv_gm_env_valid. auto.
+  Qed.
 
 End HardnessPoslk.
