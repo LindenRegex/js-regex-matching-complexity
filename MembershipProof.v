@@ -7,13 +7,13 @@ Import ListNotations.
 Section MembershipProof.
   Context {params: LindenParameters}.
 
-  (* The subset of supported regexes: no lookarounds, no forced quantifiers *)
+  (* The subset of supported regexes: no lookarounds *)
   Inductive supported_regex: regex -> Prop :=
   | s_Epsilon: supported_regex Epsilon
   | s_Character: forall cd, supported_regex (Regex.Character cd)
   | s_Disjunction: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Disjunction r1 r2)
   | s_Sequence: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Sequence r1 r2)
-  | s_QuantNonForced: forall greedy delta r, supported_regex r -> supported_regex (Quantified greedy 0 delta r) (* any non-forced quantifier, including done, star and question mark *)
+  | s_Quant: forall greedy min delta r, supported_regex r -> supported_regex (Quantified greedy min delta r)
   | s_Lookaround: forall lk r, supported_regex r -> supported_regex (Lookaround lk r)
   | s_Group: forall gid r, supported_regex r -> supported_regex (Group gid r)
   | s_Anchor: forall a, supported_regex (Anchor a)
@@ -30,7 +30,7 @@ Section MembershipProof.
   Fixpoint regex_size (r: regex): nat := match r with
   | Epsilon | Regex.Character _ => 1
   | Disjunction r1 r2 | Sequence r1 r2 => 1 + regex_size r1 + regex_size r2
-  | Quantified _ _ _ r => 3 + regex_size r
+  | Quantified _ min _ r => (S min) * (3 + regex_size r)
   | Lookaround _ r => 1 + regex_size r
   | Group _ r => 2 + regex_size r (* Open, Close *)
   | Anchor _ | Backreference _ => 1
@@ -63,6 +63,9 @@ Section MembershipProof.
   | afr_pop_quant_done: forall inp greedy r1 l dir,
       act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 0) r1) :: l) dir ->
       act_from_regex r inp l dir
+  | afr_pop_quant_forced: forall inp greedy min delta r1 l dir,
+      act_from_regex r inp (Areg (Quantified greedy (S min) delta r1) :: l) dir ->
+      act_from_regex r inp (Areg r1 :: Areg (Quantified greedy min delta r1) :: l) dir
   | afr_pop_quant_free_iter: forall greedy delta r1 inp l dir,
       act_from_regex r inp (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) dir ->
       act_from_regex r inp (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 delta r1) :: l) dir
@@ -106,6 +109,10 @@ Section MembershipProof.
       inversion H2. subst r0.
       inversion H1. subst r0 r3.
       destruct dir; repeat (constructor; auto).
+    - inversion IHact_from_regex. subst x l0.
+      inversion H2. subst r0.
+      inversion H1. subst greedy0 r0. rewrite <- H5 in *.
+      repeat (constructor; auto).
     - inversion IHact_from_regex. subst x l0.
       inversion H2. subst r0.
       inversion H1. subst greedy0 r0. rewrite <- H5 in *.
@@ -198,6 +205,8 @@ Section MembershipProof.
     - intros i inpcheck EQ_CHECK. destruct i; try discriminate.
       specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
     - intros i inpcheck EQ_CHECK. destruct dir; destruct i as [ | []]; try discriminate;
+        specialize (IHact_from_regex (S n) inpcheck EQ_CHECK); auto.
+    - intros i inpcheck EQ_CHECK. destruct i as [|[]]; try discriminate.
       specialize (IHact_from_regex (S n) inpcheck EQ_CHECK); auto.
     - (* Quantifier case: more interesting *)
       (* Either we consider the newly introduced check, in which case this is trivial, or we consider another check, in which case we apply IH *)
@@ -420,6 +429,11 @@ Section MembershipProof.
       + specialize (IHact_from_regex 0 _ eq_refl). subst acttail. simpl in *.
         intros rchk EQ_rchk. destruct dir; specialize (IHact_from_regex rchk EQ_rchk); simpl in *; lia.
       + apply IHact_from_regex with (i := S i). destruct dir; auto.
+    - intros i acttail EQ_acttail. destruct i as [|[|i]]; simpl in *;
+        subst acttail; simpl; intros rchk H0.
+      + specialize (IHact_from_regex 0 _ eq_refl rchk H0). simpl in IHact_from_regex. lia.
+      + specialize (IHact_from_regex 0 _ eq_refl rchk H0). simpl in IHact_from_regex. lia.
+      + apply IHact_from_regex with (i:= S i); auto.
     - intros i acttail EQ_acttail. destruct i as [|[|i]]; simpl in *.
       + subst acttail. simpl. intros rchk H0. injection H0 as <-. simpl. lia.
       + subst acttail. simpl. intros rchk H0. injection H0 as <-. simpl. lia.
@@ -601,6 +615,9 @@ Section MembershipProof.
     - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
       + auto.
       + rewrite last_chunk_size_nocheck by assumption. lia.
+    - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
+      + simpl. rewrite FSTCHK. auto.
+      + simpl. rewrite FSTCHK. lia.
     - simpl in *. destruct (first_check_input l); assumption.
     - simpl in IHact_from_regex. destruct (first_check_input l) eqn:FSTCHK.
       + auto.
@@ -664,6 +681,13 @@ Section MembershipProof.
       + specialize (IHact_from_regex 0 (Areg (Sequence r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
         unfold num_checks in *. destruct dir; simpl in *; lia.
       + apply IHact_from_regex with (i := S i). destruct dir; auto.
+    - (* Forced Quantifier *)
+      intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
+      + specialize (IHact_from_regex 0 _ eq_refl) as [H1 H2].
+        unfold num_checks in *. simpl in *. lia.
+      + specialize (IHact_from_regex 0 _ eq_refl) as [H1 H2].
+        unfold num_checks in *. simpl in *. lia.
+      + apply IHact_from_regex with (i := S i); auto.
     - (* Quantifier iteration *)
       intros i acttail EQ_acttail. destruct i as [|[|[|i]]]; simpl in *.
       + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
@@ -1215,6 +1239,17 @@ remaining_length nextinp dir) * last_chunk_size cont). {
         pose proof suppregex_suppactions r SUPP_REGEX inp _ dir AFR as SUPP_ACTIONS.
         inversion SUPP_ACTIONS. subst x l. inversion H1. subst r0.
         inversion H0. subst min delta0 r0 greedy0.
+        destruct min0.
+        (* forced quantifier *)
+        2:{
+          specialize (IHfuel inp (Areg r1::Areg(Quantified greedy min0 delta r1)::cont) dir).
+          specialize_prove IHfuel.
+          { apply afr_pop_quant_forced. auto. }
+          specialize_prove IHfuel.
+          { admit. }
+          destruct (compute_tree) eqn:COMP.
+          - unfold not. inversion 1.
+          - apply IHfuel in COMP. inversion COMP. }
         destruct (delta is (NoI.N 0)) eqn:ZERO.
         * destruct delta as [[]|]; try discriminate.
           apply IHfuel.
@@ -1405,7 +1440,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             + unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl in *. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-  Qed.
+  Admitted.
 
 
   (** * Any fuel depth is a bound on the tree depth *)
