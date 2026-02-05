@@ -9,7 +9,7 @@ Section GroupMaps.
   Let n := length (fst q).
 
   Definition wf_gm (gm: group_map): Prop :=
-    forall gid, GroupMap.find gid gm = None \/
+    forall gid, gid <= n -> GroupMap.find gid gm = None \/
       GroupMap.find gid gm = Some (GroupMap.Range (2*(gid-1)) (Some (2*(gid-1)+1))).
   
   Definition gm_satisfies_var (gm: group_map) (v: variable): bool :=

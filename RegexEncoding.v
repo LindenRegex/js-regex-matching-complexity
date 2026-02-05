@@ -7,7 +7,7 @@ Section RegexEncoding.
   Context {params: LindenParameters}.
   Context (q: qbf).
 
-  Context (x_char semicolon_char: Parameters.Character).
+  Context (x_char semicolon_char n_char: Parameters.Character).
 
   (* Regex used to define a variable: <(_i x)|x>; *)
   Definition def_var_regex (v: variable): regex :=
@@ -53,6 +53,6 @@ Section RegexEncoding.
 
   (* The string *)
   Definition theString: LWParameters.string :=
-    List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + List.length (snd q))).
+    List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + List.length (snd q))) ++ [n_char].
 
 End RegexEncoding.

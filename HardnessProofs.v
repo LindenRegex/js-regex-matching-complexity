@@ -10,13 +10,13 @@ Section Proofs.
   Context (q: qbf).
   Hypothesis (WF_q: wf_qbf q).
 
-  Context (x_char semicolon_char: Parameters.Character).
+  Context (x_char semicolon_char n_char: Parameters.Character).
   Context (rer: RegExpRecord).
   Hypothesis (x_semicolon_neq: Character.canonicalize rer x_char <>
     Character.canonicalize rer semicolon_char).
 
   (* The string *)
-  Let str := theString q x_char semicolon_char.
+  Let str := theString q x_char semicolon_char n_char.
   (* Number of variables *)
   Let n := List.length (fst q).
   (* The quantifiers *)
@@ -44,10 +44,10 @@ Section Proofs.
     rewrite concat_length, map_repeat, list_sum_repeat. apply Nat.mul_comm.
   Qed.
 
-  Lemma str_len: length str = 2*(n+m).
+  Lemma str_len: length str = 2*(n+m)+1.
   Proof.
     unfold str, theString.
-    rewrite concat_repeat_len. reflexivity.
+    rewrite app_length, concat_repeat_len. reflexivity.
   Qed.
 
   Lemma rev_concat_repeat {A: Type}:
@@ -63,7 +63,7 @@ Section Proofs.
   Lemma inp_of_idx_even:
     forall i, i <= n + m ->
       inp_of_idx (2*i) = Input
-        (List.concat (List.repeat [x_char; semicolon_char] (n+m-i)))
+        (List.concat (List.repeat [x_char; semicolon_char] (n+m-i)) ++ [n_char])
         (List.concat (List.repeat [semicolon_char; x_char] i)).
   Proof.
     induction i.
@@ -149,7 +149,7 @@ Section Proofs.
     unfold wf_var in WF_v. assert (WF_v': v - 1 < n) by lia.
     unfold str, theString.
     rewrite (Nat.mul_comm 2 (v - 1)). change 2 with (length [x_char; semicolon_char]).
-    rewrite skipn_concat_repeat.
+    rewrite skipn_app, skipn_concat_repeat.
     fold n m.
     destruct (n + m - (v - 1)) eqn:?; try lia. reflexivity.
   Qed.
@@ -188,17 +188,20 @@ Section Proofs.
 
   Lemma read_backref_var_sat:
     forall (gm: group_map) (v: variable) (i: nat),
-      i < m -> wf_var n v -> wf_gm gm ->
+      i < m -> wf_var n v -> wf_gm q gm ->
       gm_satisfies_var gm v = true -> read_backref rer gm v (inp_of_idx (2*(n+i))) forward = Some ([x_char], inp_of_idx (2*(n+i)+1)).
   Proof.
     intros gm v i INB_i WF_v WF_GM SAT.
-    destruct (WF_GM v) as [FOUND|NOTFOUND].
+    unfold wf_gm in WF_GM. unfold wf_var in WF_v.
+    specialize (WF_GM v).
+    specialize_prove WF_GM. { fold n. destruct WF_v. auto. }
+    destruct WF_GM as [FOUND|NOTFOUND].
     {
       unfold gm_satisfies_var in SAT. rewrite FOUND in SAT. discriminate.
     }
     unfold read_backref. rewrite NOTFOUND.
     rewrite inp_of_idx_even at 1. 2: lia.
-    rewrite concat_length, map_repeat, list_sum_repeat. simpl length.
+    rewrite app_length, concat_length, map_repeat, list_sum_repeat. simpl length.
     replace (2*(v-1)+1-2*(v-1)) with 1 by lia.
     replace (S _ <=? 1) with false. 2: {
       symmetry. rewrite PeanoNat.Nat.leb_gt. lia.
@@ -211,7 +214,7 @@ Section Proofs.
 
   Lemma read_backref_var_unsat:
     forall (gm: group_map) (v: variable) (i: nat),
-      i < m -> wf_gm gm ->
+      i < m -> wf_gm q gm ->
       gm_satisfies_var gm v = false -> read_backref rer gm v (inp_of_idx (2*(n+i))) forward = Some ([], inp_of_idx (2*(n+i))).
   Proof.
     intros gm v i INB_i WF_GM UNSAT. unfold gm_satisfies_var in UNSAT.
@@ -261,7 +264,7 @@ Section Proofs.
     (* Let lit be a well-formed literal and gm be a valid group map. *)
     forall (i: nat) (lit: literal) (inp: input) (gm: group_map),
       i < m -> wf_literal n lit ->
-      inp = inp_of_idx (2*(n+i)) -> wf_gm gm ->
+      inp = inp_of_idx (2*(n+i)) -> wf_gm q gm ->
       (* Let t be the tree of r_lit with input inp(2*(n+i)) for some 0 ≤ i < m and group map gm. *)
       forall t, is_tree rer [Areg (check_literal_regex x_char lit)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -274,7 +277,9 @@ Section Proofs.
     intros i lit inp gm INB_i WF_lit EQ_inp WF_GM t TREE lflist EQ_lflist.
     destruct lit as [v|v]; simpl in *.
     - (* Positive variable *)
-      destruct (WF_GM v) as [NOTFOUND | FOUND].
+      specialize (WF_GM v) as WF_GM'.
+      specialize_prove WF_GM'. { fold n. inversion WF_lit. unfold wf_var in H0. tauto. }
+      destruct WF_GM' as [NOTFOUND | FOUND].
       + (* Variable not found *)
         split; intro SAT.
         1: { unfold gm_satisfies_var in SAT. rewrite NOTFOUND in SAT. discriminate. }
@@ -307,7 +312,9 @@ Section Proofs.
         rewrite skipn_skipn. rewrite firstn_app_firstn_skipn.
         unfold inp_of_idx. f_equal. f_equal. f_equal. lia.
     - (* Negative variable *)
-      destruct (WF_GM v) as [NOTFOUND|FOUND].
+      specialize (WF_GM v) as WF_GM'.
+      specialize_prove WF_GM'. { fold n. inversion WF_lit. unfold wf_var in H0. tauto. }
+      destruct WF_GM' as [NOTFOUND|FOUND].
       + (* Variable not found *)
         destruct gm_satisfies_var eqn:SAT.
         1: { unfold gm_satisfies_var in SAT. rewrite NOTFOUND in SAT. discriminate. }
@@ -353,7 +360,7 @@ Section Proofs.
     (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map and 0 <= i < m. *)
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
       i < m -> wf_clause n c ->
-      inp = inp_of_idx (2*(n+i)) -> wf_gm gm ->
+      inp = inp_of_idx (2*(n+i)) -> wf_gm q gm ->
       (* Let t be the tree of r with input inp(2*(n+i)) and group map gm. *)
       forall t, is_tree rer [Areg (check_clause_regex_aux x_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -434,7 +441,7 @@ Section Proofs.
     rewrite char_match_semicolon. f_equal. f_equal.
     setoid_rewrite inp_of_idx_even; try lia.
     f_equal.
-    - f_equal. f_equal. lia.
+    - f_equal. f_equal. f_equal. lia.
     - rewrite Nat.add_comm. reflexivity.
   Qed.
 
@@ -475,7 +482,7 @@ Section Proofs.
     (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map, and 0 <= i < m. *)
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
       i < m -> wf_clause n c ->
-      inp = inp_of_idx (2*(n+i)) -> wf_gm gm ->
+      inp = inp_of_idx (2*(n+i)) -> wf_gm q gm ->
       (* Let t be the tree of r on input inp(2*(n+i)) and group map gm. *)
       forall t, is_tree rer [Areg (check_clause_regex x_char semicolon_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -543,7 +550,7 @@ Section Proofs.
   Lemma check_conjunct_regex_spec:
     (* Let r be the regex checking the validity of the conjunction of clauses, and gm a valid group map. *)
     forall (inp: input) (gm: group_map),
-      inp = inp_of_idx (2*n) -> wf_gm gm ->
+      inp = inp_of_idx (2*n) -> wf_gm q gm ->
       (* Let t be the tree of r on input inp(2*n) and group map gm. *)
       forall t, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev clauses))] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -743,6 +750,7 @@ Section Proofs.
     forall (l: list A) (a: A) (i: nat), i < length l ->
       skipn i l = nth i l a :: skipn (S i) l.
   Proof.
+    clear q WF_q str n quants m clauses x_char semicolon_char n_char x_semicolon_neq params rer.
     induction l.
     - intros a i. simpl. lia.
     - intros a' i. simpl. destruct i as [|i].
@@ -753,15 +761,15 @@ Section Proofs.
   Qed.
 
   Lemma wf_gm_add:
-    forall gm, wf_gm gm ->
-      forall i, wf_gm (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm).
+    forall gm, wf_gm q gm ->
+      forall i, i <= n -> wf_gm q (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm).
   Proof.
-    intros gm WF_gm i.
-    unfold wf_gm in *. intro gid.
+    intros gm WF_gm i LE.
+    unfold wf_gm in *. intros gid LE_GID.
     destruct (Nat.eq_dec gid i).
     - subst gid. unfold GroupMap.find, GroupMap.add.
       right. apply GroupMap.Facts.add_eq_o. reflexivity.
-    - setoid_rewrite GroupMap.Facts.add_neq_o; try congruence. apply WF_gm.
+    - setoid_rewrite GroupMap.Facts.add_neq_o; try congruence. apply WF_gm. auto.
   Qed.
 
   Lemma undef_gm_add:
@@ -812,7 +820,7 @@ Section Proofs.
     i <> 0 -> i <= n + 1 ->
       (* Let gm be a valid group map... *)
       forall gm: group_map,
-        wf_gm gm ->
+        wf_gm q gm ->
         (* ... such that gm(i), gm(i+1), ..., gm(n) are undefined. *)
         (forall j, i <= j -> j <= n -> GroupMap.find j gm = None) ->
         forall inp qtail t,
@@ -878,7 +886,7 @@ Section Proofs.
         specialize (IHnp1_minus_i gmpos) as IHpos. specialize (IHnp1_minus_i gm) as IHneg.
         clear IHnp1_minus_i.
         specialize_prove IHpos. {
-          rewrite Heqgmpos. apply wf_gm_add. auto.
+          rewrite Heqgmpos. apply wf_gm_add. - auto. - lia.
         }
         specialize_prove IHpos. {
           eapply undef_gm_add with (gm := gm); eauto.
@@ -969,7 +977,7 @@ Section Proofs.
           pose proof (IHnp1_minus_i gmpos) as IHpos.
           pose proof (IHnp1_minus_i gm) as IHneg.
           specialize_prove IHpos. {
-            rewrite Heqgmpos. apply wf_gm_add. auto.
+            rewrite Heqgmpos. apply wf_gm_add. - auto. - lia.
           }
           specialize_prove IHpos. {
             eapply undef_gm_add with (gm := gm); eauto.
@@ -1014,7 +1022,7 @@ Section Proofs.
           pose proof (IHnp1_minus_i gmpos) as IHpos.
           pose proof (IHnp1_minus_i gm) as IHneg.
           specialize_prove IHpos. {
-            rewrite Heqgmpos. apply wf_gm_add. auto.
+            rewrite Heqgmpos. apply wf_gm_add. - auto. - lia.
           }
           specialize_prove IHpos. {
             eapply undef_gm_add with (gm := gm); eauto.
@@ -1040,7 +1048,7 @@ Section Proofs.
   Qed.
 
 
-
+  (* TODO Move to Linden *)
   Definition regex_matches_string (rer: RegExpRecord) (r: regex) (s: LWParameters.string): Prop :=
     forall t: tree, is_tree rer [Areg r] (init_input s) GroupMap.empty forward t ->
       first_leaf t (init_input s) <> None.
@@ -1051,9 +1059,9 @@ Section Proofs.
     apply GroupMap.Facts.empty_o.
   Qed.
 
-  Lemma emptygm_wf: wf_gm GroupMap.empty.
+  Lemma emptygm_wf: wf_gm q GroupMap.empty.
   Proof.
-    unfold wf_gm. intro gid. left. apply emptygm_find. 
+    unfold wf_gm. intros gid LE. left. apply emptygm_find. 
   Qed.
   
 

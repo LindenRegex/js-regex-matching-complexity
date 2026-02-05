@@ -351,7 +351,6 @@ Section MembershipProof.
     | Disjunction r1 r2 | Sequence r1 r2 => max (regex_lookaround_fuel str r1) (regex_lookaround_fuel str r2)
     | Quantified _ _ _ r => regex_lookaround_fuel str r
     | Lookaround lk r =>
-        let dir := lk_dir lk in
         let this_lk_fuel := (1 + length str) * regex_size r in
         this_lk_fuel + regex_lookaround_fuel str r
     | Group _ r => regex_lookaround_fuel str r
