@@ -24,7 +24,7 @@ Section HardnessPoslk.
 
   Let str := theString q x_char semicolon_char n_char.
   Let quants := fst q.
-  Let clauses := snd q.
+  Let form := snd q.
   Let n := length quants.
 
   (* Definition inp_of_idx (i: nat) :=
@@ -447,7 +447,7 @@ Section HardnessPoslk.
           is_tree rer [Areg (theRegex_aux x_char semicolon_char n_char q i qtail)] inp gm forward t ->
           (* Then: *)
           (* - t has a leaf iff gm satisfies F_i *)
-          (tree_leaves t gm inp forward <> [] <-> gm_satisfies_qbf_aux gm i qtail clauses = true) /\
+          (tree_leaves t gm inp forward <> [] <-> gm_satisfies_qbf_aux gm i qtail form = true) /\
           (* - for any leaf (inp', gm') of t, gm' and gm coincide on indices n+ni+1, ..., n+num_notexists quants. *)
           (forall inp' gm', In (inp', gm') (tree_leaves t gm inp forward) ->
             forall j, num_notexists qtail + 1 + n <= j -> j <= num_notexists quants + n -> GroupMap.find j gm = GroupMap.find j gm').
@@ -732,12 +732,12 @@ Section HardnessPoslk.
       intro H'. specialize (H' t TREE). specialize (H t TREE).
       unfold first_leaf in H'. rewrite first_tree_leaf in H'.
       rewrite hd_error_none_nil in H'.
-      apply proj1 in H. unfold quants, clauses in H.
+      apply proj1 in H. unfold quants, form in H.
       rewrite equiv_gm_env_valid with (q := q) in H. apply H. auto.
     - intros VALID t TREE.
       specialize (H t TREE). apply proj1 in H.
       setoid_rewrite first_tree_leaf. rewrite hd_error_none_nil.
-      apply H. unfold quants, clauses. rewrite equiv_gm_env_valid. auto.
+      apply H. unfold quants, form. rewrite equiv_gm_env_valid. auto.
   Qed.
 
 End HardnessPoslk.

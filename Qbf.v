@@ -19,8 +19,11 @@ Inductive quantifier: Type :=
 | Exists
 | NotExists.
 
+(* Propositional formula *)
+Definition formula := list clause.
+
 (* A QBF (in CNF) is a list of quantifiers followed by a conjunction of clauses. *)
-Definition qbf := (list quantifier * list clause)%type.
+Definition qbf := (list quantifier * formula)%type.
 
 (* A QBF is well-formed if all the variables that appear in it are quantified. *)
 Definition wf_var (num_vars: nat) (v: variable): Prop := v <> 0 /\ v <= num_vars.
@@ -33,7 +36,7 @@ Definition wf_clause (num_vars: nat) (c: clause): Prop :=
   Forall (wf_literal num_vars) c.
 
 Inductive wf_qbf: qbf -> Prop :=
-| Wf: forall (ql: list quantifier) (cl: list clause),
+| Wf: forall (ql: list quantifier) (cl: formula),
   Forall (wf_clause (length ql)) cl ->
   wf_qbf (ql, cl).
 
@@ -82,7 +85,7 @@ Definition valid_clause (e: env) (c: clause): bool :=
 
 (* n is the variable to be assigned at this stage *)
 (* ql contains the remaining quantifiers to process, including the nth one *)
-Fixpoint qbf_valid_aux (e: env) (n: nat) (ql: list quantifier) (cl: list clause) {struct ql}: bool :=
+Fixpoint qbf_valid_aux (e: env) (n: nat) (ql: list quantifier) (cl: formula) {struct ql}: bool :=
   match ql with
   | nil => List.forallb (valid_clause e) cl
   | quant::q =>
