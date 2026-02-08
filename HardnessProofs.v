@@ -21,10 +21,11 @@ Section Proofs.
   Let n := List.length (fst q).
   (* The quantifiers *)
   Let quants := fst q.
-  (* Number of clauses *)
-  Let m := List.length (snd q).
   (* The formula *)
   Let form := snd q.
+  Let pos_form := inner_pos_formula form.
+  (* Number of clauses *)
+  Let m := num_clauses_qbf q.
 
   Definition inp_of_idx (i: nat) :=
     Input (List.skipn i str) (List.rev (List.firstn i str)).
@@ -552,19 +553,20 @@ Section Proofs.
     forall (inp: input) (gm: group_map),
       inp = inp_of_idx (2*n) -> wf_gm q gm ->
       (* Let t be the tree of r on input inp(2*n) and group map gm. *)
-      forall t, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev form))] inp gm forward t ->
+      forall t, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev pos_form))] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
           (* Then: *)
           (* - all the leaves of t (if any) are equal to (inp(2*(n+m)), gm), *)
           (forall lf, In lf lflist -> lf = (inp_of_idx (2*(n+m)), gm)) /\
           (* - t has (at least) a leaf iff gm satisfies the conjunction of clauses. *)
-          (lflist <> nil <-> gm_satisfies_conjunct gm form = true).
+          (lflist <> nil <-> gm_satisfies_conjunct gm pos_form = true).
   Proof.
-    intros inp gm EQ_inp WF_GM. unfold m. fold form.
-    assert (LE_length_clauses: length form <= m). { reflexivity. }
+    intros inp gm EQ_inp WF_GM. unfold m, num_clauses_qbf. fold form.
+    unfold num_clauses_formula. fold pos_form.
+    assert (LE_length_clauses: length pos_form <= m). { reflexivity. }
     revert LE_length_clauses.
-    assert (WF_clauses: Forall (wf_clause n) form). { inversion WF_q; subst. apply H. }
-    revert WF_clauses. generalize form. induction form0 using rev_ind.
+    assert (WF_clauses: Forall (wf_clause n) pos_form). { inversion WF_q; subst. inversion H; subst; apply H0. }
+    revert WF_clauses. generalize pos_form. induction pos_form0 using rev_ind.
     - simpl. intros ? ? t TREE lflist EQ_lflist.
       inversion TREE. subst cont inp0 gm0 dir tcont.
       inversion ISTREE. subst inp0 gm0 dir t. simpl in EQ_lflist. subst lflist.
@@ -575,16 +577,16 @@ Section Proofs.
       intros ? ? t TREE lflist EQ_lflist.
       inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
       rewrite app_nil_r in CONT. simpl in CONT.
-      assert (SUBTREE: exists tsub: tree, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev form0))] inp gm forward tsub). {
+      assert (SUBTREE: exists tsub: tree, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev pos_form0))] inp gm forward tsub). {
         eexists. apply compute_tr_is_tree.
       }
       destruct SUBTREE as [tsub SUBTREE].
-      specialize_prove IHform0. { rewrite Forall_app in WF_clauses. tauto. }
-      specialize (IHform0 ltac:(lia) tsub SUBTREE).
-      pose proof leaves_concat rer inp gm forward [Areg (check_conjunct_regex x_char semicolon_char (rev form0))] [Areg (check_clause_regex x_char semicolon_char x)] _ _ CONT SUBTREE as CONCAT.
+      specialize_prove IHpos_form0. { rewrite Forall_app in WF_clauses. tauto. }
+      specialize (IHpos_form0 ltac:(lia) tsub SUBTREE).
+      pose proof leaves_concat rer inp gm forward [Areg (check_conjunct_regex x_char semicolon_char (rev pos_form0))] [Areg (check_clause_regex x_char semicolon_char x)] _ _ CONT SUBTREE as CONCAT.
       rewrite <- EQ_lflist in CONCAT.
-      remember (tree_leaves tsub gm inp forward) as lflist_sub. specialize (IHform0 lflist_sub eq_refl).
-      pose proof check_clause_regex_spec (length form0) x as SPEC_check_x. 
+      remember (tree_leaves tsub gm inp forward) as lflist_sub. specialize (IHpos_form0 lflist_sub eq_refl).
+      pose proof check_clause_regex_spec (length pos_form0) x as SPEC_check_x. 
       split.
       + intros lf IN_lf. rewrite @FlatMap_in_r with (X := leaf) in IN_lf.
         3: apply CONCAT. 2: apply act_from_leaf_determ.
@@ -596,7 +598,7 @@ Section Proofs.
           destruct WF_clauses as [_ WF_clauses].
           inversion WF_clauses. auto.
         }
-        destruct IHform0 as [IHclauses0_0 IHclauses0_1].
+        destruct IHpos_form0 as [IHclauses0_0 IHclauses0_1].
         specialize (IHclauses0_0 lfsub IN_lfsub).
         specialize_prove SPEC_check_x. {
           rewrite IHclauses0_0. reflexivity.
@@ -619,7 +621,7 @@ Section Proofs.
             destruct WF_clauses as [_ WF_clauses].
             inversion WF_clauses. auto.
           }
-          destruct IHform0 as [IHclauses0_0 IHclauses0_1].
+          destruct IHpos_form0 as [IHclauses0_0 IHclauses0_1].
           specialize (IHclauses0_0 lfsub IN_lfsub).
           specialize_prove SPEC_check_x. {
             rewrite IHclauses0_0. reflexivity.
@@ -642,7 +644,7 @@ Section Proofs.
         * unfold gm_satisfies_conjunct in *. rewrite forallb_app in H.
           apply andb_true_iff in H. destruct H as [clauses0_sat x_sat].
           simpl in x_sat. rewrite andb_true_r in x_sat.
-          destruct IHform0 as [IHclauses0_0 [_ IHclauses0_1]].
+          destruct IHpos_form0 as [IHclauses0_0 [_ IHclauses0_1]].
           specialize (IHclauses0_1 clauses0_sat).
           destruct lflist_sub as [|[inpsub gmsub] lflist_sub]; try contradiction.
           specialize (IHclauses0_0 (inpsub, gmsub) ltac:(left; reflexivity)).
@@ -666,6 +668,35 @@ Section Proofs.
           -- rewrite Heqlflist_clause. constructor. auto.
           -- destruct SPEC_check_x as [_ SPEC_check_x]. tauto.
   Qed.
+
+  (* Lemma specifying the behavior of the regex checking the possibly negated formula. *)
+  Lemma check_formula_regex_spec:
+    (* Let r be the regex checking the validity of the possibly negated formula, and gm a valid group map. *)
+    forall (inp: input) (gm: group_map),
+      inp = inp_of_idx (2*n) -> wf_gm q gm ->
+      (* Let t be the tree of r on input inp(2*n) and group map gm. *)
+      forall t, is_tree rer [Areg (check_formula_regex x_char semicolon_char form)] inp gm forward t ->
+        forall lflist, lflist = tree_leaves t gm inp forward ->
+          (* Then: *)
+          (* - all the leaves of t (if any) leave the group map unchanged, *)
+          (forall lf, In lf lflist -> snd lf = gm) /\
+          (* - t has (at least) a leaf iff gm satisfies the conjunction of clauses. *)
+          (lflist <> nil <-> gm_satisfies_formula gm form = true).
+  Proof.
+    intros inp gm EQ_inp WF_gm t TREE lflist EQ_lflist.
+    set form as form'. destruct form' as [pf | pf] eqn:?.
+    - simpl gm_satisfies_formula.
+      assert (Hpf_pos_form: pf = pos_form). { unfold pos_form. fold form'. rewrite Heqf. reflexivity. }
+      rewrite Hpf_pos_form.
+      pose proof check_conjunct_regex_spec inp gm EQ_inp WF_gm t.
+      fold form' in TREE. rewrite Heqf in TREE. simpl in TREE.
+      rewrite Hpf_pos_form in TREE.
+      specialize (H TREE lflist EQ_lflist).
+      destruct H as [H1 H2].
+      split; auto.
+      intros lf IN_lf. rewrite H1 with (lf := lf) by auto. reflexivity.
+    - admit.
+  Admitted.
 
   (* Lemma specifying the behavior of the regex that defines a variable. *)
   Lemma def_var_regex_spec:
@@ -750,7 +781,7 @@ Section Proofs.
     forall (l: list A) (a: A) (i: nat), i < length l ->
       skipn i l = nth i l a :: skipn (S i) l.
   Proof.
-    clear q WF_q str n quants m form x_char semicolon_char n_char x_semicolon_neq params rer.
+    clear q WF_q str n quants m pos_form form x_char semicolon_char n_char x_semicolon_neq params rer.
     induction l.
     - intros a i. simpl. lia.
     - intros a' i. simpl. destruct i as [|i].

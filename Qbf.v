@@ -19,11 +19,27 @@ Inductive quantifier: Type :=
 | Exists
 | NotExists.
 
-(* Propositional formula *)
-Definition formula := list clause.
+(* Positive propositional formula in CNF: a list of clauses *)
+Definition pos_formula := list clause.
+
+(* Propositional formula in CNF that can be negated *)
+Inductive formula: Type :=
+| PosForm: pos_formula -> formula
+| NegForm: pos_formula -> formula.
 
 (* A QBF (in CNF) is a list of quantifiers followed by a conjunction of clauses. *)
 Definition qbf := (list quantifier * formula)%type.
+
+(* The underlying CNF of a QBF *)
+Definition inner_pos_formula (f: formula): pos_formula :=
+  match f with | PosForm pf | NegForm pf => pf end.
+
+(* Number of clauses in a QBF. *)
+Definition num_clauses_formula (f: formula): nat :=
+  length (inner_pos_formula f).
+
+Definition num_clauses_qbf (q: qbf): nat :=
+  num_clauses_formula (snd q).
 
 (* A QBF is well-formed if all the variables that appear in it are quantified. *)
 Definition wf_var (num_vars: nat) (v: variable): Prop := v <> 0 /\ v <= num_vars.
@@ -35,10 +51,17 @@ Inductive wf_literal (num_vars: nat): literal -> Prop :=
 Definition wf_clause (num_vars: nat) (c: clause): Prop :=
   Forall (wf_literal num_vars) c.
 
+Definition wf_pos_formula (num_vars: nat) (pf: pos_formula) :=
+  Forall (wf_clause num_vars) pf.
+
+Inductive wf_formula (num_vars: nat): formula -> Prop :=
+| WfPosForm: forall pf, wf_pos_formula num_vars pf -> wf_formula num_vars (PosForm pf)
+| WfNegForm: forall pf, wf_pos_formula num_vars pf -> wf_formula num_vars (NegForm pf).
+
 Inductive wf_qbf: qbf -> Prop :=
-| Wf: forall (ql: list quantifier) (cl: formula),
-  Forall (wf_clause (length ql)) cl ->
-  wf_qbf (ql, cl).
+| Wf: forall (ql: list quantifier) (f: formula),
+  wf_formula (length ql) f ->
+  wf_qbf (ql, f).
 
 (** ** Environments *)
 (* An environment is a set of variables that are true *)
@@ -74,31 +97,40 @@ Inductive qbf_valid: nat -> env -> qbf -> Prop :=
 Definition true_variable (e: env) (v: variable): bool :=
   Environment.mem v e.
 
-Definition valid_literal (e: env) (l: literal): bool :=
+Definition true_literal (e: env) (l: literal): bool :=
   match l with
   | PosVar v => true_variable e v
   | NegVar v => negb (true_variable e v)
   end.
 
-Definition valid_clause (e: env) (c: clause): bool :=
-  List.existsb (valid_literal e) c.
+Definition true_clause (e: env) (c: clause): bool :=
+  List.existsb (true_literal e) c.
+
+Definition true_pos_formula (e: env) (pf: pos_formula): bool :=
+  List.forallb (true_clause e) pf.
+
+Definition true_formula (e: env) (f: formula): bool :=
+  match f with
+  | PosForm pf => true_pos_formula e pf
+  | NegForm pf => negb (true_pos_formula e pf)
+  end.
 
 (* n is the variable to be assigned at this stage *)
 (* ql contains the remaining quantifiers to process, including the nth one *)
-Fixpoint qbf_valid_aux (e: env) (n: nat) (ql: list quantifier) (cl: formula) {struct ql}: bool :=
+Fixpoint qbf_true_aux (e: env) (n: nat) (ql: list quantifier) (f: formula) {struct ql}: bool :=
   match ql with
-  | nil => List.forallb (valid_clause e) cl
+  | nil => true_formula e f
   | quant::q =>
     match quant with
     | Exists =>
-        qbf_valid_aux (Environment.add n e) (S n) q cl ||
-        qbf_valid_aux e (S n) q cl
+        qbf_true_aux (Environment.add n e) (S n) q f ||
+        qbf_true_aux e (S n) q f
     | NotExists =>
-        negb (qbf_valid_aux (Environment.add n e) (S n) q cl) &&
-        negb (qbf_valid_aux e (S n) q cl)
+        negb (qbf_true_aux (Environment.add n e) (S n) q f) &&
+        negb (qbf_true_aux e (S n) q f)
     end
   end.
 
-Definition qbf_valid (q: qbf): bool :=
-  qbf_valid_aux Environment.empty 1 (fst q) (snd q).
+Definition qbf_true (q: qbf): bool :=
+  qbf_true_aux Environment.empty 1 (fst q) (snd q).
 

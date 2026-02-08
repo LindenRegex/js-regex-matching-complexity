@@ -27,19 +27,25 @@ Section GroupMaps.
   Definition gm_satisfies_clause (gm: group_map) (c: clause): bool :=
     List.existsb (gm_satisfies_lit gm) c.
   
-  Definition gm_satisfies_conjunct (gm: group_map) (cl: list clause): bool :=
-    List.forallb (gm_satisfies_clause gm) cl.
+  Definition gm_satisfies_conjunct (gm: group_map) (pf: pos_formula): bool :=
+    List.forallb (gm_satisfies_clause gm) pf.
+
+  Definition gm_satisfies_formula (gm: group_map) (f: formula): bool :=
+    match f with
+    | PosForm pf => gm_satisfies_conjunct gm pf
+    | NegForm pf => negb (gm_satisfies_conjunct gm pf)
+    end.
   
   Fixpoint gm_satisfies_qbf_aux (gm: group_map) (n: nat) (ql: list quantifier)
-    (cl: list clause) {struct ql}: bool :=
+    (f: formula) {struct ql}: bool :=
     match ql with
-    | nil => gm_satisfies_conjunct gm cl
+    | nil => gm_satisfies_formula gm f
     | Qbf.Exists::ql =>
-        gm_satisfies_qbf_aux gm (S n) ql cl ||
-        gm_satisfies_qbf_aux (GroupMap.add n (GroupMap.Range (2*(n-1)) (Some (2*(n-1)+1))) gm) (S n) ql cl
+        gm_satisfies_qbf_aux gm (S n) ql f ||
+        gm_satisfies_qbf_aux (GroupMap.add n (GroupMap.Range (2*(n-1)) (Some (2*(n-1)+1))) gm) (S n) ql f
     | Qbf.NotExists::ql =>
-        negb (gm_satisfies_qbf_aux gm (S n) ql cl) &&
-        negb (gm_satisfies_qbf_aux (GroupMap.add n (GroupMap.Range (2*(n-1)) (Some (2*(n-1)+1))) gm) (S n) ql cl)
+        negb (gm_satisfies_qbf_aux gm (S n) ql f) &&
+        negb (gm_satisfies_qbf_aux (GroupMap.add n (GroupMap.Range (2*(n-1)) (Some (2*(n-1)+1))) gm) (S n) ql f)
     end.
 
 End GroupMaps.

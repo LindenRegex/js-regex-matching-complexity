@@ -41,10 +41,16 @@ Section RegexEncoding.
     | c::cl => Sequence (check_conjunct_regex cl) (check_clause_regex c)
     end.
 
+  Definition check_formula_regex (f: formula): regex :=
+    match f with
+    | PosForm pf => check_conjunct_regex (rev pf)
+    | NegForm pf => Lookaround NegLookAhead (check_conjunct_regex (rev pf))
+    end.
+
   (* The regex *)
   Fixpoint theRegex_aux (v: variable) (ql: list quantifier) {struct ql}: regex :=
     match ql with
-    | nil => check_conjunct_regex (rev (snd q))
+    | nil => check_formula_regex (snd q)
     | Qbf.Exists::ql => Sequence (def_var_regex v) (theRegex_aux (S v) ql)
     | Qbf.NotExists::ql => Lookaround NegLookAhead (Sequence (def_var_regex v) (theRegex_aux (S v) ql))
     end.
@@ -53,6 +59,6 @@ Section RegexEncoding.
 
   (* The string *)
   Definition theString: LWParameters.string :=
-    List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + List.length (snd q))) ++ [n_char].
+    List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + num_clauses_qbf q)) ++ [n_char].
 
 End RegexEncoding.
