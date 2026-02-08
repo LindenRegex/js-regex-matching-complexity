@@ -184,12 +184,12 @@ Section MembershipProof.
   Qed.
 
 
-  (** * In a valid list of actions, a check is always followed by a quantifier. *)
+  (** * In a valid list of actions, a check is always followed by a quantifier with a minimum number of repetitions equal to zero. *)
   Definition checks_fby_quant (act: actions) :=
     forall (i: nat) (inpcheck: input),
       List.nth_error act i = Some (Acheck inpcheck) ->
-      exists greedy min delta r,
-        List.nth_error act (S i) = Some (Areg (Quantified greedy min delta r)).
+      exists greedy delta r,
+        List.nth_error act (S i) = Some (Areg (Quantified greedy 0 delta r)).
   
   Lemma afr_checks_fby_quant:
     forall r inp act dir, act_from_regex r inp act dir -> checks_fby_quant act.
@@ -212,7 +212,7 @@ Section MembershipProof.
       (* Either we consider the newly introduced check, in which case this is trivial, or we consider another check, in which case we apply IH *)
       intros i inpcheck EQ_CHECK. destruct i as [|[|[|i]]]; try discriminate; simpl in EQ_CHECK.
       + injection EQ_CHECK as <-.
-        exists greedy. exists 0. exists delta. exists r1. reflexivity.
+        exists greedy. exists delta. exists r1. reflexivity.
       + specialize (IHact_from_regex (S i) inpcheck EQ_CHECK). auto.
     - (* Apply IH *)
       intros i inpcheck EQ_CHECK. destruct i as [|[|i]]; simpl in EQ_CHECK; try discriminate.
@@ -392,7 +392,7 @@ Section MembershipProof.
     | Some inpchk =>
         let b := is_strict_suffix inp inpchk dir in
         let beginning_fuel := match act with
-        | Areg (Quantified _ _ _ r) :: l =>
+        | Areg (Quantified _ 0 _ r) :: l =>
           (if b then 1 else 3 + regex_size r) + actions_fuel' l
         | _ => actions_fuel' act
         end in
@@ -547,8 +547,8 @@ Section MembershipProof.
       specialize (CHKSZ_LT 0 (a :: act) eq_refl).
       unfold checks_fby_quant in CHK_FBY_QUANT.
       pose proof (proj1 (first_check_input_nth_error (a :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
-      specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
-      specialize (CHKSZ_LT (Quantified greedy min delta rquant)).
+      specialize (CHK_FBY_QUANT _ _ FSTCHK_NTH1). destruct CHK_FBY_QUANT as [greedy [delta [rquant CHK_FBY_QUANT]]].
+      specialize (CHKSZ_LT (Quantified greedy 0 delta rquant)).
       specialize_prove CHKSZ_LT. { eauto using next_check_regex_nth_error. }
       specialize (IHact i _ eq_refl).
       destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
@@ -557,7 +557,7 @@ Section MembershipProof.
           pose proof last_chunk_size_skipn (a :: act) i inpchk FSTCHK_NTH1.
           simpl in H. rewrite FSTCHK in H. auto.
         }
-        assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
+        assert (regex_size (Quantified greedy 0 delta rquant) <= chunk_size (skipn i act)). {
           pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
           rewrite H0. simpl. lia.
         }
@@ -566,7 +566,7 @@ Section MembershipProof.
           pose proof last_chunk_size_skipn_last (a :: act) i inpchk FSTCHK_NTH1 SNDCHK.
           simpl in H. rewrite FSTCHK in H. auto.
         }
-        assert (regex_size (Quantified greedy min delta rquant) <= chunk_size (skipn i act)). {
+        assert (regex_size (Quantified greedy 0 delta rquant) <= chunk_size (skipn i act)). {
           pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
           rewrite H0. simpl. lia.
         }
@@ -959,7 +959,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       }
       destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
       destruct r; try lia.
-      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy min delta r)). {
+      destruct min; try lia.
+      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy 0 delta r)). {
         simpl. destruct (is_strict_suffix nextinp inpchk dir); lia.
       }
       lia.
@@ -1033,7 +1034,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       }
       destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
       destruct r; try lia.
-      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy min delta r)). {
+      destruct min; try lia.
+      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy 0 delta r)). {
         simpl. destruct (is_strict_suffix nextinp inpchk dir); lia.
       }
       lia.
@@ -1070,6 +1072,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     rewrite FSTCHK.
     destruct act as [|[r | ? | ?] l]; try reflexivity.
     destruct r; try reflexivity.
+    destruct min; try reflexivity.
     destruct is_strict_suffix; simpl; lia.
   Qed.
 
@@ -1128,6 +1131,10 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     rewrite PeanoNat.Nat.sub_0_r. reflexivity.
   Qed.
 
+  Lemma max_max_same:
+    forall a b: nat, Nat.max a (Nat.max a b) = Nat.max a b.
+  Proof. lia. Qed.
+
   Theorem functional_terminates':
     forall (r: regex) (inp: input) (act: actions) (dir: Direction),
       supported_regex r -> act_from_regex r inp act dir ->
@@ -1147,6 +1154,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
         destruct first_check_input as [inpchk|] eqn:FSTCHK.
         * destruct cont as [|[] cont]; try lia.
           destruct r0; try lia.
+          destruct min; try lia.
           simpl in FUEL, FSTCHK. simpl.
           rewrite FSTCHK in FUEL. rewrite FSTCHK.
           destruct is_strict_suffix; lia.
@@ -1245,7 +1253,19 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           specialize_prove IHfuel.
           { apply afr_pop_quant_forced. auto. }
           specialize_prove IHfuel.
-          { admit. }
+          {
+            unfold actions_fuel, actions_fuel_nolk in FUEL. unfold actions_fuel, actions_fuel_nolk.
+            simpl first_check_input in *. simpl actions_lookaround_fuel in *.
+            rewrite max_max_same.
+            destruct first_check_input as [inpchk|] eqn:FSTCHK.
+            2: {
+              simpl chunk_size in *. lia.
+            }
+            simpl last_chunk_size in *. rewrite FSTCHK in *.
+            destruct r1; try (simpl in *; lia).
+            destruct min; try (simpl in *; lia).
+            destruct is_strict_suffix; try (simpl in *; lia).
+          }
           destruct (compute_tree) eqn:COMP.
           - unfold not. inversion 1.
           - apply IHfuel in COMP. inversion COMP. }
@@ -1291,9 +1311,9 @@ remaining_length nextinp dir) * last_chunk_size cont). {
                       rewrite FSTCHK in H. simpl. lia.
                     }
                     simpl in H.
-                    lia.
-                  -- simpl in *. lia.
-                * simpl in FUEL. simpl. rewrite FSTCHK. lia.
+                    destruct min; lia.
+                  -- simpl in *. destruct min; lia.
+                * simpl in FUEL. simpl. rewrite FSTCHK. destruct min; lia.
               + replace (match r1 with | Quantified _ _ _ r0 => _ | _ => _ end) with (actions_fuel' (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont)).
                 2: { destruct r1; try discriminate; reflexivity. }
                 unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
@@ -1402,11 +1422,12 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             (* AFR implies that cont must start with a quantifier *)
             pose proof afr_checks_fby_quant r inp (Acheck inpcheck :: cont) dir AFR as CHK_FBY_QUANT.
             unfold checks_fby_quant in CHK_FBY_QUANT. specialize (CHK_FBY_QUANT 0 inpcheck eq_refl).
-            destruct CHK_FBY_QUANT as [greedy [min [delta [rquant CHK_FBY_QUANT]]]].
+            destruct CHK_FBY_QUANT as [greedy [delta [rquant CHK_FBY_QUANT]]].
             destruct cont as [|a cont].
             1: { exfalso. discriminate. }
             destruct a as [rsub | ? | ?]. 2,3: exfalso; discriminate.
             destruct rsub. 1-4,6-9: exfalso; discriminate.
+            simpl in CHK_FBY_QUANT. injection CHK_FBY_QUANT as -> -> -> ->.
             simpl first_check_input. destruct first_check_input as [inpchknext | ] eqn:SNDCHK.
             + (* NON-TRIVIAL: is_strict_suffix inp inpcheck forward = true implies
               is_strict_suffix inp inpchknext forward = true *)
@@ -1439,7 +1460,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             + unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl in *. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-  Admitted.
+  Qed.
 
 
   (** * Any fuel depth is a bound on the tree depth *)
