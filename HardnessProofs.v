@@ -684,19 +684,56 @@ Section Proofs.
           (lflist <> nil <-> gm_satisfies_formula gm form = true).
   Proof.
     intros inp gm EQ_inp WF_gm t TREE lflist EQ_lflist.
-    set form as form'. destruct form' as [pf | pf] eqn:?.
+    set form as form'.
+    pose proof check_conjunct_regex_spec inp gm EQ_inp WF_gm.
+    destruct form' as [pf | pf] eqn:?.
     - simpl gm_satisfies_formula.
       assert (Hpf_pos_form: pf = pos_form). { unfold pos_form. fold form'. rewrite Heqf. reflexivity. }
       rewrite Hpf_pos_form.
-      pose proof check_conjunct_regex_spec inp gm EQ_inp WF_gm t.
       fold form' in TREE. rewrite Heqf in TREE. simpl in TREE.
       rewrite Hpf_pos_form in TREE.
-      specialize (H TREE lflist EQ_lflist).
+      specialize (H t TREE lflist EQ_lflist).
       destruct H as [H1 H2].
       split; auto.
       intros lf IN_lf. rewrite H1 with (lf := lf) by auto. reflexivity.
-    - admit.
-  Admitted.
+    - simpl gm_satisfies_formula.
+      assert (Hpf_pos_form: pf = pos_form). { unfold pos_form. fold form'. rewrite Heqf. reflexivity. }
+      rewrite Hpf_pos_form.
+      fold form' in TREE. rewrite Heqf in TREE. simpl in TREE.
+      rewrite Hpf_pos_form in TREE.
+      inversion TREE.
+      + (* Negative lookahead succeeds: conjunction is false *)
+        subst lk r1 cont inp0 gm0 dir t.
+        simpl in EQ_lflist.
+        unfold lk_result in RES_LK. simpl in RES_LK.
+        rewrite first_tree_leaf in RES_LK.
+        destruct (tree_leaves treelk gm inp forward) eqn:EQ_lflist'; try discriminate.
+        simpl in RES_LK. injection RES_LK as <-.
+        simpl in TREELK.
+        inversion TREECONT. subst inp0 gm0 dir treecont. simpl in EQ_lflist.
+        symmetry in EQ_lflist'.
+        specialize (H treelk TREELK [] EQ_lflist').
+        split.
+        * rewrite EQ_lflist. intros lf []. 2: { inversion H0. }
+          rewrite <- H0. reflexivity.
+        * rewrite EQ_lflist. split; try discriminate. intros _.
+          apply eq_true_not_negb.
+          apply proj2 in H. rewrite <- H. auto.
+      + (* Negative lookahead fails: conjunction is true *)
+        subst lk r1 cont inp0 gm0 dir t.
+        simpl in EQ_lflist.
+        unfold lk_result in FAIL_LK. simpl in FAIL_LK.
+        rewrite first_tree_leaf in FAIL_LK.
+        destruct (tree_leaves treelk gm inp forward) eqn:EQ_lflist'; try discriminate.
+        simpl in FAIL_LK.
+        split.
+        * rewrite EQ_lflist. intros _ [].
+        * rewrite EQ_lflist. split; try contradiction.
+          symmetry in EQ_lflist'.
+          specialize (H treelk TREELK _ EQ_lflist').
+          apply proj2 in H. apply proj1 in H.
+          rewrite H; discriminate.
+  Qed.
 
   (* Lemma specifying the behavior of the regex that defines a variable. *)
   Lemma def_var_regex_spec:
@@ -878,11 +915,11 @@ Section Proofs.
       unfold n, quants in EQ_qtail. rewrite skipn_all in EQ_qtail. subst qtail.
       simpl theRegex_aux. simpl gm_satisfies_qbf_aux. simpl hd_error.
       intro TREE. split; [|split; try discriminate].
-      + apply check_conjunct_regex_spec with (inp := inp) (gm := gm) (t := t) (lflist := tree_leaves t gm inp forward); auto.
-      + pose proof check_conjunct_regex_spec inp gm EQ_inp WF_gm t TREE _ eq_refl as SPEC.
+      + apply check_formula_regex_spec with (inp := inp) (gm := gm) (t := t) (lflist := tree_leaves t gm inp forward); auto.
+      + pose proof check_formula_regex_spec inp gm EQ_inp WF_gm t TREE _ eq_refl as SPEC.
         destruct SPEC as [SPEC _].
         intros inp' gm' IN. specialize (SPEC (inp', gm') IN).
-        injection SPEC as -> ->. reflexivity.
+        simpl in SPEC. rewrite SPEC. reflexivity.
     - intros i EQ_i i_INB _ gm WF_gm UNDEF inp qtail t EQ_inp EQ_qtail TREE.
       specialize (IHnp1_minus_i (S i)).
       specialize_prove IHnp1_minus_i. { rewrite EQ_i. lia. }
@@ -1098,7 +1135,7 @@ Section Proofs.
 
   Theorem qbf_regex:
     regex_matches_string rer (theRegex q x_char semicolon_char) str <->
-    qbf_valid q = true.
+    qbf_true q = true.
   Proof.
     pose proof theRegex_aux_spec n 1 ltac:(lia) ltac:(lia) ltac:(lia) GroupMap.empty ltac:(apply emptygm_wf).
     specialize_prove H. {
@@ -1114,7 +1151,7 @@ Section Proofs.
       specialize (H t eq_refl eq_refl TREE).
       destruct H as [H _].
       unfold quants, form in H.
-      rewrite equiv_gm_env_valid with (q := q) in H.
+      rewrite equiv_gm_env_true with (q := q) in H.
       apply H. setoid_rewrite first_tree_leaf in MATCHES.
       rewrite hd_error_none_nil in MATCHES. auto.
     - intro VALID. unfold regex_matches_string.
@@ -1122,6 +1159,6 @@ Section Proofs.
       specialize (H t eq_refl eq_refl TREE).
       destruct H as [H _].
       setoid_rewrite first_tree_leaf. rewrite hd_error_none_nil.
-      apply H. unfold quants, form. rewrite equiv_gm_env_valid. auto.
+      apply H. unfold quants, form. rewrite equiv_gm_env_true. auto.
   Qed.
 End Proofs.
