@@ -439,7 +439,7 @@ Section HardnessPoslk.
         (* ... such that gm(i), gm(i+1), ..., gm(n) are undefined... *)
         (forall j, i <= j -> j <= n -> GroupMap.find j gm = None) ->
         (* ... and gm(n+1), ..., gm(n+ni) are undefined. *)
-        (forall j, S n <= j -> j <= num_notexists qtail + n -> GroupMap.find j gm = None) ->
+        (forall j, S n <= j -> j <= z_gid_at q qtail -> GroupMap.find j gm = None) ->
         forall inp t,
           (* Let inp := inp(2(i-1))... *)
           inp = inp_of_idx (2*(i-1)) ->
@@ -448,21 +448,101 @@ Section HardnessPoslk.
           (* Then: *)
           (* - t has a leaf iff gm satisfies F_i *)
           (tree_leaves t gm inp forward <> [] <-> gm_satisfies_qbf_aux gm i qtail form = true) /\
-          (* - for any leaf (inp', gm') of t, gm' and gm coincide on indices n+ni+1, ..., n+num_notexists quants. *)
+          (* - for any leaf (inp', gm') of t, gm' and gm coincide on indices greater than n+ni. *)
           (forall inp' gm', In (inp', gm') (tree_leaves t gm inp forward) ->
-            forall j, num_notexists qtail + 1 + n <= j -> j <= num_notexists quants + n -> GroupMap.find j gm = GroupMap.find j gm').
+            forall j, z_gid_at q qtail + 1 <= j -> j <= z_gid_at q quants -> GroupMap.find j gm = GroupMap.find j gm').
   Proof.
     induction np1_minus_i.
     - rewrite PeanoNat.Nat.sub_0_r. intros i -> _ _ qtail EQ_qtail.
       rewrite PeanoNat.Nat.add_sub in EQ_qtail. unfold n in EQ_qtail. rewrite skipn_all in EQ_qtail. subst qtail.
-      intros gm WF_gm _ _.
+      intros gm WF_gm _ UNDEF'.
       rewrite PeanoNat.Nat.add_sub.
       intros inp t EQ_inp TREE.
-      pose proof check_conjunct_regex_spec q WF_q x_char semicolon_char n_char rer x_semicolon_neq inp gm EQ_inp.
-      unfold wf_gm_poslk in WF_gm. destruct WF_gm as [WF_gm WF_gm_supp].
-      specialize (H WF_gm t TREE _ eq_refl). destruct H. split; auto.
-      intros inp' gm' IN_lf. specialize (H (inp', gm') IN_lf).
-      injection H as EQ_inp' EQ_gm'. subst gm'. reflexivity.
+      simpl in TREE. unfold check_formula_regex in TREE. fold form in TREE.
+      pose proof inp_of_idx_even q x_char semicolon_char n_char n as EQ_inp'.
+      specialize_prove EQ_inp'. { fold quants n. lia. }
+      setoid_rewrite <- EQ_inp in EQ_inp'.
+      destruct form eqn:EQ_form; simpl in TREE.
+      + (* Non-negated CNF *)
+        pose proof check_conjunct_regex_spec q WF_q x_char semicolon_char n_char rer x_semicolon_neq inp gm EQ_inp.
+        unfold wf_gm_poslk in WF_gm. destruct WF_gm as [WF_gm WF_gm_supp].
+        specialize (H WF_gm t).
+        fold form in H. rewrite EQ_form in H. simpl in H.
+        specialize (H TREE _ eq_refl). destruct H. split; auto.
+        intros inp' gm' IN_lf. specialize (H (inp', gm') IN_lf).
+        injection H as EQ_inp'' EQ_gm'. subst gm'. reflexivity.
+      + (* Negated CNF; tedious *)
+        fold quants n in TREE.
+        (* LATER: factorize proof of negation_regex *)
+        unfold negation_regex in TREE.
+        inversion TREE. subst r1 r2 cont inp0 gm0 dir t0. simpl in CONT.
+        inversion CONT.
+        2: {
+          (* The capture_n_regex always captures the n at the end, so the lookaround cannot fail *)
+          exfalso.
+          subst lk r1 cont inp0 gm0 dir t.
+          pose proof capture_n_regex_spec (S n) as CAP_N_SPEC.
+          specialize (CAP_N_SPEC _ inp _ EQ_inp').
+          inversion TREELK. subst r1 r2 cont inp0 gm0 dir treelk.
+          specialize (CAP_N_SPEC gm t2 ISTREE2).
+          unfold lk_result in FAIL_LK. simpl in FAIL_LK.
+          rewrite first_tree_leaf with (t := t2) in FAIL_LK. rewrite CAP_N_SPEC in FAIL_LK.
+          destruct (tree_res t1 gm inp forward) as [[]|]; try discriminate.
+        }
+        subst lk r1 cont inp0 gm0 dir t. clear CONT.
+        inversion TREELK. subst r1 r2 cont inp0 gm0 dir treelk.
+        pose proof check_conjunct_regex_spec q WF_q x_char semicolon_char n_char rer x_semicolon_neq inp gm EQ_inp.
+        unfold wf_gm_poslk in WF_gm. destruct WF_gm as [WF_gm WF_gm_supp].
+        specialize (H WF_gm t1).
+        fold form in H. rewrite EQ_form in H. simpl in H.
+        specialize (H ISTREE1).
+        pose proof capture_n_regex_spec (S n) as CAP_N_SPEC.
+        specialize (CAP_N_SPEC _ inp _ EQ_inp' gm t2 ISTREE2).
+        simpl. rewrite CAP_N_SPEC.
+        specialize (H _ eq_refl).
+        pose proof check_n_regex_spec (S n) _ inp _ ltac:(lia) EQ_inp' as CHECK_N_SPEC.
+        unfold lk_result in RES_LK. simpl in RES_LK. do 2 rewrite first_tree_leaf in RES_LK.
+        destruct (tree_leaves t1 gm inp forward) as [|[inpconj gmconj] l]; simpl.
+        * (* Conjunction is false *)
+          set (gmcap := GroupMap.add (S n) _ gm).
+          specialize (CHECK_N_SPEC gmcap).
+          specialize_prove CHECK_N_SPEC. { unfold wf_gm_n_i. right. unfold gmcap.
+            setoid_rewrite GroupMap.Facts.add_eq_o; auto. }
+          rewrite CAP_N_SPEC in RES_LK. simpl in RES_LK. injection RES_LK as <-.
+          fold gmcap in TREECONT.
+          specialize (CHECK_N_SPEC _ TREECONT).
+          split.
+          -- apply proj2 in H. split; intros _.
+            ++ apply eq_true_not_negb. rewrite <- H. auto.
+            ++ apply proj1 in CHECK_N_SPEC. apply CHECK_N_SPEC. unfold gmcap. apply GroupMap.Facts.add_eq_o. auto.
+          -- simpl.
+            apply proj2 in CHECK_N_SPEC.
+            intros inp' gm' IN_lf'. specialize (CHECK_N_SPEC (inp', gm') IN_lf').
+            injection CHECK_N_SPEC as _ ->.
+            unfold z_gid_at. fold form. rewrite EQ_form. fold quants n.
+            intros j INB_j1 INB_j2. unfold gmcap. symmetry.
+            apply GroupMap.Facts.add_neq_o. lia.
+        * (* Conjunction is true *)
+          simpl in RES_LK. injection RES_LK as <-.
+          destruct H as [H1 H2].
+          specialize (H1 (inpconj, gmconj) ltac:(left; reflexivity)).
+          injection H1 as EQ_inpconj ->.
+          specialize (CHECK_N_SPEC gm).
+          specialize_prove CHECK_N_SPEC. {
+            unfold wf_gm_n in WF_gm_supp. rewrite EQ_inp. setoid_rewrite input_str_inp_of_idx. fold str. apply WF_gm_supp. lia.
+          }
+          specialize (CHECK_N_SPEC _ TREECONT).
+          split.
+          -- apply proj1 in CHECK_N_SPEC. rewrite CHECK_N_SPEC.
+          apply proj1 in H2. specialize (H2 ltac:(discriminate)). rewrite H2. simpl.
+          split; try discriminate.
+            rewrite UNDEF'.
+            ++ discriminate.
+            ++ lia.
+            ++ unfold z_gid_at. fold form. rewrite EQ_form. fold quants n. lia.
+          -- apply proj2 in CHECK_N_SPEC. intros inp' gm' IN_lf'.
+            specialize (CHECK_N_SPEC _ IN_lf').
+            injection CHECK_N_SPEC as _ ->. reflexivity.
     - intros i EQ_i i_NEQ_0 _ qtail EQ_qtail gm WF_gm UNDEF UNDEF' inp t EQ_inp TREE.
       specialize (IHnp1_minus_i (S i) ltac:(lia) ltac:(lia) ltac:(lia)).
       replace (S i - 1) with i in IHnp1_minus_i by lia.
@@ -504,7 +584,9 @@ Section HardnessPoslk.
           eapply undef_gm_add with (gm := gm); eauto.
         }
         specialize_prove IHpos. {
-          eapply undef'_gm_add with (gm := gm); eauto. lia.
+          unfold z_gid_at. fold quants n.
+          unfold z_gid_at in UNDEF'. fold quants n in UNDEF'.
+          destruct (snd q); rewrite PeanoNat.Nat.add_comm; rewrite PeanoNat.Nat.add_comm in UNDEF'; eapply undef'_gm_add with (gm := gm); eauto; try lia.
         }
         specialize (IHpos (inp_of_idx (i + (i + 0))) t0 ltac:(reflexivity) ltac:(auto)).
         specialize (IHneg WF_gm).
@@ -522,7 +604,9 @@ Section HardnessPoslk.
           destruct IHneg as [_ IHneg].
           specialize (IHpos inp' gm'). specialize (IHneg inp' gm'). destruct IN_lf; auto.
           intros j INB_j1 INB_j2. specialize (IHpos H0 j INB_j1 INB_j2). rewrite <- IHpos.
-          rewrite Heqgmpos. symmetry. setoid_rewrite GroupMap.Facts.add_neq_o. 2: lia. reflexivity.
+          rewrite Heqgmpos. symmetry. setoid_rewrite GroupMap.Facts.add_neq_o.
+          2: { unfold z_gid_at in INB_j1, INB_j2. fold quants n in INB_j1, INB_j2. destruct (snd q); lia. }
+          reflexivity.
       + (* Not exists *)
         inversion TREE. subst r1 r2 cont inp0 gm0 dir t0. clear TREE.
         rewrite app_nil_r in CONT. simpl in CONT.
@@ -534,7 +618,7 @@ Section HardnessPoslk.
           (* The capture_n_regex always captures the n at the end, so the lookaround cannot fail *)
           exfalso.
           subst lk r1 cont inp0 gm0 dir t.
-          pose proof capture_n_regex_spec (length (fst q) + S (num_notexists (skipn i quants))) as CAP_N_SPEC. specialize (CAP_N_SPEC _ inp _ EQ_inp').
+          pose proof capture_n_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CAP_N_SPEC. specialize (CAP_N_SPEC _ inp _ EQ_inp').
           inversion TREELK. subst r1 r2 cont inp0 gm0 dir treelk.
           specialize (CAP_N_SPEC gm t2 ISTREE2).
           unfold lk_result in FAIL_LK. simpl in FAIL_LK.
@@ -573,28 +657,31 @@ Section HardnessPoslk.
           eapply undef_gm_add with (gm := gm); eauto.
         }
         specialize_prove IHpos. {
-          eapply undef'_gm_add with (gm := gm); eauto.
-          - lia.
-          - intros j INB_j1 INB_j2. apply UNDEF'; simpl; lia.
+          unfold z_gid_at. fold quants n.
+          unfold z_gid_at in UNDEF'. fold quants n in UNDEF'.
+          destruct (snd q); rewrite PeanoNat.Nat.add_comm; rewrite PeanoNat.Nat.add_comm in UNDEF'; eapply undef'_gm_add with (gm := gm); eauto; try lia;
+          intros j INB_j1 INB_j2; apply UNDEF'; simpl; lia.
         }
         specialize (IHpos (inp_of_idx (i + (i + 0))) t0 ltac:(reflexivity) ltac:(auto)).
         specialize (IHneg WF_gm).
         specialize_prove IHneg. { apply undef_gm_unchanged; auto. }
         specialize_prove IHneg. {
-          intros j INB_j1 INB_j2. apply UNDEF'; simpl; lia.
+          intros j INB_j1 INB_j2. apply UNDEF'; simpl; try lia. unfold z_gid_at in *. simpl in *. destruct (snd q); lia.
         }
         specialize (IHneg (inp_of_idx (i + (i + 0))) t1 ltac:(reflexivity) ltac:(auto)).
         setoid_rewrite H4 in IHpos. setoid_rewrite H5 in IHneg.
         (* End specializing IHnp1_minus_i *)
-        pose proof capture_n_regex_spec (length (fst q) + S (num_notexists (skipn i quants))) as CAP_N_SPEC.
+        pose proof capture_n_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CAP_N_SPEC.
         specialize (CAP_N_SPEC _ inp _ EQ_inp' _ _ ISTREE2). rewrite CAP_N_SPEC.
         pose proof app_nonempty_iff ly ly0.
         (* About check_n_regex *)
-        pose proof check_n_regex_spec (length (fst q) + S (num_notexists (skipn i quants))) _ inp _ ltac:(fold quants; fold n; lia) EQ_inp' as CHECK_N_SPEC.
+        pose proof check_n_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CHECK_N_SPEC.
+        specialize CHECK_N_SPEC with (k := _) (inp := inp) (pref := _) (2 := EQ_inp').
+        specialize_prove CHECK_N_SPEC. { unfold z_gid_at. fold quants n. destruct (snd q); simpl; lia. }
         destruct (ly ++ ly0) as [|lfnonneg ?] eqn:NONNEG_EMPTY.
         * (* Non-negated QBF is false: we capture the n at the end. Prove True <-> True *)
           simpl.
-          set (gmsetn := GroupMap.add (length (fst q) + _) _ gm).
+          set (gmsetn := GroupMap.add (z_gid_at q (NotExists :: skipn i quants)) _ gm).
           specialize (CHECK_N_SPEC gmsetn).
           specialize_prove CHECK_N_SPEC. {
             unfold gmsetn, wf_gm_n_i.
@@ -626,7 +713,7 @@ Section HardnessPoslk.
              injection CHECK_N_SPEC as _ ->.
              intros j INB_j1 INB_j2. unfold gmsetn.
              fold quants. fold n. symmetry.
-             apply GroupMap.Facts.add_neq_o. lia.
+             apply GroupMap.Facts.add_neq_o. unfold z_gid_at in *. simpl in *. destruct (snd q); lia.
         * (* Non-negated QBF is true: we don't capture the n at the end. *)
           set (leaves := match (lfnonneg :: l) ++ _ with | [] => _ | (_, gm') :: _ => _ end).
           assert (leaves = []). {
@@ -638,23 +725,28 @@ Section HardnessPoslk.
             - apply proj2 in IHpos. clear IHneg.
               rewrite first_tree_leaf, <- H, <- H3, app_nil_r, NONNEG_EMPTY in RES_LK. simpl in RES_LK.
               injection RES_LK as <-.
-              specialize (IHpos inpnneg gmnneg H1 (length (fst q) + S (num_notexists (skipn i quants)))).
+              specialize (IHpos inpnneg gmnneg H1 (z_gid_at q qtail)).
               specialize_prove IHpos. {
-                fold quants. fold n. lia.
+                rewrite EQ'_qtail. unfold z_gid_at. simpl. fold quants. fold n. destruct (snd q); lia.
               }
               specialize_prove IHpos. {
-                fold quants. fold n. rewrite PeanoNat.Nat.add_comm.
-                apply Nat.add_le_mono_r.
-                change (S _) with (num_notexists (NotExists :: skipn i quants)).
-                rewrite <- EQ'_qtail, EQ_qtail. apply num_notexists_skipn_le. (* num_notexists of a tail is at most num_notexists of the entire list *)
+                unfold z_gid_at. simpl.
+                fold quants. fold n.
+                destruct (snd q).
+                - apply Nat.add_le_mono_l.
+                rewrite EQ_qtail. apply num_notexists_skipn_le. (* num_notexists of a tail is at most num_notexists of the entire list *)
+                - apply Nat.add_le_mono_l.
+                rewrite EQ_qtail. apply le_n_S, num_notexists_skipn_le. (* num_notexists of a tail is at most num_notexists of the entire list *)
               }
               specialize CHECK_N_SPEC with (gm := gmnneg) (t := treecont) (2 := TREECONT).
               unfold wf_gm_n_i in CHECK_N_SPEC.
-              assert (GroupMap.find (length (fst q) + S (num_notexists (skipn i quants))) gmnneg = None). {
-                rewrite <- IHpos, Heqgmpos.
-                fold quants. fold n.
-                setoid_rewrite GroupMap.Facts.add_neq_o; try lia.
-                apply UNDEF'; simpl; lia.
+              assert (GroupMap.find (z_gid_at q (NotExists :: skipn i quants)) gmnneg = None). {
+                rewrite <- EQ'_qtail, <- IHpos, Heqgmpos.
+                unfold z_gid_at.
+                fold quants n.
+                setoid_rewrite GroupMap.Facts.add_neq_o; try (destruct (snd q); rewrite EQ'_qtail; simpl; lia).
+                apply UNDEF'; simpl; try (destruct (snd q); rewrite EQ'_qtail; simpl; lia).
+                rewrite EQ'_qtail. reflexivity.
               }
               specialize_prove CHECK_N_SPEC. {
                 left. auto.
@@ -667,22 +759,24 @@ Section HardnessPoslk.
             - apply proj2 in IHneg. clear IHpos.
               rewrite first_tree_leaf, <- H, <- H3, app_nil_r, NONNEG_EMPTY in RES_LK. simpl in RES_LK.
               injection RES_LK as <-.
-              specialize (IHneg inpnneg gmnneg H1 (length (fst q) + S (num_notexists (skipn i quants)))).
+              specialize (IHneg inpnneg gmnneg H1 (z_gid_at q (NotExists :: skipn i quants))).
               specialize_prove IHneg. {
-                fold quants. fold n. lia.
+                unfold z_gid_at. simpl. destruct (snd q); lia.
               }
               specialize_prove IHneg. {
-                fold quants. fold n. rewrite PeanoNat.Nat.add_comm.
-                apply Nat.add_le_mono_r.
-                change (S _) with (num_notexists (NotExists :: skipn i quants)).
-                rewrite <- EQ'_qtail, EQ_qtail. apply num_notexists_skipn_le. (* num_notexists of a tail is at most num_notexists of the entire list *)
+                (* LATER: lemma stating that z_gid_at q (skipn (i-1) quants) <= z_gid_at q quants *)
+                unfold z_gid_at.
+                fold quants n. rewrite <- EQ'_qtail, EQ_qtail.
+                destruct (snd q); apply Nat.add_le_mono_l.
+                - apply num_notexists_skipn_le. (* num_notexists of a tail is at most num_notexists of the entire list *)
+                - apply le_n_S, num_notexists_skipn_le.
               }
               specialize CHECK_N_SPEC with (gm := gmnneg) (t := treecont) (2 := TREECONT).
               unfold wf_gm_n_i in CHECK_N_SPEC.
-              assert (GroupMap.find (length (fst q) + S (num_notexists (skipn i quants))) gmnneg = None). {
+              assert (GroupMap.find (z_gid_at q (NotExists :: skipn i quants)) gmnneg = None). {
                 rewrite <- IHneg.
-                fold quants. fold n.
-                apply UNDEF'; simpl; lia.
+                apply UNDEF'; try reflexivity.
+                unfold z_gid_at. fold quants n. destruct (snd q); simpl; lia.
               }
               specialize_prove CHECK_N_SPEC. {
                 left. auto.
@@ -715,7 +809,7 @@ Section HardnessPoslk.
 
   Theorem qbf_regex:
     regex_matches_string rer (theRegex x_char semicolon_char n_char q) str <->
-    qbf_valid q = true.
+    qbf_true q = true.
   Proof.
     unfold regex_matches_string, theRegex.
     pose proof theRegex_aux_spec n 1 ltac:(lia) ltac:(lia) ltac:(lia) quants.
@@ -733,11 +827,11 @@ Section HardnessPoslk.
       unfold first_leaf in H'. rewrite first_tree_leaf in H'.
       rewrite hd_error_none_nil in H'.
       apply proj1 in H. unfold quants, form in H.
-      rewrite equiv_gm_env_valid with (q := q) in H. apply H. auto.
+      rewrite equiv_gm_env_true with (q := q) in H. apply H. auto.
     - intros VALID t TREE.
       specialize (H t TREE). apply proj1 in H.
       setoid_rewrite first_tree_leaf. rewrite hd_error_none_nil.
-      apply H. unfold quants, form. rewrite equiv_gm_env_valid. auto.
+      apply H. unfold quants, form. rewrite equiv_gm_env_true. auto.
   Qed.
 
 End HardnessPoslk.
