@@ -4,6 +4,75 @@ From Warblre Require Import Base.
 Require Import List Lia Sorted.
 Import ListNotations.
 
+Section PSPACE_algo.
+
+  Inductive choice: Type :=
+  | Left | Right : choice.
+
+  Definition choices: Type := list choice.
+
+  (* states of the semantics (list of action, input, direction, group map) *)
+  Parameter state: Type.
+  Parameter init_state: state.
+
+  (* return result: input and group map *)
+  Parameter leaf: Type.
+
+  (* direct children of a given semantic state according to the tree semantics *)
+  Inductive children: Type :=
+  | Match (l:leaf)
+  | Mismatch
+  | Single (s:state)
+  | Choice (s1 s2:state).
+
+  (* this computes the next 0,1 or 2 next states *)
+    (* this simply follows the functional semantics *)
+  Parameter next: state -> children.
+
+  (* given a done list of choices (last choice made first), computes the next list of forced choices, reversed *)
+  Fixpoint next_choices (c:choices) : option choices :=
+    match c with
+    | Left::c' => Some (Right::c')
+    | Right::c' => next_choices c'
+    | [] => None
+    end.
+
+  (* explores a single branch *)
+  (* given a list of forced choices, it follows them *)
+  (* when running out of forced choices, it creates new Left choices *)
+  (* when it fails, it returns the full reverse list of all choices made, stored in done *)
+  Fail Fixpoint explore (s:state) (forced: choices) (done: choices): (option leaf * choices) :=
+    match next s with
+    | Match l => (Some l, done)
+    | Mismatch => (None, done)
+    | Single s1 => explore s1 forced done
+    | Choice s1 s2 =>
+        match forced with
+        | Left::f' => explore s1 f' (Left::done)
+        | Right::f' => explore s2 f' (Right::done)
+        | [] =>                  (* no more forced choices, make new ones, starting with Left *)
+            explore s1 [] (Left::done)
+        end
+    end.
+  (* Cannot guess decreasing argument of fix. *)
+  Parameter explore: state -> choices -> choices -> (option leaf * choices).
+
+  (* keeps exploring branches until it finds a match or no more branches *)
+  Fail Fixpoint explore_all (done:choices) : option leaf :=
+    match explore init_state (rev done) [] with
+    | (Some l, _) => Some l
+    | (None, done') =>
+        (* done' is the list of choices of the branch that was just explored *)
+        match (next_choices done') with
+        | None => None           (* we explored all branches *)
+        | Some nextbranch => explore_all nextbranch
+        end
+    end.
+  (* Recursive definition of explore_all is ill-formed. *)
+  
+  
+End PSPACE_algo.
+
 Section MembershipProof.
   Context {params: LindenParameters}.
 
