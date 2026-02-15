@@ -680,7 +680,7 @@ Section Proofs.
           (* Then: *)
           (* - all the leaves of t (if any) leave the group map unchanged, *)
           (forall lf, In lf lflist -> snd lf = gm) /\
-          (* - t has (at least) a leaf iff gm satisfies the conjunction of clauses. *)
+          (* - t has (at least) a leaf iff gm satisfies the propositional formula. *)
           (lflist <> nil <-> gm_satisfies_formula gm form = true).
   Proof.
     intros inp gm EQ_inp WF_gm t TREE lflist EQ_lflist.
