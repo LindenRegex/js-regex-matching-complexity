@@ -1,8 +1,184 @@
 From Linden Require Import Regex Parameters Semantics Chars StrictSuffix
-  FunctionalSemantics Tactics Tree FunctionalUtils ComputeIsTree.
-From Warblre Require Import Base.
+  FunctionalSemantics Tactics Tree FunctionalUtils ComputeIsTree
+  Semantics.Tree Semantics.Groups.
+From Warblre Require Import Base spec.RegExpRecord.
 Require Import List Lia Sorted.
 Import ListNotations.
+
+Section PSPACE_algo.
+
+  Context {params: LindenParameters}.
+  Context (rer: RegExpRecord).
+
+  Inductive match_result :=
+  | Out_of_fuel: match_result
+  | NoMatch: match_result
+  | Success: leaf -> match_result.
+
+  Fixpoint compute_result (act: actions) (inp: input) (gm: group_map) (dir: Direction) (fuel:nat): match_result :=
+    match fuel with
+    | 0 => Out_of_fuel
+    | S fuel => 
+        match act with
+        (* tree_done *)
+        | [] => Success (inp, gm)
+        (* tree_check, tree_check_fail *)
+        | Acheck strcheck :: cont =>
+            if (is_strict_suffix inp strcheck dir) then
+              compute_result cont inp gm dir fuel
+            else NoMatch
+        (* tree_close *)
+        | Aclose gid :: cont =>
+            compute_result cont inp (GroupMap.close (idx inp) gid gm) dir fuel
+        (* tree_epsilon *)
+        | Areg Epsilon::cont => compute_result cont inp gm dir fuel
+        (* tree_char, tree_char_fail *)
+        | Areg (Regex.Character cd)::cont =>
+            match read_char rer cd inp dir with
+            | Some (c, nextinp) =>
+                compute_result cont nextinp gm dir fuel
+            | None => NoMatch
+            end
+        (* tree_disj *)
+        | Areg (Disjunction r1 r2)::cont =>
+            match compute_result (Areg r1 :: cont) inp gm dir fuel with
+            | Out_of_fuel => Out_of_fuel
+            | Success lf => Success lf
+            | NoMatch => compute_result (Areg r2 :: cont) inp gm dir fuel
+            end
+        (* tree_sequence *)
+        | Areg (Sequence r1 r2)::cont =>
+            compute_result (seq_list r1 r2 dir ++ cont) inp gm dir fuel
+        (* tree_quant_forced *)
+        | Areg (Quantified greedy (S min) delta r1)::cont =>
+            let gidl := def_groups r1 in
+            compute_result (Areg r1 :: Areg (Quantified greedy min delta r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel
+        (* tree_quant_done *)
+        | Areg (Quantified greedy 0 (NoI.N 0) r1)::cont =>
+            compute_result cont inp gm dir fuel
+        (* tree_quant_free *)
+        | Areg (Quantified greedy 0 delta r1)::cont =>
+            let gidl := def_groups r1 in
+            match greedy with
+            | true =>
+                match (compute_result (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel) with
+                | Out_of_fuel => Out_of_fuel
+                | Success lf => Success lf
+                | NoMatch => compute_result cont inp gm dir fuel
+                end
+            | false =>
+                match (compute_result cont inp gm dir fuel) with
+                | Out_of_fuel => Out_of_fuel
+                | Success lf => Success lf
+                | NoMatch => (compute_result (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel)
+                end
+            end
+        (* tree_group *)
+        | Areg (Group gid r1)::cont =>
+            compute_result (Areg r1 :: Aclose gid :: cont) inp (GroupMap.open (idx inp) gid gm) dir fuel
+        (* tree_lk, tree_lk_fail *)
+        | Areg (Lookaround lk r1)::cont =>
+            match (compute_result [Areg r1] inp gm (lk_dir lk) fuel) with
+            | Out_of_fuel => Out_of_fuel
+            | Success (_,gmlk) =>
+                match (positivity lk) with
+                | false => NoMatch
+                | true => compute_result cont inp gmlk dir fuel
+                end
+            | NoMatch =>
+                match (positivity lk) with
+                | true => NoMatch
+                | false => compute_result cont inp gm dir fuel
+                end
+            end
+        (* tree_anchor, tree_anchor_fail *)
+        | Areg (Anchor a)::cont =>
+            if anchor_satisfied rer a inp then
+              compute_result cont inp gm dir fuel
+            else NoMatch
+        (* tree_backref, tree_backref_fail *)
+        | Areg (Backreference gid)::cont =>
+          match read_backref rer gm gid inp dir with
+          | Some (br_str, nextinp) =>
+            compute_result cont nextinp gm dir fuel
+          | None => NoMatch        
+          end
+        end
+    end.
+
+  Definition res_to_leaf (mr:match_result) : option (option leaf) :=
+    match mr with
+    | Out_of_fuel => None
+    | NoMatch => Some None
+    | Success leaf => Some (Some leaf)
+    end.
+
+  Theorem compute_result_correctness:
+    forall fuel l i gm d tree,
+      compute_tree rer l i gm d fuel = Some tree ->
+      res_to_leaf (compute_result l i gm d fuel) = Some (tree_res tree gm i d).
+  Proof.
+    intros fuel.
+    induction fuel; intros.
+    { simpl in H. inversion H. }
+    destruct l.
+    { simpl in H. inversion H. subst. unfold first_leaf. auto. }
+    destruct a.
+    2: { simpl in H. destruct is_strict_suffix eqn:SUF; simpl; rewrite SUF.
+         - destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.
+         - simpl. inversion H. auto. }
+    2: { simpl in H. destruct compute_tree eqn:COMP; inversion H. simpl. auto. }
+    destruct r; simpl in H; simpl; auto.
+    - destruct read_char as [[c nextinp]|] eqn:READ.
+      + apply read_char_success_advance in READ as ADV.
+        apply advance_input_success in ADV.
+        destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.
+      + inversion H. auto.
+    - destruct compute_tree eqn:COMP1; [|inversion H].
+      destruct (compute_tree rer (Areg r2 :: l) i gm d fuel) eqn:COMP2; inversion H.
+      subst. simpl. apply IHfuel in COMP1. apply IHfuel in COMP2.
+      destruct compute_result eqn:COMPR1; simpl in COMP1; inversion COMP1; simpl; auto.
+    - destruct min.
+      2: { destruct compute_tree eqn:COMP; inversion H.
+           apply IHfuel in COMP. simpl. auto. }
+      destruct delta as [[|delta]|].
+      + subst. destruct compute_tree eqn:COMP; inversion H.
+        subst. apply IHfuel in COMP. simpl. auto.
+      + simpl. destruct compute_tree eqn:COMP1; [|inversion H].
+        destruct (compute_tree rer l i gm d fuel) eqn:COMP2; inversion H.
+        apply IHfuel in COMP1, COMP2. simpl in COMP1.
+        subst. destruct greedy; simpl.
+        * destruct compute_result eqn:COMPR; simpl in COMP1; inversion COMP1; simpl; auto.
+        * destruct (compute_result l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.
+      + simpl. destruct compute_tree eqn:COMP1; [|inversion H].
+        destruct (compute_tree rer l i gm d fuel) eqn:COMP2; inversion H.
+        apply IHfuel in COMP1, COMP2. simpl in COMP1.
+        subst. destruct greedy; simpl.
+        * destruct compute_result eqn:COMPR; simpl in COMP1; inversion COMP1; simpl; auto.
+        * destruct (compute_result l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.   
+    - destruct compute_tree eqn:COMP; [|inversion H].
+      destruct lk_result eqn:LKRES.
+      + destruct (compute_tree rer l i g d fuel) eqn:COMPNEXT; inversion H.
+        subst. simpl. apply IHfuel in COMP, COMPNEXT.
+        unfold lk_result in LKRES.
+        destruct compute_result eqn:COMPR; inversion COMP; simpl; auto;
+          try destruct l0; destruct positivity; auto; rewrite <- H1 in LKRES; inversion LKRES; auto.
+      + apply IHfuel in COMP.
+        unfold lk_result in LKRES.
+        inversion H. subst.
+        destruct compute_result eqn:COMPR; simpl in COMP; inversion COMP;
+          try destruct l0; destruct positivity; simpl; auto; rewrite <- H1 in LKRES; inversion LKRES.
+    - destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.
+    - destruct anchor_satisfied eqn:ANC.
+      + destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.
+      + inversion H. auto.
+    - destruct read_backref eqn:READ.
+      + destruct p. apply read_backref_success_advance in READ as ADV.
+        destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.        
+      + inversion H. auto.
+  Qed.   
+     
+End PSPACE_algo.
 
 Section MembershipProof.
   Context {params: LindenParameters}.
