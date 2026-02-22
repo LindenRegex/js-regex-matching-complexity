@@ -1742,6 +1742,19 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     intros r str. induction r; simpl; lia.
   Qed.
 
+  Theorem poly_fuel:
+    forall inp r,
+      actions_fuel inp [Areg r] forward <= (1 + remaining_length inp forward) * regex_size r + (1 + length (input_str inp)) * regex_size r * regex_size r.
+  Proof.
+    intros inp r.
+    unfold actions_fuel, actions_fuel_nolk.
+    simpl first_check_input. cbv match. simpl chunk_size.
+    rewrite PeanoNat.Nat.add_0_r.
+    apply PeanoNat.Nat.add_le_mono_l.
+    unfold actions_lookaround_fuel. rewrite PeanoNat.Nat.max_0_r.
+    apply regex_lookaround_fuel_bound.
+  Qed.
+
   Corollary tree_depth_bound_regex:
     forall r: regex, supported_regex r ->
       forall rer inp gm t, is_tree rer [Areg r] inp gm forward t ->
@@ -1751,11 +1764,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     pose proof tree_depth_bound_act r inp [Areg r] forward SUPP_REGEX.
     specialize_prove H. { constructor. }
     specialize (H gm rer t TREE).
-    unfold actions_fuel in H. simpl actions_lookaround_fuel in H.
-    rewrite PeanoNat.Nat.max_0_r in H.
-    pose proof regex_lookaround_fuel_bound r (input_str inp).
-    unfold actions_fuel_nolk in H. simpl first_check_input in H.
-    cbv match in H. simpl chunk_size in H. lia.
+    pose proof poly_fuel inp r. lia.
   Qed.
 
 End MembershipProof.
