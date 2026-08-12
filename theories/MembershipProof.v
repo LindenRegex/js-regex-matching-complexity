@@ -175,29 +175,14 @@ End PSPACE_algo.
 Section MembershipProof.
   Context {params: LindenParameters}.
 
-  (* The subset of supported regexes: no lookarounds *)
-  Inductive supported_regex: regex -> Prop :=
-  | s_Epsilon: supported_regex Epsilon
-  | s_Character: forall cd, supported_regex (Regex.Character cd)
-  | s_Disjunction: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Disjunction r1 r2)
-  | s_Sequence: forall r1 r2, supported_regex r1 -> supported_regex r2 -> supported_regex (Sequence r1 r2)
-  | s_Quant: forall greedy min delta r, supported_regex r -> supported_regex (Quantified greedy min delta r)
-  | s_Lookaround: forall lk r, supported_regex r -> supported_regex (Lookaround lk r)
-  | s_Group: forall gid r, supported_regex r -> supported_regex (Group gid r)
-  | s_Anchor: forall a, supported_regex (Anchor a)
-  | s_Backreference: forall gid, supported_regex (Backreference gid).
-
-  Lemma supported_regex_all: forall r, supported_regex r.
-  Proof. induction r; constructor; assumption. Qed.
-
-  (* Lifting to lists of actions *)
-  Inductive supported_action: action -> Prop :=
-  | s_Acheck: forall i, supported_action (Acheck i)
-  | s_Aclose: forall g, supported_action (Aclose g)
-  | s_Areg: forall r, supported_regex r -> supported_action (Areg r).
-
-  Definition supported_actions (l: actions): Prop := Forall supported_action l.
-
+  Fixpoint regex_size (r: regex): nat := match r with
+  | Epsilon | Regex.Character _ => 1
+  | Disjunction r1 r2 | Sequence r1 r2 => 1 + regex_size r1 + regex_size r2
+  | Quantified _ min _ r => (S min) * (3 + regex_size r)
+  | Lookaround _ r => 1 + regex_size r
+  | Group _ r => 2 + regex_size r (* Open, Close *)
+  | Anchor _ | Backreference _ => 1
+  end.
 
   (* Formalizing when an input, list of actions and direction come from a supported regex *)
   Inductive act_from_regex (r: regex): input -> actions -> Direction -> Prop :=
@@ -251,43 +236,6 @@ Section MembershipProof.
       act_from_regex r inp (Areg (Backreference gid) :: l) dir ->
       advance_input_n inp n dir = nextinp ->
       act_from_regex r nextinp l dir.
-
-
-  (* A list of actions coming from a supported regex is a supported list of actions *)
-  Lemma suppregex_suppactions:
-    forall r, supported_regex r ->
-      forall inp l dir, act_from_regex r inp l dir -> supported_actions l.
-  Proof.
-    intros r SUPP inp l dir. induction 1; try solve[inversion IHact_from_regex; auto].
-    - constructor; constructor. auto.
-    - inversion IHact_from_regex. subst x l0.
-      inversion H2. subst r0.
-      inversion H1. subst r0 r3.
-      constructor; auto. constructor. auto.
-    - inversion IHact_from_regex. subst x l0.
-      inversion H2. subst r0.
-      inversion H1. subst r0 r3.
-      constructor; auto. constructor. auto.
-    - inversion IHact_from_regex. subst x l0.
-      inversion H2. subst r0.
-      inversion H1. subst r0 r3.
-      destruct dir; repeat (constructor; auto).
-    - inversion IHact_from_regex. subst x l0.
-      inversion H2. subst r0.
-      inversion H1. subst greedy0 r0. rewrite <- H5 in *.
-      repeat (constructor; auto).
-    - inversion IHact_from_regex. subst x l0.
-      inversion H2. subst r0.
-      inversion H1. subst greedy0 r0. rewrite <- H5 in *.
-      repeat (constructor; auto).
-    - inversion IHact_from_regex. subst x l0.
-      inversion H2. subst r0. inversion H1. subst gid r0.
-      repeat (constructor; auto).
-    - inversion IHact_from_regex. subst x l0.
-      inversion H2. subst r0.
-      inversion H1. subst lk0 r0.
-      constructor; constructor; auto.
-  Qed.
 
   (** * In a valid list of actions, all checks are ordered (non-strictly) from more to less restrictive. *)
 
@@ -1299,11 +1247,11 @@ remaining_length nextinp dir) * last_chunk_size cont). {
 
   Theorem functional_terminates':
     forall (r: regex) (inp: input) (act: actions) (dir: Direction),
-      supported_regex r -> act_from_regex r inp act dir ->
+      act_from_regex r inp act dir ->
       forall fuel, fuel > actions_fuel inp act dir ->
         forall gm rer, compute_tree rer act inp gm dir fuel <> None.
   Proof.
-    intros r inp act dir SUPP_REGEX AFR fuel.
+    intros r inp act dir AFR fuel.
     revert inp act dir AFR. induction fuel.
     - lia.
     - intros inp act dir AFR FUEL gm rer. simpl.
@@ -1405,13 +1353,10 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           }
           destruct dir; simpl; lia.
       + (* Quantified *)
-        pose proof suppregex_suppactions r SUPP_REGEX inp _ dir AFR as SUPP_ACTIONS.
-        inversion SUPP_ACTIONS. subst x l. inversion H1. subst r0.
-        inversion H0. subst min delta0 r0 greedy0.
-        destruct min0.
+        destruct min.
         (* forced quantifier *)
         2:{
-          specialize (IHfuel inp (Areg r1::Areg(Quantified greedy min0 delta r1)::cont) dir).
+          specialize (IHfuel inp (Areg r1::Areg(Quantified greedy min delta r1)::cont) dir).
           specialize_prove IHfuel.
           { apply afr_pop_quant_forced. auto. }
           specialize_prove IHfuel.
@@ -1425,7 +1370,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             }
             simpl last_chunk_size in *. rewrite FSTCHK in *.
             destruct r1; try (simpl in *; lia).
-            destruct min; try (simpl in *; lia).
+            destruct min0; try (simpl in *; lia).
             destruct is_strict_suffix; try (simpl in *; lia).
           }
           destruct (compute_tree) eqn:COMP.
@@ -1707,12 +1652,12 @@ remaining_length nextinp dir) * last_chunk_size cont). {
 
   Corollary tree_depth_bound_act:
     forall (r: regex) (inp: input) (act: actions) (dir: Direction),
-      supported_regex r -> act_from_regex r inp act dir ->
+      act_from_regex r inp act dir ->
       forall gm rer t, is_tree rer act inp gm dir t ->
         tree_depth t <= 2*(S (actions_fuel inp act dir)).
   Proof.
-    intros r inp act dir SUPP_REGEX AFR gm rer t TREE.
-    pose proof functional_terminates' r inp act dir SUPP_REGEX AFR (S (actions_fuel inp act dir)) ltac:(lia) gm rer.
+    intros r inp act dir AFR gm rer t TREE.
+    pose proof functional_terminates' r inp act dir AFR (S (actions_fuel inp act dir)) ltac:(lia) gm rer.
     destruct compute_tree as [t'|] eqn:COMPUTE; try congruence.
     pose proof compute_is_tree _ _ _ _ _ _ _ COMPUTE.
     assert (t = t'). {
@@ -1742,12 +1687,11 @@ remaining_length nextinp dir) * last_chunk_size cont). {
   Qed.
 
   Corollary tree_depth_bound_regex:
-    forall r: regex, supported_regex r ->
-      forall rer inp gm t, is_tree rer [Areg r] inp gm forward t ->
+    forall (r: regex) rer inp gm t, is_tree rer [Areg r] inp gm forward t ->
         tree_depth t <= 2*(S ((1 + remaining_length inp forward) * expanded_size r + (1 + length (input_str inp)) * expanded_size r * expanded_size r)).
   Proof.
-    intros r SUPP_REGEX rer inp gm t TREE.
-    pose proof tree_depth_bound_act r inp [Areg r] forward SUPP_REGEX.
+    intros r rer inp gm t TREE.
+    pose proof tree_depth_bound_act r inp [Areg r] forward.
     specialize_prove H. { constructor. }
     specialize (H gm rer t TREE).
     pose proof poly_fuel inp r. lia.
