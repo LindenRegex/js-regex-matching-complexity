@@ -20,19 +20,14 @@ Section PSPACE_algo.
     | 0 => Out_of_fuel
     | S fuel => 
         match act with
-        (* tree_done *)
         | [] => Success (inp, gm)
-        (* tree_check, tree_check_fail *)
         | Acheck strcheck :: cont =>
             if (is_strict_suffix inp strcheck dir) then
               compute_result cont inp gm dir fuel
             else NoMatch
-        (* tree_close *)
         | Aclose gid :: cont =>
             compute_result cont inp (GroupMap.close (idx inp) gid gm) dir fuel
-        (* tree_epsilon *)
         | Areg Epsilon::cont => compute_result cont inp gm dir fuel
-        (* tree_char, tree_char_fail *)
         | Areg (Regex.Character cd)::cont =>
             match read_char rer cd inp dir with
             | Some (c, nextinp) =>
@@ -46,7 +41,6 @@ Section PSPACE_algo.
             | Success lf => Success lf
             | NoMatch => compute_result (Areg r2 :: cont) inp gm dir fuel
             end
-        (* tree_sequence *)
         | Areg (Sequence r1 r2)::cont =>
             compute_result (seq_list r1 r2 dir ++ cont) inp gm dir fuel
         (* tree_quant_forced *)
@@ -73,7 +67,6 @@ Section PSPACE_algo.
                 | NoMatch => (compute_result (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel)
                 end
             end
-        (* tree_group *)
         | Areg (Group gid r1)::cont =>
             compute_result (Areg r1 :: Aclose gid :: cont) inp (GroupMap.open (idx inp) gid gm) dir fuel
         (* tree_lk, tree_lk_fail *)
@@ -91,12 +84,10 @@ Section PSPACE_algo.
                 | false => compute_result cont inp gm dir fuel
                 end
             end
-        (* tree_anchor, tree_anchor_fail *)
         | Areg (Anchor a)::cont =>
             if anchor_satisfied rer a inp then
               compute_result cont inp gm dir fuel
             else NoMatch
-        (* tree_backref, tree_backref_fail *)
         | Areg (Backreference gid)::cont =>
           match read_backref rer gm gid inp dir with
           | Some (br_str, nextinp) =>
@@ -849,7 +840,7 @@ Section MembershipProof.
       + specialize (IHact_from_regex 0 (Areg (Disjunction r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
         unfold num_checks in *. simpl in *. lia.
       + apply IHact_from_regex with (i := S i). auto.
-    - (* Sequence *)
+    -
       intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
       + specialize (IHact_from_regex 0 (Areg (Sequence r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
         unfold num_checks in *. destruct dir; simpl in *; lia.
@@ -872,7 +863,7 @@ Section MembershipProof.
       + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
         simpl in IHact_from_regex. simpl. unfold num_checks in *. simpl in *. lia.
       + apply IHact_from_regex with (i := S i). auto.
-    - (* Group *)
+    -
       intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
       + specialize (IHact_from_regex 0 (Areg (Group gid r1) :: l) eq_refl).
         unfold num_checks in *. simpl in *. lia.
@@ -1322,8 +1313,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     - lia.
     - intros inp act dir AFR FUEL gm rer. simpl.
       destruct act as [ | [[] | inpcheck | gid] cont ].
-      + (* Done *) discriminate.
-      + (* Epsilon *) apply IHfuel with (dir := dir).
+      + discriminate.
+      + apply IHfuel with (dir := dir).
         { apply afr_pop_epsilon. auto. }
         unfold actions_fuel, actions_fuel_nolk in FUEL. unfold actions_fuel, actions_fuel_nolk.
         simpl in FUEL.
@@ -1346,7 +1337,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
         }
         specialize (IHfuel gm rer).
         destruct compute_tree as [treecont|]. * discriminate. * contradiction.
-      + (* Disjunction *)
+      +
         unfold actions_fuel, actions_fuel_nolk in FUEL.
         destruct first_check_input as [inpchk|] eqn:FSTCHK.
         * simpl in FSTCHK, FUEL.
@@ -1565,7 +1556,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
               simpl chunk_size in *. simpl actions_lookaround_fuel in FUEL. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-      + (* Anchor *)
+      +
         destruct anchor_satisfied; try discriminate.
         assert (CONT: compute_tree rer cont inp gm dir fuel <> None). {
           apply IHfuel.
@@ -1587,7 +1578,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-      + (* Check *)
+      +
         destruct is_strict_suffix eqn:SS; try discriminate.
         assert (CONT: compute_tree rer cont inp gm dir fuel <> None). {
           apply IHfuel.
@@ -1625,7 +1616,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             + rewrite SS in FUEL. simpl in *. rewrite SNDCHK in FUEL. simpl in *. lia. 
         }
         destruct compute_tree; try contradiction. discriminate.
-      + (* Group close *)
+      +
         assert (CONT: compute_tree rer cont inp (Groups.GroupMap.close (idx inp) gid gm) dir fuel <> None). {
           apply IHfuel.
           - apply afr_pop_close with (gid := gid). auto.

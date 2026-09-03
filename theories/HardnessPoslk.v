@@ -17,8 +17,6 @@ Section HardnessPoslk.
     Character.canonicalize rer semicolon_char).
   Hypothesis (x_n_neq: Character.canonicalize rer x_char <>
     Character.canonicalize rer n_char).
-  Hypothesis (semicolon_n_neq: Character.canonicalize rer semicolon_char <>
-    Character.canonicalize rer n_char).
   Hypothesis (n_not_lineterminator: ~In n_char Character.line_terminators).
   Hypothesis (x_not_lineterminator: ~In x_char Character.line_terminators).
 
