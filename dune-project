@@ -1,10 +1,10 @@
-(lang dune 3.14)
+(lang dune 3.21)
 
 (name jsregexoptp)
 
 (generate_opam_files false)
 
-(using coq 0.8)
+(using rocq 0.11)
 
 (authors "Victor Deng" "Aurèle Barrière" "Clément Pit-Claudel")
 
@@ -12,5 +12,5 @@
  (name jsregexoptp)
  (synopsis "Proving that JavaScript regex matching is OptP-complete")
  (depends
-  (coq (and (>= "8.18.0") (<= "8.19.2")))
+  (rocq-prover (= 9.1.0))
   (linden (= "dev"))))

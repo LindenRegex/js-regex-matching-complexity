@@ -1,0 +1,12 @@
+[submodule "vendor/warblre"]
+	path = vendor/warblre
+	url = https://github.com/LindenRegex/Warblre.git
+	branch = main
+[submodule "vendor/linden"]
+	path = vendor/linden
+	url = https://github.com/LindenRegex/Linden.git
+	branch = main
+[submodule "vendor/strictordersolver"]
+	path = vendor/strictordersolver
+	url = https://github.com/epfl-systemf/StrictOrderSolver.git
+	branch = main

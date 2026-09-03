@@ -1,6 +1,6 @@
 From JsRegexOptp Require Import Qbf.
 From Linden Require Import Regex Chars Parameters.
-Require Import List.
+From Stdlib Require Import List.
 Import ListNotations.
 
 Section RegexEncoding.
@@ -17,14 +17,12 @@ Section RegexEncoding.
         (Character (CdSingle x_char)))
       (Character (CdSingle semicolon_char)).
 
-  (* Regex used to check a literal *)
   Definition check_literal_regex (l: literal): regex :=
     match l with
     | PosVar v => Backreference v
     | NegVar v => Sequence (Backreference v) (Character (CdSingle x_char))
     end.
   
-  (* Regex used to check a clause *)
   Fixpoint check_clause_regex_aux (c: clause): regex :=
     match c with
     | nil => Epsilon
@@ -34,7 +32,6 @@ Section RegexEncoding.
   Definition check_clause_regex (c: clause): regex :=
     Sequence (check_clause_regex_aux c) (Character (CdSingle semicolon_char)).
 
-  (* Regex used to check the conjunction *)
   Fixpoint check_conjunct_regex (rev_cl: list clause): regex :=
     match rev_cl with
     | nil => Epsilon

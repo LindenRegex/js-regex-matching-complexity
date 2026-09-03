@@ -2,7 +2,7 @@ From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
 From Linden Require Import Parameters Chars Groups Semantics Tree Tactics.
 From Linden.Rewriting Require Import ProofSetup.
 From Warblre Require Import Parameters RegExpRecord Base.
-Require Import List Lia.
+From Stdlib Require Import List Lia.
 Import ListNotations.
 
 Section Proofs.
@@ -42,18 +42,19 @@ Section Proofs.
     forall (l: list A) n, length (concat (repeat l n)) = length l * n.
   Proof.
     clear n. intros l n.
-    rewrite concat_length, map_repeat, list_sum_repeat. apply Nat.mul_comm.
+    rewrite length_concat, map_repeat, list_sum_repeat. apply Nat.mul_comm.
   Qed.
 
   Lemma str_len: length str = 2*(n+m)+1.
   Proof.
     unfold str, theString.
-    rewrite app_length, concat_repeat_len. reflexivity.
+    rewrite length_app, concat_repeat_len. reflexivity.
   Qed.
 
   Lemma rev_concat_repeat {A: Type}:
     forall (l: list A) i, rev (concat (repeat l i)) = concat (repeat (rev l) i).
   Proof.
+    clear n m.
     induction i.
     - reflexivity.
     - replace (S i) with (i + 1) at 1 by lia. simpl.
@@ -99,7 +100,7 @@ Section Proofs.
   Lemma idx_inp_of_idx:
     forall i, i <= length str -> idx (inp_of_idx i) = i.
   Proof.
-    intros i LE. unfold idx, inp_of_idx. rewrite rev_length.
+    intros i LE. unfold idx, inp_of_idx. rewrite length_rev.
     apply firstn_length_le. auto.
   Qed.
 
@@ -124,7 +125,7 @@ Section Proofs.
     forall (l: list A) n i,
       skipn (i * length l) (concat (repeat l n)) = concat (repeat l (n - i)).
   Proof.
-    clear n. intros l n i. induction i.
+    clear n m. intros l n i. induction i.
     - rewrite Nat.sub_0_r. reflexivity.
     - destruct (Nat.lt_decidable i n).
       + replace (n - i) with (S (n - S i)) in IHi by lia.
@@ -202,7 +203,7 @@ Section Proofs.
     }
     unfold read_backref. rewrite NOTFOUND.
     rewrite inp_of_idx_even at 1. 2: lia.
-    rewrite app_length, concat_length, map_repeat, list_sum_repeat. simpl length.
+    rewrite length_app, length_concat, map_repeat, list_sum_repeat. simpl length.
     replace (2*(v-1)+1-2*(v-1)) with 1 by lia.
     replace (S _ <=? 1) with false. 2: {
       symmetry. rewrite PeanoNat.Nat.leb_gt. lia.
@@ -573,7 +574,7 @@ Section Proofs.
       split.
       + intros lf [EQ_lf|[]]. subst lf inp. f_equal. f_equal. lia.
       + split. * reflexivity. * discriminate.
-    - rewrite app_length, rev_app_distr. simpl.
+    - rewrite length_app, rev_app_distr. simpl.
       intros ? ? t TREE lflist EQ_lflist.
       inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
       rewrite app_nil_r in CONT. simpl in CONT.

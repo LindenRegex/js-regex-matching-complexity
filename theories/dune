@@ -1,0 +1,6 @@
+(include_subdirs qualified)
+
+(rocq.theory
+ (name JsRegexOptp)
+ (package jsregexoptp)
+ (theories Linden Warblre Ltac2 Stdlib StrictOrderSolver))

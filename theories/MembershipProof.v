@@ -15,92 +15,83 @@ Section PSPACE_algo.
   | NoMatch: match_result
   | Success: leaf -> match_result.
 
-  Fixpoint compute_result (act: actions) (inp: input) (gm: group_map) (dir: Direction) (fuel:nat): match_result :=
+  Fixpoint pspace_algo (act: actions) (inp: input) (gm: group_map) (dir: Direction) (fuel:nat): match_result :=
     match fuel with
     | 0 => Out_of_fuel
     | S fuel => 
         match act with
-        (* tree_done *)
         | [] => Success (inp, gm)
-        (* tree_check, tree_check_fail *)
         | Acheck strcheck :: cont =>
             if (is_strict_suffix inp strcheck dir) then
-              compute_result cont inp gm dir fuel
+              pspace_algo cont inp gm dir fuel
             else NoMatch
-        (* tree_close *)
         | Aclose gid :: cont =>
-            compute_result cont inp (GroupMap.close (idx inp) gid gm) dir fuel
-        (* tree_epsilon *)
-        | Areg Epsilon::cont => compute_result cont inp gm dir fuel
-        (* tree_char, tree_char_fail *)
+            pspace_algo cont inp (GroupMap.close (idx inp) gid gm) dir fuel
+        | Areg Epsilon::cont => pspace_algo cont inp gm dir fuel
         | Areg (Regex.Character cd)::cont =>
             match read_char rer cd inp dir with
             | Some (c, nextinp) =>
-                compute_result cont nextinp gm dir fuel
+                pspace_algo cont nextinp gm dir fuel
             | None => NoMatch
             end
         (* tree_disj *)
         | Areg (Disjunction r1 r2)::cont =>
-            match compute_result (Areg r1 :: cont) inp gm dir fuel with
+            match pspace_algo (Areg r1 :: cont) inp gm dir fuel with
             | Out_of_fuel => Out_of_fuel
             | Success lf => Success lf
-            | NoMatch => compute_result (Areg r2 :: cont) inp gm dir fuel
+            | NoMatch => pspace_algo (Areg r2 :: cont) inp gm dir fuel
             end
-        (* tree_sequence *)
         | Areg (Sequence r1 r2)::cont =>
-            compute_result (seq_list r1 r2 dir ++ cont) inp gm dir fuel
+            pspace_algo (seq_list r1 r2 dir ++ cont) inp gm dir fuel
         (* tree_quant_forced *)
         | Areg (Quantified greedy (S min) delta r1)::cont =>
             let gidl := def_groups r1 in
-            compute_result (Areg r1 :: Areg (Quantified greedy min delta r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel
+            pspace_algo (Areg r1 :: Areg (Quantified greedy min delta r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel
         (* tree_quant_done *)
         | Areg (Quantified greedy 0 (NoI.N 0) r1)::cont =>
-            compute_result cont inp gm dir fuel
+            pspace_algo cont inp gm dir fuel
         (* tree_quant_free *)
         | Areg (Quantified greedy 0 delta r1)::cont =>
             let gidl := def_groups r1 in
             match greedy with
             | true =>
-                match (compute_result (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel) with
+                match (pspace_algo (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel) with
                 | Out_of_fuel => Out_of_fuel
                 | Success lf => Success lf
-                | NoMatch => compute_result cont inp gm dir fuel
+                | NoMatch => pspace_algo cont inp gm dir fuel
                 end
             | false =>
-                match (compute_result cont inp gm dir fuel) with
+                match (pspace_algo cont inp gm dir fuel) with
                 | Out_of_fuel => Out_of_fuel
                 | Success lf => Success lf
-                | NoMatch => (compute_result (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel)
+                | NoMatch => (pspace_algo (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (GroupMap.reset gidl gm) dir fuel)
                 end
             end
-        (* tree_group *)
         | Areg (Group gid r1)::cont =>
-            compute_result (Areg r1 :: Aclose gid :: cont) inp (GroupMap.open (idx inp) gid gm) dir fuel
+            pspace_algo (Areg r1 :: Aclose gid :: cont) inp (GroupMap.open (idx inp) gid gm) dir fuel
         (* tree_lk, tree_lk_fail *)
         | Areg (Lookaround lk r1)::cont =>
-            match (compute_result [Areg r1] inp gm (lk_dir lk) fuel) with
+            match (pspace_algo [Areg r1] inp gm (lk_dir lk) fuel) with
             | Out_of_fuel => Out_of_fuel
             | Success (_,gmlk) =>
                 match (positivity lk) with
                 | false => NoMatch
-                | true => compute_result cont inp gmlk dir fuel
+                | true => pspace_algo cont inp gmlk dir fuel
                 end
             | NoMatch =>
                 match (positivity lk) with
                 | true => NoMatch
-                | false => compute_result cont inp gm dir fuel
+                | false => pspace_algo cont inp gm dir fuel
                 end
             end
-        (* tree_anchor, tree_anchor_fail *)
         | Areg (Anchor a)::cont =>
             if anchor_satisfied rer a inp then
-              compute_result cont inp gm dir fuel
+              pspace_algo cont inp gm dir fuel
             else NoMatch
-        (* tree_backref, tree_backref_fail *)
         | Areg (Backreference gid)::cont =>
           match read_backref rer gm gid inp dir with
           | Some (br_str, nextinp) =>
-            compute_result cont nextinp gm dir fuel
+            pspace_algo cont nextinp gm dir fuel
           | None => NoMatch        
           end
         end
@@ -113,10 +104,10 @@ Section PSPACE_algo.
     | Success leaf => Some (Some leaf)
     end.
 
-  Theorem compute_result_correctness:
+  Theorem pspace_algo_correctness:
     forall fuel l i gm d tree,
       compute_tree rer l i gm d fuel = Some tree ->
-      res_to_leaf (compute_result l i gm d fuel) = Some (tree_res tree gm i d).
+      res_to_leaf (pspace_algo l i gm d fuel) = Some (tree_res tree gm i d).
   Proof.
     intros fuel.
     induction fuel; intros.
@@ -137,7 +128,7 @@ Section PSPACE_algo.
     - destruct compute_tree eqn:COMP1; [|inversion H].
       destruct (compute_tree rer (Areg r2 :: l) i gm d fuel) eqn:COMP2; inversion H.
       subst. simpl. apply IHfuel in COMP1. apply IHfuel in COMP2.
-      destruct compute_result eqn:COMPR1; simpl in COMP1; inversion COMP1; simpl; auto.
+      destruct pspace_algo eqn:COMPR1; simpl in COMP1; inversion COMP1; simpl; auto.
     - destruct min.
       2: { destruct compute_tree eqn:COMP; inversion H.
            apply IHfuel in COMP. simpl. auto. }
@@ -148,25 +139,25 @@ Section PSPACE_algo.
         destruct (compute_tree rer l i gm d fuel) eqn:COMP2; inversion H.
         apply IHfuel in COMP1, COMP2. simpl in COMP1.
         subst. destruct greedy; simpl.
-        * destruct compute_result eqn:COMPR; simpl in COMP1; inversion COMP1; simpl; auto.
-        * destruct (compute_result l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.
+        * destruct pspace_algo eqn:COMPR; simpl in COMP1; inversion COMP1; simpl; auto.
+        * destruct (pspace_algo l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.
       + simpl. destruct compute_tree eqn:COMP1; [|inversion H].
         destruct (compute_tree rer l i gm d fuel) eqn:COMP2; inversion H.
         apply IHfuel in COMP1, COMP2. simpl in COMP1.
         subst. destruct greedy; simpl.
-        * destruct compute_result eqn:COMPR; simpl in COMP1; inversion COMP1; simpl; auto.
-        * destruct (compute_result l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.   
+        * destruct pspace_algo eqn:COMPR; simpl in COMP1; inversion COMP1; simpl; auto.
+        * destruct (pspace_algo l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.   
     - destruct compute_tree eqn:COMP; [|inversion H].
       destruct lk_result eqn:LKRES.
       + destruct (compute_tree rer l i g d fuel) eqn:COMPNEXT; inversion H.
         subst. simpl. apply IHfuel in COMP, COMPNEXT.
         unfold lk_result in LKRES.
-        destruct compute_result eqn:COMPR; inversion COMP; simpl; auto;
+        destruct pspace_algo eqn:COMPR; inversion COMP; simpl; auto;
           try destruct l0; destruct positivity; auto; rewrite <- H1 in LKRES; inversion LKRES; auto.
       + apply IHfuel in COMP.
         unfold lk_result in LKRES.
         inversion H. subst.
-        destruct compute_result eqn:COMPR; simpl in COMP; inversion COMP;
+        destruct pspace_algo eqn:COMPR; simpl in COMP; inversion COMP;
           try destruct l0; destruct positivity; simpl; auto; rewrite <- H1 in LKRES; inversion LKRES.
     - destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.
     - destruct anchor_satisfied eqn:ANC.
@@ -203,12 +194,12 @@ Section MembershipProof.
 
   Definition supported_actions (l: actions): Prop := Forall supported_action l.
 
-  Fixpoint regex_size (r: regex): nat := match r with
+  Fixpoint expanded_size (r: regex): nat := match r with
   | Epsilon | Regex.Character _ => 1
-  | Disjunction r1 r2 | Sequence r1 r2 => 1 + regex_size r1 + regex_size r2
-  | Quantified _ min _ r => (S min) * (3 + regex_size r)
-  | Lookaround _ r => 1 + regex_size r
-  | Group _ r => 2 + regex_size r (* Open, Close *)
+  | Disjunction r1 r2 | Sequence r1 r2 => 1 + expanded_size r1 + expanded_size r2
+  | Quantified _ min _ r => (S min) * (3 + expanded_size r)
+  | Lookaround _ r => 1 + expanded_size r
+  | Group _ r => 2 + expanded_size r (* Open, Close *)
   | Anchor _ | Backreference _ => 1
   end.
 
@@ -501,7 +492,7 @@ Section MembershipProof.
     match act with
     | Acheck _ :: _ => 0
     | Aclose gid :: l => 1 + chunk_size l
-    | Areg r :: l => regex_size r + chunk_size l
+    | Areg r :: l => expanded_size r + chunk_size l
     | [] => 0
     end.
 
@@ -527,7 +518,7 @@ Section MembershipProof.
     | Disjunction r1 r2 | Sequence r1 r2 => max (regex_lookaround_fuel str r1) (regex_lookaround_fuel str r2)
     | Quantified _ _ _ r => regex_lookaround_fuel str r
     | Lookaround lk r =>
-        let this_lk_fuel := (1 + length str) * regex_size r in
+        let this_lk_fuel := (1 + length str) * expanded_size r in
         this_lk_fuel + regex_lookaround_fuel str r
     | Group _ r => regex_lookaround_fuel str r
     | Anchor _ | Backreference _ => 0
@@ -554,7 +545,7 @@ Section MembershipProof.
           1
       end
     | Acheck _ :: _ => 0 (* should not happen *)
-    | Areg r :: l => regex_size r + actions_fuel' l
+    | Areg r :: l => expanded_size r + actions_fuel' l
     | Aclose _ :: l => 1 + actions_fuel' l
     | [] => 0 (* should not happen *)
     end.
@@ -569,7 +560,7 @@ Section MembershipProof.
         let b := is_strict_suffix inp inpchk dir in
         let beginning_fuel := match act with
         | Areg (Quantified _ 0 _ r) :: l =>
-          (if b then 1 else 3 + regex_size r) + actions_fuel' l
+          (if b then 1 else 3 + expanded_size r) + actions_fuel' l
         | _ => actions_fuel' act
         end in
         let last := ((if b then 1 else 0) + remaining_length inp dir) * last_chunk_size act in
@@ -586,7 +577,7 @@ Section MembershipProof.
     forall r inp act dir, act_from_regex r inp act dir ->
       forall i acttail, acttail = List.skipn i act ->
         forall rchk, next_check_regex acttail = Some rchk ->
-          chunk_size acttail < regex_size rchk.
+          chunk_size acttail < expanded_size rchk.
   Proof.
     induction 1; try solve[intros i acttail EQ_acttail; apply IHact_from_regex with (i := S i); auto].
     - intros i acttail -> rchk EQ_rchk. destruct i as [|[|i]]; simpl in *; discriminate.
@@ -705,7 +696,7 @@ Section MembershipProof.
         apply IHact with (i := i) (inpchk := inpchk); auto.
       }
       simpl in EQ_acttail. subst acttail. simpl in FSTCHK.
-      (*destruct (a is (Acheck _)) eqn:IS_CHECK.
+      (*destruct (match a with Acheck _ => true | _ => false end) eqn:IS_CHECK.
       (*destruct a as [rsub | inpchk0 | gid].*)
       + destruct a as [rsub | inpchk0 | gid]; try discriminate. simpl.
         unfold checks_fby_quant in CHK_FBY_QUANT.
@@ -719,7 +710,7 @@ Section MembershipProof.
           simpl in SNDCHK. simpl. rewrite SNDCHK. lia.
       + *)
       simpl. rewrite FSTCHK.
-      (* Idea: apply CHKSZ_LT to show that regex_size rsub + chunk_size act < regex_size rchk for some rchk, then apply IHact with acttail = the appropriate tail *)
+      (* Idea: apply CHKSZ_LT to show that expanded_size rsub + chunk_size act < expanded_size rchk for some rchk, then apply IHact with acttail = the appropriate tail *)
       specialize (CHKSZ_LT 0 (a :: act) eq_refl).
       unfold checks_fby_quant in CHK_FBY_QUANT.
       pose proof (proj1 (first_check_input_nth_error (a :: act) inpchk)) FSTCHK as [i [FSTCHK_NTH1 FSTCHK_NTH2]].
@@ -733,7 +724,7 @@ Section MembershipProof.
           pose proof last_chunk_size_skipn (a :: act) i inpchk FSTCHK_NTH1.
           simpl in H. rewrite FSTCHK in H. auto.
         }
-        assert (regex_size (Quantified greedy 0 delta rquant) <= chunk_size (skipn i act)). {
+        assert (expanded_size (Quantified greedy 0 delta rquant) <= chunk_size (skipn i act)). {
           pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
           rewrite H0. simpl. lia.
         }
@@ -742,7 +733,7 @@ Section MembershipProof.
           pose proof last_chunk_size_skipn_last (a :: act) i inpchk FSTCHK_NTH1 SNDCHK.
           simpl in H. rewrite FSTCHK in H. auto.
         }
-        assert (regex_size (Quantified greedy 0 delta rquant) <= chunk_size (skipn i act)). {
+        assert (expanded_size (Quantified greedy 0 delta rquant) <= chunk_size (skipn i act)). {
           pose proof nth_error_skipn _ _ _ CHK_FBY_QUANT. simpl in H0.
           rewrite H0. simpl. lia.
         }
@@ -764,7 +755,7 @@ Section MembershipProof.
   Lemma last_chunk_size_lt_regex:
     forall r inp act dir,
       act_from_regex r inp act dir ->
-      last_chunk_size act <= regex_size r.
+      last_chunk_size act <= expanded_size r.
   Proof.
     induction 1.
     - simpl. lia.
@@ -819,7 +810,7 @@ Section MembershipProof.
     match act with
     | [] => 0
     | Acheck _ :: l | Aclose _ :: l => 1 + actions_size l
-    | Areg r :: l => regex_size r + actions_size l
+    | Areg r :: l => expanded_size r + actions_size l
     end.
   
   Fixpoint sum_to_n (n_min_i: nat) (n: nat) {struct n_min_i} :=
@@ -833,7 +824,7 @@ Section MembershipProof.
   Lemma chunk_size_bound:
     forall r inp act dir, act_from_regex r inp act dir ->
       forall i acttail, acttail = skipn i act ->
-        chunk_size acttail <= regex_size r - num_checks acttail /\ num_checks acttail <= regex_size r.
+        chunk_size acttail <= expanded_size r - num_checks acttail /\ num_checks acttail <= expanded_size r.
   Proof.
     induction 1; try solve[intros i acttail EQ_acttail; apply IHact_from_regex with (i := S i); auto].
     - intros i acttail EQ_acttail. destruct i as [|i]; subst acttail; simpl.
@@ -849,7 +840,7 @@ Section MembershipProof.
       + specialize (IHact_from_regex 0 (Areg (Disjunction r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
         unfold num_checks in *. simpl in *. lia.
       + apply IHact_from_regex with (i := S i). auto.
-    - (* Sequence *)
+    -
       intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
       + specialize (IHact_from_regex 0 (Areg (Sequence r1 r2) :: l) eq_refl). simpl in IHact_from_regex.
         unfold num_checks in *. destruct dir; simpl in *; lia.
@@ -872,7 +863,7 @@ Section MembershipProof.
       + subst acttail. specialize (IHact_from_regex 0 (Areg (Quantified greedy 0 (NoI.N 1 + delta)%NoI r1) :: l) eq_refl).
         simpl in IHact_from_regex. simpl. unfold num_checks in *. simpl in *. lia.
       + apply IHact_from_regex with (i := S i). auto.
-    - (* Group *)
+    -
       intros i acttail EQ_acttail. destruct i as [|[|i]]; subst acttail; simpl.
       + specialize (IHact_from_regex 0 (Areg (Group gid r1) :: l) eq_refl).
         unfold num_checks in *. simpl in *. lia.
@@ -916,7 +907,7 @@ Section MembershipProof.
   Proof.
     induction act.
     - discriminate.
-    - destruct (a is (Acheck _)) eqn:IS_CHECK.
+    - destruct (match a with Acheck _ => true | _ => false end) eqn:IS_CHECK.
       + destruct a; try discriminate. simpl. reflexivity.
       + intros inpcheck FSTCHK.
         replace (num_checks (a :: act)) with (num_checks act).
@@ -939,7 +930,7 @@ Section MembershipProof.
   Theorem actions_size_bound:
     forall r inp act dir, act_from_regex r inp act dir ->
       forall i acttail, acttail = skipn i act ->
-        actions_size acttail <= num_checks acttail + sum_to_n (num_checks acttail) (regex_size r).
+        actions_size acttail <= num_checks acttail + sum_to_n (num_checks acttail) (expanded_size r).
   Proof.
     intros r inp act dir AFR. pose proof chunk_size_bound r inp act dir AFR as CHK_BOUND.
     clear AFR inp. induction act.
@@ -1051,14 +1042,14 @@ Section MembershipProof.
   (* The main corollary for bounding the size of the list of actions *)
   Corollary actions_size_bound':
     forall r inp act dir, act_from_regex r inp act dir ->
-      forall n, n = regex_size r ->
+      forall n, n = expanded_size r ->
         actions_size act <= n + PeanoNat.Nat.div2 (n * S n).
   Proof.
     intros r inp act dir AFR n EQ_n.
     pose proof actions_size_bound r inp act dir AFR 0 act eq_refl.
     pose proof chunk_size_bound r inp act dir AFR 0 act eq_refl.
     apply proj2 in H0.
-    pose proof sum_to_n_bound (num_checks act) (regex_size r).
+    pose proof sum_to_n_bound (num_checks act) (expanded_size r).
     pose proof sum_to_n_n_formula n.
     rewrite <- EQ_n in *. lia.
   Qed.
@@ -1136,7 +1127,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
       destruct r; try lia.
       destruct min; try lia.
-      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy 0 delta r)). {
+      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (expanded_size r)))) <= expanded_size (Quantified greedy 0 delta r)). {
         simpl. destruct (is_strict_suffix nextinp inpchk dir); lia.
       }
       lia.
@@ -1211,7 +1202,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       destruct cont as [|[r | ? | ?] l]; simpl in *; try lia.
       destruct r; try lia.
       destruct min; try lia.
-      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (regex_size r)))) <= regex_size (Quantified greedy 0 delta r)). {
+      assert ((if (is_strict_suffix nextinp inpchk dir: bool) then 1 else S (S (S (expanded_size r)))) <= expanded_size (Quantified greedy 0 delta r)). {
         simpl. destruct (is_strict_suffix nextinp inpchk dir); lia.
       }
       lia.
@@ -1299,7 +1290,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
   Qed.
 
   Lemma succ_noi_pred:
-    forall ninf, (ninf is (NoI.N 0)) = false ->
+    forall ninf, match ninf with NoI.N 0 => true | _ => false end = false ->
       (NoI.N 1 + noi_pred ninf)%NoI = ninf.
   Proof.
     intros ninf NON_ZERO.
@@ -1322,8 +1313,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     - lia.
     - intros inp act dir AFR FUEL gm rer. simpl.
       destruct act as [ | [[] | inpcheck | gid] cont ].
-      + (* Done *) discriminate.
-      + (* Epsilon *) apply IHfuel with (dir := dir).
+      + discriminate.
+      + apply IHfuel with (dir := dir).
         { apply afr_pop_epsilon. auto. }
         unfold actions_fuel, actions_fuel_nolk in FUEL. unfold actions_fuel, actions_fuel_nolk.
         simpl in FUEL.
@@ -1346,7 +1337,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
         }
         specialize (IHfuel gm rer).
         destruct compute_tree as [treecont|]. * discriminate. * contradiction.
-      + (* Disjunction *)
+      +
         unfold actions_fuel, actions_fuel_nolk in FUEL.
         destruct first_check_input as [inpchk|] eqn:FSTCHK.
         * simpl in FSTCHK, FUEL.
@@ -1373,7 +1364,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             - unfold actions_fuel, actions_fuel_nolk. simpl first_check_input. rewrite FSTCHK.
               simpl chunk_size in *.
               unfold gt in FUEL. unfold gt.
-              assert ((1 + remaining_length inp dir) * (regex_size r1 + chunk_size cont) < (1 + remaining_length inp dir) * S (regex_size r1 + regex_size r2 + chunk_size cont)). {
+              assert ((1 + remaining_length inp dir) * (expanded_size r1 + chunk_size cont) < (1 + remaining_length inp dir) * S (expanded_size r1 + expanded_size r2 + chunk_size cont)). {
                 apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
               }
               simpl actions_lookaround_fuel in *. lia.
@@ -1384,7 +1375,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             - unfold actions_fuel, actions_fuel_nolk. simpl first_check_input. rewrite FSTCHK.
               simpl chunk_size in *.
               unfold gt in FUEL. unfold gt.
-              assert ((1 + remaining_length inp dir) * (regex_size r1 + chunk_size cont) < (1 + remaining_length inp dir) * S (regex_size r1 + regex_size r2 + chunk_size cont)). {
+              assert ((1 + remaining_length inp dir) * (expanded_size r1 + chunk_size cont) < (1 + remaining_length inp dir) * S (expanded_size r1 + expanded_size r2 + chunk_size cont)). {
                 apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
               }
               simpl actions_lookaround_fuel in *. lia.
@@ -1410,11 +1401,11 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             symmetry. destruct dir; setoid_rewrite FSTCHK; reflexivity.
           }
           simpl chunk_size in *.
-          replace (chunk_size (seq_list r1 r2 dir ++ cont)) with (regex_size r1 + regex_size r2 + chunk_size cont). 2: {
+          replace (chunk_size (seq_list r1 r2 dir ++ cont)) with (expanded_size r1 + expanded_size r2 + chunk_size cont). 2: {
             destruct dir; simpl; lia.
           }
           unfold gt in FUEL. unfold gt.
-          assert ((1 + remaining_length inp dir) * (regex_size r1 + regex_size r2 + chunk_size cont) < (1 + remaining_length inp dir) * S (regex_size r1 + regex_size r2 + chunk_size cont)). {
+          assert ((1 + remaining_length inp dir) * (expanded_size r1 + expanded_size r2 + chunk_size cont) < (1 + remaining_length inp dir) * S (expanded_size r1 + expanded_size r2 + chunk_size cont)). {
             apply PeanoNat.Nat.mul_lt_mono_pos_l; lia.
           }
           destruct dir; simpl; lia.
@@ -1445,7 +1436,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           destruct (compute_tree) eqn:COMP.
           - unfold not. inversion 1.
           - apply IHfuel in COMP. inversion COMP. }
-        destruct (delta is (NoI.N 0)) eqn:ZERO.
+        destruct (match delta with NoI.N 0 => true | _ => false end) eqn:ZERO.
         * destruct delta as [[]|]; try discriminate.
           apply IHfuel.
           1: eapply afr_pop_quant_done; eauto.
@@ -1482,7 +1473,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
                 * simpl last_chunk_size in *. rewrite FSTCHK in FUEL. rewrite FSTCHK.
                   destruct (is_strict_suffix inp inpchk dir) eqn:SS.
                   -- simpl in *.
-                    assert (regex_size (Quantified greedy 0 delta (Quantified greedy0 min delta0 r1)) <= last_chunk_size cont). {
+                    assert (expanded_size (Quantified greedy 0 delta (Quantified greedy0 min delta0 r1)) <= last_chunk_size cont). {
                       pose proof chunk_size_lt_last r inp _ dir AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
                       rewrite FSTCHK in H. simpl. lia.
                     }
@@ -1497,7 +1488,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
                 * simpl last_chunk_size in *. rewrite FSTCHK in FUEL.
                   destruct (is_strict_suffix inp inpchk dir) eqn:SS.
                   -- simpl in *.
-                    assert (regex_size (Quantified greedy 0 delta r1) <= last_chunk_size cont). {
+                    assert (expanded_size (Quantified greedy 0 delta r1) <= last_chunk_size cont). {
                       pose proof chunk_size_lt_last r inp _ dir AFR 0 _ eq_refl inpchk FSTCHK. simpl in H.
                       rewrite FSTCHK in H. simpl. lia.
                     }
@@ -1513,7 +1504,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
               simpl first_check_input in FUEL.
               destruct first_check_input as [inpchk | ] eqn:FSTCHK.
               + pose proof actions_fuel_nolk_notlast_le inp cont inpchk dir FSTCHK.
-                assert ((if is_strict_suffix inp inpchk dir then 1 else 3 + regex_size r1) >= 1). { destruct (is_strict_suffix inp inpchk dir); lia. }
+                assert ((if is_strict_suffix inp inpchk dir then 1 else 3 + expanded_size r1) >= 1). { destruct (is_strict_suffix inp inpchk dir); lia. }
                 simpl last_chunk_size in FUEL. rewrite FSTCHK in FUEL.
                 unfold actions_fuel. simpl actions_lookaround_fuel in FUEL.
                 lia.
@@ -1529,7 +1520,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           unfold actions_fuel_nolk. simpl.
           rewrite PeanoNat.Nat.max_0_r, PeanoNat.Nat.add_0_r.
           pose proof remaining_le_full_length inp (lk_dir lk).
-          assert (remaining_length inp (lk_dir lk) * regex_size r0 <= length (input_str inp) * regex_size r0). {
+          assert (remaining_length inp (lk_dir lk) * expanded_size r0 <= length (input_str inp) * expanded_size r0). {
             apply PeanoNat.Nat.mul_le_mono_r. auto.
           }
           unfold actions_fuel_nolk in FUEL. simpl in FUEL.
@@ -1565,7 +1556,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
               simpl chunk_size in *. simpl actions_lookaround_fuel in FUEL. lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-      + (* Anchor *)
+      +
         destruct anchor_satisfied; try discriminate.
         assert (CONT: compute_tree rer cont inp gm dir fuel <> None). {
           apply IHfuel.
@@ -1587,7 +1578,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             lia.
         }
         destruct compute_tree; try contradiction. discriminate.
-      + (* Check *)
+      +
         destruct is_strict_suffix eqn:SS; try discriminate.
         assert (CONT: compute_tree rer cont inp gm dir fuel <> None). {
           apply IHfuel.
@@ -1625,7 +1616,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             + rewrite SS in FUEL. simpl in *. rewrite SNDCHK in FUEL. simpl in *. lia. 
         }
         destruct compute_tree; try contradiction. discriminate.
-      + (* Group close *)
+      +
         assert (CONT: compute_tree rer cont inp (Groups.GroupMap.close (idx inp) gid gm) dir fuel <> None). {
           apply IHfuel.
           - apply afr_pop_close with (gid := gid). auto.
@@ -1737,14 +1728,14 @@ remaining_length nextinp dir) * last_chunk_size cont). {
   Qed.
 
   Lemma regex_lookaround_fuel_bound:
-    forall r str, regex_lookaround_fuel str r <= (1 + length str) * regex_size r * regex_size r.
+    forall r str, regex_lookaround_fuel str r <= (1 + length str) * expanded_size r * expanded_size r.
   Proof.
     intros r str. induction r; simpl; lia.
   Qed.
 
   Theorem poly_fuel:
     forall inp r,
-      actions_fuel inp [Areg r] forward <= (1 + remaining_length inp forward) * regex_size r + (1 + length (input_str inp)) * regex_size r * regex_size r.
+      actions_fuel inp [Areg r] forward <= (1 + remaining_length inp forward) * expanded_size r + (1 + length (input_str inp)) * expanded_size r * expanded_size r.
   Proof.
     intros inp r.
     unfold actions_fuel, actions_fuel_nolk.
@@ -1758,7 +1749,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
   Corollary tree_depth_bound_regex:
     forall r: regex, supported_regex r ->
       forall rer inp gm t, is_tree rer [Areg r] inp gm forward t ->
-        tree_depth t <= 2*(S ((1 + remaining_length inp forward) * regex_size r + (1 + length (input_str inp)) * regex_size r * regex_size r)).
+        tree_depth t <= 2*(S ((1 + remaining_length inp forward) * expanded_size r + (1 + length (input_str inp)) * expanded_size r * expanded_size r)).
   Proof.
     intros r SUPP_REGEX rer inp gm t TREE.
     pose proof tree_depth_bound_act r inp [Areg r] forward SUPP_REGEX.

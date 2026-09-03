@@ -1,7 +1,7 @@
 From Linden Require Import Regex Chars Parameters Groups.
 From JsRegexOptp Require Import Qbf RegexEncoding.
 From Warblre Require Import Base.
-Require Import List.
+From Stdlib Require Import List.
 Import ListNotations.
 
 Section RegexEncodingPoslk.
