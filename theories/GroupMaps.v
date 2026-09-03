@@ -1,6 +1,6 @@
 From Linden Require Import Groups Parameters.
 From JsRegexOptp Require Import Qbf.
-Require Import List.
+From Stdlib Require Import List.
 
 Section GroupMaps.
   Context {params: LindenParameters}.

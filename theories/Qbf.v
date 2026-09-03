@@ -1,4 +1,4 @@
-From Coq Require Import MSetList PeanoNat List.
+From Stdlib Require Import MSetList PeanoNat List.
 Open Scope bool_scope.
 
 (** * Definition of quantified boolean formulas and their interpretation. *)

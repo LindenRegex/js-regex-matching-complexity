@@ -3,7 +3,7 @@ From Linden Require Import Regex Chars Parameters Groups Tree Semantics Tactics
 From JsRegexOptp Require Import Qbf RegexEncoding RegexEncodingPoslk GroupMaps
   HardnessProofs GroupMapQbfEquiv.
 From Warblre Require Import RegExpRecord Parameters Base.
-Require Import List Lia.
+From Stdlib Require Import List Lia.
 Import ListNotations.
 
 Section HardnessPoslk.
@@ -113,6 +113,7 @@ Section HardnessPoslk.
           [(Input [] (n_char :: List.concat (List.repeat [semicolon_char; x_char] k) ++ pref),
             GroupMap.add gid (GroupMap.Range (length (input_str inp) - 1) (Some (length (input_str inp)))) gm)].
   Proof.
+    clear n.
     intros gid k. induction k.
     - simpl. intros inp pref -> gm t TREE.
       unfold capture_n_regex in TREE.
@@ -138,7 +139,7 @@ Section HardnessPoslk.
       inversion TREECONT1. subst inp gm0 dir treecont.
       simpl. unfold advance_input'. simpl.
       f_equal. f_equal.
-      rewrite app_length, rev_length. simpl.
+      rewrite length_app, length_rev. simpl.
       replace (length pref + 1 - 1) with (length pref) by lia. rewrite PeanoNat.Nat.add_comm.
       simpl. apply gm_add_close_open. lia.
     - simpl. intros inp pref -> gm t TREE.
@@ -188,12 +189,13 @@ Section HardnessPoslk.
   Lemma substr_last:
     forall pref, substr (Input [n_char] pref) (length (rev pref ++ [n_char]) - 1) (length (rev pref ++ [n_char])) = [n_char].
   Proof.
+    clear n.
     intro pref. unfold substr. simpl.
     assert (length (rev pref ++ [n_char]) >= 1). {
-      rewrite app_length. simpl. lia.
+      rewrite length_app. simpl. lia.
     }
     replace (length (rev pref ++ [n_char]) - (length (rev pref ++ [n_char]) - 1)) with 1 by lia.
-    rewrite app_length. simpl. replace (length (rev pref) + 1 - 1) with (length (rev pref)) by lia.
+    rewrite length_app. simpl. replace (length (rev pref) + 1 - 1) with (length (rev pref)) by lia.
     rewrite skipn_app, skipn_all, PeanoNat.Nat.sub_diag. simpl. reflexivity.
   Qed.
 
@@ -202,10 +204,11 @@ Section HardnessPoslk.
       GroupMap.find gid gm = Some (GroupMap.Range (length (input_str (Input [n_char] pref)) - 1) (Some (length (input_str (Input [n_char] pref))))) ->
       read_backref rer gm gid (Input [n_char] pref) forward = Some ([n_char], Input [] (n_char :: pref)).
   Proof.
+    clear n.
     intros gm gid pref SOME.
     unfold read_backref. rewrite SOME. simpl.
     assert (length (rev pref ++ [n_char]) >= 1). {
-      rewrite app_length. simpl. lia.
+      rewrite length_app. simpl. lia.
     }
     replace (length (rev pref ++ [n_char]) - (length (rev pref ++ [n_char]) - 1)) with 1 by lia.
     simpl. rewrite substr_last. simpl. rewrite EqDec.reflb. reflexivity.
@@ -235,13 +238,14 @@ Section HardnessPoslk.
       l = length (rev pref ++ next ++ [n_char]) ->
       substr (Input (next ++ [n_char]) pref) (l-1) l = [n_char].
   Proof.
+    clear n.
     intros next pref l Heql.
     unfold substr.
     assert (L_GEQ_1: l >= 1). {
-      do 2 rewrite app_length in Heql. simpl in Heql. lia.
+      do 2 rewrite length_app in Heql. simpl in Heql. lia.
     }
     replace (l-(l-1)) with 1 by lia. simpl.
-    rewrite app_assoc. rewrite app_assoc, app_length in Heql. simpl in Heql.
+    rewrite app_assoc. rewrite app_assoc, length_app in Heql. simpl in Heql.
     assert (LM1: length (rev pref ++ next) = l-1) by lia.
     rewrite skipn_app, <- LM1, skipn_all, Nat.sub_diag. simpl. reflexivity.
   Qed.
@@ -253,12 +257,13 @@ Section HardnessPoslk.
       GroupMap.find gid gm = Some (GroupMap.Range (len-1) (Some len)) ->
       read_backref rer gm gid inp forward = None.
   Proof.
+    clear n.
     intros gm gid len inp k pref -> -> SOME.
     unfold read_backref. rewrite SOME.
     simpl.
     set (l := length (rev pref ++ x_char :: semicolon_char :: _ ++ [n_char])).
     assert (l >= 1). {
-      unfold l. rewrite app_length. simpl. lia.
+      unfold l. rewrite length_app. simpl. lia.
     }
     replace (l - (l - 1)) with 1 by lia. simpl.
     do 2 rewrite app_comm_cons.
@@ -419,6 +424,7 @@ Section HardnessPoslk.
   Lemma num_notexists_skipn_le:
     forall l i, num_notexists (skipn i l) <= num_notexists l.
   Proof.
+    clear n.
     induction l.
     - intro i. simpl. destruct i; reflexivity.
     - intro i. simpl. destruct i; simpl; try reflexivity.
