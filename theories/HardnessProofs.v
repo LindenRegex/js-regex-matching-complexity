@@ -1,5 +1,6 @@
-From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
+From JsRegexOptp Require Import QbfPrenex.
 From JsRegexOptp Require Import Basics.
+From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
 From Linden Require Import Chars Groups Semantics Tree Tactics.
 From Linden.Rewriting Require Import ProofSetup.
 From Warblre Require Import Parameters RegExpRecord Base.
@@ -1069,3 +1070,24 @@ Section Proofs.
       apply H. unfold quants, form. rewrite equiv_gm_env_true. auto.
   Qed.
 End Proofs.
+
+Section PCNF.
+  Context {params: LindenParameters}.
+  Context (pq: pqbf).
+  Hypothesis (WF_pq: wf_pqbf pq).
+  Context (x_char semicolon_char n_char: Character).
+  Context (rer: RegExpRecord).
+  Hypothesis (x_semicolon_neq:
+    Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char).
+
+  Notation q := (qbf_of_pqbf pq).
+
+
+  Theorem pcnf_regex:
+    regex_matches_string rer (theRegex q x_char semicolon_char)
+      (theString q x_char semicolon_char n_char) <-> pqbf_true pq = true.
+  Proof.
+    rewrite <- qbf_of_pqbf_true; auto using qbf_regex, wf_qbf_of_pqbf.
+  Qed.
+
+End PCNF.

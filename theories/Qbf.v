@@ -41,6 +41,22 @@ Definition num_clauses_formula (f: formula): nat :=
 Definition num_clauses_qbf (q: qbf): nat :=
   num_clauses_formula (snd q).
 
+Fixpoint num_literals_pos_formula (pf: pos_formula): nat :=
+  match pf with
+  | nil => 0
+  | c::pf => length c + num_literals_pos_formula pf
+  end.
+
+Definition num_literals_formula (f: formula): nat :=
+  num_literals_pos_formula (inner_pos_formula f).
+
+Definition num_literals_qbf (q: qbf): nat :=
+  num_literals_formula (snd q).
+
+Definition qbf_size (q: qbf): nat :=
+  (* [1 +] allows a formula like [c * qbf_size q] to absorb the encoding's constant part. *)
+  1 + length (fst q) + num_clauses_qbf q + num_literals_qbf q.
+
 (* A QBF is well-formed if all the variables that appear in it are quantified. *)
 Definition wf_var (num_vars: nat) (v: variable): Prop := v <> 0 /\ v <= num_vars.
 
