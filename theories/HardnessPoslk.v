@@ -37,7 +37,7 @@ Section HardnessPoslk.
     forall i, i >= S n -> wf_gm_n_i strlen gm i.
 
   Definition wf_gm_poslk (strlen: nat) (gm: group_map): Prop :=
-    wf_gm q gm /\ wf_gm_n strlen gm.
+    wf_gm n gm /\ wf_gm_n strlen gm.
 
   Lemma char_match_diff:
     forall a b, Character.canonicalize rer a <> Character.canonicalize rer b ->
