@@ -1,6 +1,7 @@
 From Linden Require Import Regex Parameters Semantics Chars StrictSuffix
   FunctionalSemantics Tactics Tree FunctionalUtils ComputeIsTree
   Semantics.Tree Semantics.Groups.
+From JsRegexOptp Require Export Basics.
 From Warblre Require Import Base spec.RegExpRecord.
 Require Import List Lia Sorted.
 Import ListNotations.
@@ -194,14 +195,6 @@ Section MembershipProof.
 
   Definition supported_actions (l: actions): Prop := Forall supported_action l.
 
-  Fixpoint expanded_size (r: regex): nat := match r with
-  | Epsilon | Regex.Character _ => 1
-  | Disjunction r1 r2 | Sequence r1 r2 => 1 + expanded_size r1 + expanded_size r2
-  | Quantified _ min _ r => (S min) * (3 + expanded_size r)
-  | Lookaround _ r => 1 + expanded_size r
-  | Group _ r => 2 + expanded_size r (* Open, Close *)
-  | Anchor _ | Backreference _ => 1
-  end.
 
   (* Formalizing when an input, list of actions and direction come from a supported regex *)
   Inductive act_from_regex (r: regex): input -> actions -> Direction -> Prop :=

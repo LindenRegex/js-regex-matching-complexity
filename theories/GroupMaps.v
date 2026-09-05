@@ -1,4 +1,5 @@
-From Linden Require Import Groups Parameters.
+From Linden Require Import Groups.
+From JsRegexOptp Require Import Basics.
 From JsRegexOptp Require Import Qbf.
 From Stdlib Require Import List.
 

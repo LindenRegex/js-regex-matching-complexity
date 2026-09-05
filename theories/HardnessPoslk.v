@@ -1,5 +1,5 @@
-From Linden Require Import Regex Chars Parameters Groups Tree Semantics Tactics
-  FunctionalUtils Equivalence.
+From Linden Require Import Chars Groups Tree Semantics Tactics FunctionalUtils Equivalence.
+From JsRegexOptp Require Import Basics.
 From JsRegexOptp Require Import Qbf RegexEncoding RegexEncodingPoslk GroupMaps
   HardnessProofs GroupMapQbfEquiv.
 From Warblre Require Import RegExpRecord Parameters Base.
@@ -269,7 +269,6 @@ Section HardnessPoslk.
     simpl. rewrite FunctionalUtils.EqDec_neqb; auto.
     intro ABS. inversion ABS. contradiction.
   Qed.
-
 
   Lemma check_n_before_end:
     forall gm gid k inp pref,
