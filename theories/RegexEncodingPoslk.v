@@ -74,3 +74,44 @@ Section RegexEncodingPoslk.
     List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + List.length (snd q))) ++ [n_char]. *)
 
 End RegexEncodingPoslk.
+
+Section Fragment.
+  Context {params: LindenParameters}.
+  Context (x_char semicolon_char n_char: Parameters.Character).
+
+  Local Ltac frag_cbn :=
+    unfold frag_regex in *;
+    cbn [no_lower_bound no_neg_lookaround positivity def_var_regex check_literal_regex
+         check_clause_regex_aux check_clause_regex check_conjunct_regex
+         x_semicolon_star capture_n_regex check_n_regex negation_regex
+         check_formula_regex theRegex_aux] in *.
+
+  Lemma negation_regex_frag:
+    forall rsub z_gid, frag_regex rsub ->
+      frag_regex (negation_regex x_char semicolon_char n_char rsub z_gid).
+  Proof. intros rsub z_gid F; frag_cbn; intuition auto. Qed.
+
+  Lemma poslk_check_formula_regex_frag:
+    forall q, frag_regex (check_formula_regex x_char semicolon_char n_char q).
+  Proof.
+    intro q; unfold check_formula_regex;
+      pose proof check_conjunct_regex_frag x_char semicolon_char (rev (inner_pos_formula (snd q)));
+      destruct (snd q); auto using negation_regex_frag.
+  Qed.
+
+  Lemma poslk_theRegex_aux_frag:
+    forall q ql v, frag_regex (theRegex_aux x_char semicolon_char n_char q v ql).
+  Proof.
+    intros q ql; induction ql as [|[] ql IH]; intro v;
+      [pose proof poslk_check_formula_regex_frag q | (pose proof (IH (S v))) ..];
+      frag_cbn; auto using negation_regex_frag; intuition auto.
+  Qed.
+
+  Theorem theRegex_poslk_nolb:
+    forall q, no_lower_bound (theRegex x_char semicolon_char n_char q).
+  Proof. intro q; apply (proj1 (poslk_theRegex_aux_frag q _ _)). Qed.
+
+  Theorem theRegex_poslk_noneglk:
+    forall q, no_neg_lookaround (theRegex x_char semicolon_char n_char q).
+  Proof. intro q; apply (proj2 (poslk_theRegex_aux_frag q _ _)). Qed.
+End Fragment.
