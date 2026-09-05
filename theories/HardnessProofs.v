@@ -1,5 +1,6 @@
 From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
-From Linden Require Import Parameters Chars Groups Semantics Tree Tactics.
+From JsRegexOptp Require Import Basics.
+From Linden Require Import Chars Groups Semantics Tree Tactics.
 From Linden.Rewriting Require Import ProofSetup.
 From Warblre Require Import Parameters RegExpRecord Base.
 From Stdlib Require Import List Lia.
@@ -30,36 +31,10 @@ Section Proofs.
   Definition inp_of_idx (i: nat) :=
     Input (List.skipn i str) (List.rev (List.firstn i str)).
 
-  Lemma list_sum_repeat:
-    forall k n: nat, list_sum (repeat k n) = n*k.
-  Proof.
-    clear n. induction n.
-    - simpl. reflexivity.
-    - simpl. rewrite IHn0. reflexivity.
-  Qed.
-
-  Lemma concat_repeat_len {A: Type}:
-    forall (l: list A) n, length (concat (repeat l n)) = length l * n.
-  Proof.
-    clear n. intros l n.
-    rewrite length_concat, map_repeat, list_sum_repeat. apply Nat.mul_comm.
-  Qed.
-
   Lemma str_len: length str = 2*(n+m)+1.
   Proof.
     unfold str, theString.
     rewrite length_app, concat_repeat_len. reflexivity.
-  Qed.
-
-  Lemma rev_concat_repeat {A: Type}:
-    forall (l: list A) i, rev (concat (repeat l i)) = concat (repeat (rev l) i).
-  Proof.
-    clear n m.
-    induction i.
-    - reflexivity.
-    - replace (S i) with (i + 1) at 1 by lia. simpl.
-      rewrite repeat_app, concat_app, rev_app_distr. simpl.
-      rewrite app_nil_r. congruence.
   Qed.
 
   Lemma inp_of_idx_even:
@@ -119,26 +94,6 @@ Section Proofs.
           apply firstn_length_le. lia.
         }
         rewrite firstn_app_2. rewrite SKIPN, rev_app_distr. simpl. reflexivity.
-  Qed.
-
-  Lemma skipn_concat_repeat {A: Type}:
-    forall (l: list A) n i,
-      skipn (i * length l) (concat (repeat l n)) = concat (repeat l (n - i)).
-  Proof.
-    clear n m. intros l n i. induction i.
-    - rewrite Nat.sub_0_r. reflexivity.
-    - destruct (Nat.lt_decidable i n).
-      + replace (n - i) with (S (n - S i)) in IHi by lia.
-        simpl in *.
-        rewrite <- skipn_skipn, IHi, skipn_app, skipn_all, Nat.sub_diag. reflexivity.
-      + replace (n - S i) with 0 by lia. simpl.
-        rewrite skipn_all2. 2: {
-          rewrite concat_repeat_len.
-          rewrite (Nat.mul_comm (length l) n).
-          change (length l + i * length l) with ((S i) * length l).
-          apply Nat.mul_le_mono_r. lia.
-        }
-        reflexivity.
   Qed.
 
   Lemma substr_var:
@@ -457,29 +412,6 @@ Section Proofs.
     rewrite char_match_x_semicolon. reflexivity.
   Qed.
 
-
-  Lemma FlatMap_empty_iff {X Y: Type}:
-    forall (lx: list X) (f: X -> list Y -> Prop) (ly: list Y),
-      FlatMap.determ f -> FlatMap.FlatMap lx f ly ->
-      (ly <> [] <-> exists (x: X) (fx: list Y), In x lx /\ f x fx /\ fx <> []).
-  Proof.
-    intros lx f ly DETERM. induction 1.
-    - simpl. firstorder.
-    - specialize (IHFlatMap DETERM).
-      destruct ly as [|y ly].
-      + simpl. rewrite IHFlatMap. split; try solve[firstorder].
-        intros [x0 [fx H0]].
-        destruct H0. destruct H0.
-        * subst x0. exfalso. specialize (DETERM x [] fx).
-          rewrite <- DETERM in H1 by tauto. destruct H1. contradiction.
-        * firstorder.
-      + split. 2: rewrite <- app_comm_cons; discriminate.
-        intros _. exists x. exists (y :: ly). split.
-        * left. reflexivity.
-        * split; [auto|discriminate].
-  Qed.
-
-  (* Lemma specifying the behavior of the regex that checks a clause. *)
   Lemma check_clause_regex_spec:
     (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map, and 0 <= i < m. *)
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
@@ -815,20 +747,6 @@ Section Proofs.
     - reflexivity.
   Qed.
 
-  Lemma skipn_head {A: Type}:
-    forall (l: list A) (a: A) (i: nat), i < length l ->
-      skipn i l = nth i l a :: skipn (S i) l.
-  Proof.
-    clear q WF_q str n quants m pos_form form x_char semicolon_char n_char x_semicolon_neq params rer.
-    induction l.
-    - intros a i. simpl. lia.
-    - intros a' i. simpl. destruct i as [|i].
-      + simpl. reflexivity.
-      + intro INB. assert (i < length l) by lia.
-        simpl. rewrite IHl with (a := a') by auto.
-        reflexivity.
-  Qed.
-
   Lemma wf_gm_add:
     forall gm, wf_gm q gm ->
       forall i, i <= n -> wf_gm q (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm).
@@ -868,18 +786,6 @@ Section Proofs.
     intros l1 l2. split.
     - intro EMPTY. destruct l1; try discriminate. auto.
     - intros [-> ->]. reflexivity.
-  Qed.
-
-  Lemma app_nonempty_iff {A: Type}:
-    forall l1 l2: list A, l1 ++ l2 <> [] <-> l1 <> [] \/ l2 <> [].
-  Proof.
-    intros l1 l2. split.
-    - intro NONEMPTY. destruct l1 as [|x l1].
-      + right. auto.
-      + left. discriminate.
-    - intros [NONEMPTY1 | NONEMPTY2].
-      + destruct l1 as [|x l1]; try contradiction; discriminate.
-      + destruct l1 as [|x l1]; try discriminate; auto.
   Qed.
 
   Theorem theRegex_aux_spec:
@@ -1115,7 +1021,6 @@ Section Proofs.
              tauto.
           -- contradiction.
   Qed.
-
 
   (* TODO Move to Linden *)
   Definition regex_matches_string (rer: RegExpRecord) (r: regex) (s: LWParameters.string): Prop :=

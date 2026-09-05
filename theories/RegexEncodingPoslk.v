@@ -1,5 +1,5 @@
-From Linden Require Import Regex Chars Parameters Groups.
-From JsRegexOptp Require Import Qbf RegexEncoding.
+From Linden Require Import Chars Groups.
+From JsRegexOptp Require Import Qbf Basics RegexEncoding.
 From Warblre Require Import Base.
 From Stdlib Require Import List.
 Import ListNotations.
