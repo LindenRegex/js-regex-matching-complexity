@@ -37,6 +37,9 @@ Section Basics.
     | Lookaround _ _ => False
     end.
 
+  Lemma size_le_expanded r: regex_size r <= expanded_size r.
+  Proof. induction r; cbn; nia. Qed.
+
   Fixpoint no_neg_lookaround (r: regex): Prop :=
     match r with
     | Epsilon | Regex.Character _ | Anchor _ | Backreference _ => True

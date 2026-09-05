@@ -1,10 +1,12 @@
 (** * OptP-hardness: CNF LEXICOGRAPHIC SAT reduces to JavaScript regex matching *)
 
 From JsRegexOptp Require Import Basics Qbf GroupMaps GroupMapQbfEquiv Bits RegexEncoding
-  HardnessProofs MembershipOptp.
-From Linden Require Import Chars Groups Semantics Tree Tactics.
+  HardnessProofs MembershipOptp WarblreExtensions WarblreEncoding Warblre.
+From Linden Require Import Chars Groups Semantics Tree Tactics FunctionalSemantics
+  ComputeIsTree ResultTranslation EquivMain LWParameters RegexpTranslation.
 From Linden.Rewriting Require Import ProofSetup FlatMap.
-From Warblre Require Import Parameters RegExpRecord Base.
+From Warblre Require Import Parameters RegExpRecord Base Notation StaticSemantics Patterns
+  Result Frontend Typeclasses.
 From Stdlib Require Import List Lia PeanoNat.
 Import ListNotations.
 
@@ -344,6 +346,16 @@ Section Fragment.
       in_fragment (theRegex q x_char semicolon_char).
   Proof. intros EQ ALL; eapply theRegex_aux_frag; eauto. Qed.
 
+  Theorem theRegex_w_nolk (q: qbf):
+      wf_qbf q ->
+    forall pf, snd q = PosForm pf ->
+      (forall qt, List.In qt (fst q) -> qt = Qbf.Exists) ->
+      pattern_no_lookaround (theRegex_w q x_char semicolon_char).
+  Proof.
+    intros WF pf EQ ALL; eapply warblre_to_linden_no_lookaround;
+      [apply regex_encoding_wl, WF | apply (theRegex_frag q pf EQ ALL)].
+  Qed.
+
   Corollary lexsat_by_optp (q: qbf):
       wf_qbf q ->
     forall pf, snd q = PosForm pf ->
@@ -380,4 +392,113 @@ Corollary lexsat_regex_frag {params: LindenParameters}
     in_fragment (lexsat_regex x_char semicolon_char nv pf).
 Proof.
   unfold lexsat_regex; eapply theRegex_frag; [reflexivity | intros qt IN; eapply repeat_spec, IN].
+Qed.
+
+Section LexSatWarblre.
+  Context {params: LindenParameters}.
+  Context (x_char semicolon_char: Parameters.Character) (nv: nat) (pf: pos_formula).
+  Hypothesis WF: wf_pos_formula nv pf.
+
+  Let wr := theRegex_w (lexsat_qbf nv pf) x_char semicolon_char.
+
+  Lemma lexsat_w_earlyErrors: StaticSemantics.earlyErrors wr [] = Success false.
+  Proof. apply wr_earlyErrors, lexsat_qbf_wf, WF. Qed.
+
+  Lemma lexsat_w_to_linden:
+    lexsat_regex x_char semicolon_char nv pf = linden_of wr.
+  Proof. apply wr_to_linden, lexsat_qbf_wf, WF. Qed.
+
+  Lemma lexsat_w_frag: in_fragment (linden_of wr).
+  Proof. rewrite <- lexsat_w_to_linden; apply lexsat_regex_frag. Qed.
+
+  Lemma lexsat_w_nolk: pattern_no_lookaround wr.
+  Proof.
+    unfold wr; eapply theRegex_w_nolk;
+      [apply lexsat_qbf_wf, WF | reflexivity | intros qt IN; eapply repeat_spec, IN].
+  Qed.
+
+  Lemma lexsat_w_nolb: pattern_no_lower_bound wr.
+  Proof. apply theRegex_w_nolb, lexsat_qbf_wf, WF. Qed.
+
+  Lemma lexsat_ngroups (rer: RegExpRecord):
+      RegExpRecord.capturingGroupsCount rer
+      = StaticSemantics.countLeftCapturingParensWithin wr [] ->
+      RegExpRecord.capturingGroupsCount rer = nv.
+  Proof.
+    intros ->; unfold wr.
+    rewrite theRegex_w_ngroups by (apply lexsat_qbf_wf, WF); apply repeat_length.
+  Qed.
+
+  Context (n_char: Parameters.Character).
+  Let s := lexsat_string x_char semicolon_char n_char nv pf.
+
+  Lemma lexsat_w_matcher (rer: RegExpRecord):
+      RegExpRecord.capturingGroupsCount rer
+      = StaticSemantics.countLeftCapturingParensWithin wr [] ->
+      exists m,
+        Warblre.spec.Semantics.Semantics.compilePattern wr rer = Success m /\
+        m s 0 = Success (to_MatchState (linden_result rer
+                           (lexsat_regex x_char semicolon_char nv pf) (init_input s)) nv).
+  Proof.
+    intro CAPS; destruct (matcher_result _ _ s lexsat_w_earlyErrors lexsat_w_to_linden
+                            rer CAPS) as [m (COMP & EXEC)].
+    exists m; rewrite (lexsat_ngroups rer CAPS) in EXEC; auto.
+  Qed.
+
+  Lemma lexsat_w_exec_result (flags: RegExpFlags) (rer: RegExpRecord):
+      RegExpFlags.y flags = true ->
+      RegExpFlags.d flags = false ->
+      rer = rer_of wr flags ->
+      exists inst,
+        regExpInitialize wr flags = Success inst /\
+        exec_agrees inst s
+          (to_MatchState (linden_result rer (lexsat_regex x_char semicolon_char nv pf)
+                            (init_input s)) (RegExpRecord.capturingGroupsCount rer)).
+  Proof.
+    intros; apply (matches_regExpExec_result_flags _ _ s lexsat_w_earlyErrors
+                     lexsat_w_to_linden); assumption.
+  Qed.
+End LexSatWarblre.
+
+Lemma lexsat_answer {params: LindenParameters}
+    (x_char semicolon_char n_char: Parameters.Character) (rer: RegExpRecord) nv pf:
+    wf_pos_formula nv pf ->
+    Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+    let q := lexsat_qbf nv pf in
+    match to_MatchState (linden_result rer (RegexEncoding.theRegex q x_char semicolon_char)
+                           (init_input (theString q x_char semicolon_char n_char))) nv with
+    | Some ms => is_lex_max_sat nv pf (defined_bits (Notation.MatchState.captures ms))
+    | None => forall b, length b = nv -> assign_cnf b pf = false
+    end.
+Proof.
+  intros WF NEQ; cbv zeta; unfold linden_result; set (t := compute_tr _ _ _ _ _).
+  pose proof lexsat_qbf_wf nv pf WF as WFq.
+  assert (TREE: is_tree rer [Areg (lexsat_regex x_char semicolon_char nv pf)]
+                  (init_input (lexsat_string x_char semicolon_char n_char nv pf))
+                  GroupMap.empty forward t) by apply compute_tr_is_tree.
+  pose proof lexsat_reduction x_char semicolon_char n_char rer NEQ nv pf WF t TREE as RED.
+  pose proof theRegex_first_gm_max (lexsat_qbf nv pf) WFq x_char semicolon_char n_char rer NEQ
+    ltac:(intros qt IN; eapply repeat_spec, IN) t TREE as WFGM.
+  rewrite lexsat_qbf_num_vars, first_gm_first_leaf in WFGM; unfold lexsat_string in RED.
+  destruct (first_leaf t _) as [[inp gm]|]; cbn [option_map snd] in RED, WFGM; [|exact RED].
+  rewrite <- (defined_bits_to_MatchState nv inp gm _ (proj1 WFGM) eq_refl) in RED; exact RED.
+Qed.
+
+Corollary lexsat_answer_flags {params: LindenParameters}
+    (x_char semicolon_char n_char: Parameters.Character)
+    (flags: RegExpFlags) (rer: RegExpRecord) nv pf:
+    wf_pos_formula nv pf ->
+    Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+    let q := lexsat_qbf nv pf in
+    rer = rer_of (theRegex_w q x_char semicolon_char) flags ->
+    match to_MatchState (linden_result rer (RegexEncoding.theRegex q x_char semicolon_char)
+                           (init_input (theString q x_char semicolon_char n_char)))
+                        (RegExpRecord.capturingGroupsCount rer) with
+    | Some ms => is_lex_max_sat nv pf (defined_bits (Notation.MatchState.captures ms))
+    | None => forall b, length b = nv -> assign_cnf b pf = false
+    end.
+Proof.
+  intros WF ? ? RER.
+  rewrite (lexsat_ngroups x_char semicolon_char nv pf WF rer ltac:(now rewrite RER)).
+  apply lexsat_answer; assumption.
 Qed.
