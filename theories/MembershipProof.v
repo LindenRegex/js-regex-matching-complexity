@@ -187,6 +187,9 @@ Section MembershipProof.
   | s_Anchor: forall a, supported_regex (Anchor a)
   | s_Backreference: forall gid, supported_regex (Backreference gid).
 
+  Lemma supported_regex_all: forall r, supported_regex r.
+  Proof. induction r; constructor; assumption. Qed.
+
   (* Lifting to lists of actions *)
   Inductive supported_action: action -> Prop :=
   | s_Acheck: forall i, supported_action (Acheck i)

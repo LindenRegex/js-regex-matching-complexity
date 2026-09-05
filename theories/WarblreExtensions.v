@@ -8,6 +8,58 @@ Import ListNotations.
 Section WarblreEarlyErrors.
   Context {params: Parameters}.
 
+  Fixpoint pattern_size (r: Patterns.Regex): nat :=
+    match r with
+    | Patterns.Disjunction r1 r2 | Patterns.Seq r1 r2 => 1 + pattern_size r1 + pattern_size r2
+    | Patterns.Quantified r1 _ | Patterns.Group _ r1 | Patterns.Lookahead r1
+    | Patterns.NegativeLookahead r1 | Patterns.Lookbehind r1
+    | Patterns.NegativeLookbehind r1 => 1 + pattern_size r1
+    | _ => 1
+    end.
+
+  Lemma pattern_size_pos r: 1 <= pattern_size r.
+  Proof. destruct r; cbn; lia. Qed.
+
+  Fixpoint pattern_no_lookaround (r: Patterns.Regex): Prop :=
+    match r with
+    | Patterns.Disjunction r1 r2 | Patterns.Seq r1 r2 =>
+        pattern_no_lookaround r1 /\ pattern_no_lookaround r2
+    | Patterns.Quantified r1 _ | Patterns.Group _ r1 => pattern_no_lookaround r1
+    | Patterns.Lookahead _ | Patterns.NegativeLookahead _
+    | Patterns.Lookbehind _ | Patterns.NegativeLookbehind _ => False
+    | _ => True
+    end.
+
+  Fixpoint pattern_no_neg_lookaround (r: Patterns.Regex): Prop :=
+    match r with
+    | Patterns.Disjunction r1 r2 | Patterns.Seq r1 r2 =>
+        pattern_no_neg_lookaround r1 /\ pattern_no_neg_lookaround r2
+    | Patterns.Quantified r1 _ | Patterns.Group _ r1
+    | Patterns.Lookahead r1 | Patterns.Lookbehind r1 => pattern_no_neg_lookaround r1
+    | Patterns.NegativeLookahead _ | Patterns.NegativeLookbehind _ => False
+    | _ => True
+    end.
+
+  Definition quantprefix_no_lower_bound (p: Patterns.QuantifierPrefix): Prop :=
+    match p with
+    | Patterns.Star | Patterns.Question => True
+    | Patterns.Plus => False
+    | Patterns.RepExact n | Patterns.RepPartialRange n | Patterns.RepRange n _ => n = 0
+    end.
+
+  Definition quantifier_no_lower_bound (q: Patterns.Quantifier): Prop :=
+    match q with Patterns.Greedy p | Patterns.Lazy p => quantprefix_no_lower_bound p end.
+
+  Fixpoint pattern_no_lower_bound (r: Patterns.Regex): Prop :=
+    match r with
+    | Patterns.Disjunction r1 r2 | Patterns.Seq r1 r2 =>
+        pattern_no_lower_bound r1 /\ pattern_no_lower_bound r2
+    | Patterns.Quantified r1 q => quantifier_no_lower_bound q /\ pattern_no_lower_bound r1
+    | Patterns.Group _ r1 | Patterns.Lookahead r1 | Patterns.NegativeLookahead r1
+    | Patterns.Lookbehind r1 | Patterns.NegativeLookbehind r1 => pattern_no_lower_bound r1
+    | _ => True
+    end.
+
   Definition simple_quantifier (q: Patterns.Quantifier): Prop :=
     match q with
     | Patterns.Greedy p | Patterns.Lazy p =>
