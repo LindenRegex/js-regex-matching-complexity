@@ -59,3 +59,45 @@ Section RegexEncoding.
     List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + num_clauses_qbf q)) ++ [n_char].
 
 End RegexEncoding.
+
+Section Fragment.
+  Context {params: LindenParameters}.
+  Context (x_char semicolon_char: Parameters.Character).
+
+  Definition frag_regex (r: regex): Prop := no_lower_bound r /\ no_neg_lookaround r.
+
+  Local Ltac frag_cbn :=
+    unfold frag_regex in *;
+    cbn [no_lower_bound no_neg_lookaround def_var_regex check_literal_regex
+         check_clause_regex_aux check_clause_regex check_conjunct_regex
+         check_formula_regex theRegex_aux] in *.
+
+  Lemma check_clause_regex_frag:
+    forall c, frag_regex (check_clause_regex x_char semicolon_char c).
+  Proof.
+    intro c; enough (frag_regex (check_clause_regex_aux x_char c)) by (frag_cbn; tauto);
+      induction c as [|[] c IH]; frag_cbn; tauto.
+  Qed.
+
+  Lemma check_conjunct_regex_frag:
+    forall cl, frag_regex (check_conjunct_regex x_char semicolon_char cl).
+  Proof.
+    induction cl as [|c cl IH]; [|pose proof check_clause_regex_frag c]; frag_cbn; tauto.
+  Qed.
+
+  Lemma check_formula_regex_nolb:
+    forall f, no_lower_bound (check_formula_regex x_char semicolon_char f).
+  Proof. intros [pf|pf]; pose proof check_conjunct_regex_frag (rev pf); frag_cbn; tauto. Qed.
+
+  Lemma theRegex_aux_nolb:
+    forall q ql v, no_lower_bound (theRegex_aux q x_char semicolon_char v ql).
+  Proof.
+    intros q ql; induction ql as [|[] ql IH]; intro v;
+      [pose proof check_formula_regex_nolb (snd q) | (pose proof (IH (S v))) ..];
+      frag_cbn; tauto.
+  Qed.
+
+  Theorem theRegex_nolb:
+    forall q, no_lower_bound (theRegex q x_char semicolon_char).
+  Proof. intro q; apply theRegex_aux_nolb. Qed.
+End Fragment.
