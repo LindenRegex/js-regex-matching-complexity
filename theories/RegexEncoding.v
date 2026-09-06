@@ -1,6 +1,6 @@
 From Linden Require Import Chars.
 From JsRegexOptp Require Import Qbf Basics.
-From Stdlib Require Import List.
+From Stdlib Require Import List Lia.
 Import ListNotations.
 
 Section RegexEncoding.
@@ -101,3 +101,83 @@ Section Fragment.
     forall q, no_lower_bound (theRegex q x_char semicolon_char).
   Proof. intro q; apply theRegex_aux_nolb. Qed.
 End Fragment.
+
+Lemma num_literals_pos_formula_app:
+  forall pf1 pf2, num_literals_pos_formula (pf1 ++ pf2) =
+    num_literals_pos_formula pf1 + num_literals_pos_formula pf2.
+Proof. intros pf1 pf2; induction pf1; cbn; lia. Qed.
+
+Lemma num_literals_pos_formula_rev:
+  forall pf, num_literals_pos_formula (rev pf) = num_literals_pos_formula pf.
+Proof. intro pf; induction pf; cbn; rewrite ?num_literals_pos_formula_app; cbn; lia. Qed.
+
+Ltac size_cbn :=
+  cbn [expanded_size num_literals_pos_formula length repeat
+       def_var_regex check_literal_regex check_clause_regex_aux
+       check_clause_regex check_conjunct_regex
+       theRegex_aux] in *.
+
+Ltac measure_unfold :=
+  unfold num_clauses_qbf, num_literals_qbf, num_clauses_formula,
+    num_literals_formula, inner_pos_formula.
+
+Section Size.
+  Context {params: LindenParameters}.
+  Context (x_char semicolon_char: Parameters.Character).
+
+  Lemma check_literal_regex_size:
+    forall l, expanded_size (check_literal_regex x_char l) <= 3.
+  Proof. destruct l; size_cbn; lia. Qed.
+
+  Lemma check_clause_regex_aux_size:
+    forall c, expanded_size (check_clause_regex_aux x_char c) <= 1 + 4 * length c.
+  Proof. induction c as [|l c IH]; [|pose proof check_literal_regex_size l]; size_cbn; lia. Qed.
+
+  Lemma check_clause_regex_size:
+    forall c, expanded_size (check_clause_regex x_char semicolon_char c) <= 3 + 4 * length c.
+  Proof. intro c; pose proof check_clause_regex_aux_size c; size_cbn; lia. Qed.
+
+  Lemma check_conjunct_regex_size:
+    forall cl, expanded_size (check_conjunct_regex x_char semicolon_char cl) <=
+      1 + 4 * length cl + 4 * num_literals_pos_formula cl.
+  Proof. induction cl as [|c cl IH]; [|pose proof check_clause_regex_size c]; size_cbn; lia. Qed.
+
+  Lemma check_conjunct_regex_rev_size:
+    forall pf, expanded_size (check_conjunct_regex x_char semicolon_char (rev pf)) <=
+      1 + 4 * length pf + 4 * num_literals_pos_formula pf.
+  Proof.
+    intro pf; pose proof check_conjunct_regex_size (rev pf) as H;
+      rewrite length_rev, num_literals_pos_formula_rev in H; lia.
+  Qed.
+
+  Section NegLookaheadEncoding.
+    Context (q: qbf).
+
+    (* Negation costs one extra node (for the negative lookahead). *)
+    Lemma check_formula_regex_size:
+      expanded_size (RegexEncoding.check_formula_regex x_char semicolon_char (snd q)) <=
+        2 + 4 * num_clauses_qbf q + 4 * num_literals_qbf q.
+    Proof.
+      measure_unfold; destruct (snd q) as [pf|pf]; pose proof check_conjunct_regex_rev_size pf;
+        cbn [RegexEncoding.check_formula_regex]; size_cbn; lia.
+    Qed.
+
+    Lemma theRegex_aux_size:
+      forall ql v, expanded_size (RegexEncoding.theRegex_aux q x_char semicolon_char v ql) <=
+        9 * length ql + 2 + 4 * num_clauses_qbf q + 4 * num_literals_qbf q.
+    Proof.
+      intro ql; induction ql as [|[] ql IH]; intro v;
+        [pose proof check_formula_regex_size | (pose proof (IH (S v))) ..]; size_cbn; lia.
+    Qed.
+
+    Theorem theRegex_size_parts:
+      expanded_size (RegexEncoding.theRegex q x_char semicolon_char) <=
+        9 * length (fst q) + 4 * num_clauses_qbf q + 4 * num_literals_qbf q + 2.
+    Proof. unfold RegexEncoding.theRegex; pose proof theRegex_aux_size (fst q) 1; lia. Qed.
+
+    Theorem theRegex_size:
+      expanded_size (RegexEncoding.theRegex q x_char semicolon_char) <= 9 * qbf_size q.
+    Proof. unfold qbf_size; pose proof theRegex_size_parts; lia. Qed.
+  End NegLookaheadEncoding.
+
+End Size.

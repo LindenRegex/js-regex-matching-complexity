@@ -1,6 +1,7 @@
 (** * QBF encodings but written in Warblre instead of Linden *)
 
-From JsRegexOptp Require Import Qbf RegexEncoding GroupMaps HardnessProofs WarblreExtensions.
+From JsRegexOptp Require Import Qbf RegexEncoding GroupMaps HardnessProofs MembershipProof
+  WarblreExtensions.
 From JsRegexOptp Require Import Basics.
 From JsRegexOptp Require RegexEncodingPoslk HardnessPoslk.
 From Linden Require Import LWParameters Chars Groups Semantics Tree Tactics
@@ -10,6 +11,9 @@ From Warblre Require Import Patterns Numeric Node NodeProps StaticSemantics Resu
   EarlyErrors Parameters RegExpRecord Semantics Frontend Notation Errors Typeclasses.
 From Stdlib Require Import List Lia PeanoNat ZArith.
 Import ListNotations.
+
+(* Linden is imported after us, so its own [regex_size] would win here. *)
+Local Notation expanded_size := Basics.expanded_size.
 
 Section WarblreRegexEncoding.
   Context {params: LindenParameters}.
@@ -68,6 +72,35 @@ Section WarblreRegexEncoding.
 
   Definition theRegex_w := theRegex_w_aux (fst q).
 
+  Lemma check_clause_aux_size: forall c,
+      pattern_size (check_clause_regex_aux_w c) <= 1 + 4 * length c.
+  Proof. induction c as [|l c IH]; cbn; [|destruct l; cbn]; lia. Qed.
+
+  Lemma check_conjunct_size: forall cl,
+      pattern_size (check_conjunct_regex_w cl)
+      <= 1 + 4 * length cl + 4 * num_literals_pos_formula cl.
+  Proof. induction cl as [|c cl IH]; cbn; [|pose proof check_clause_aux_size c; cbn]; lia. Qed.
+
+  Lemma check_formula_size: forall f,
+      pattern_size (check_formula_regex_w f)
+      <= 2 + 4 * num_clauses_formula f + 4 * num_literals_formula f.
+  Proof.
+    intros [pf|pf]; unfold num_clauses_formula, num_literals_formula; cbn;
+      pose proof check_conjunct_size (rev pf); rewrite num_literals_pos_formula_rev, length_rev in *; lia.
+  Qed.
+
+  Lemma theRegex_w_aux_size: forall ql,
+      pattern_size (theRegex_w_aux ql)
+      <= 8 * length ql + pattern_size (check_formula_regex_w (snd q)).
+  Proof. induction ql as [|[|] ql IH]; cbn; lia. Qed.
+
+  Theorem theRegex_w_size: pattern_size theRegex_w <= 8 * qbf_size q.
+  Proof.
+    unfold theRegex_w, qbf_size, num_clauses_qbf, num_literals_qbf.
+    pose proof theRegex_w_aux_size (fst q); pose proof check_formula_size (snd q); lia.
+  Qed.
+
+  (* [n] is the number of capturing groups before [wr]. *)
   Definition enc (nb n k: nat) (wr: Patterns.Regex) (lr: regex): Prop :=
     StaticSemantics.countLeftCapturingParensWithin_impl wr = k /\
     num_groups lr = k /\
@@ -267,6 +300,39 @@ Section WarblreRegexEncoding.
 
   Definition theRegex_poslk_w := theRegex_poslk_w_aux (fst q).
 
+  Lemma negation_regex_w_size rsub z:
+      pattern_size (negation_regex_w rsub z) = 18 + pattern_size rsub.
+  Proof.
+    unfold negation_regex_w, check_n_regex_w, capture_n_regex_w,
+      x_semicolon_star_w, WBackref; cbn [pattern_size]; lia.
+  Qed.
+
+  Lemma check_formula_poslk_size:
+    pattern_size check_formula_regex_poslk_w
+    <= 19 + 4 * num_clauses_qbf q + 4 * num_literals_qbf q.
+  Proof.
+    unfold check_formula_regex_poslk_w, num_clauses_qbf, num_literals_qbf,
+      num_clauses_formula, num_literals_formula; cbv zeta.
+    pose proof check_conjunct_size (rev (inner_pos_formula (snd q))) as H.
+    rewrite num_literals_pos_formula_rev, length_rev in H.
+    destruct (snd q); cbn [inner_pos_formula] in H |- *;
+      [lia | rewrite negation_regex_w_size; lia].
+  Qed.
+
+  Lemma theRegex_poslk_w_aux_size: forall ql,
+      pattern_size (theRegex_poslk_w_aux ql)
+      <= 25 * length ql + pattern_size check_formula_regex_poslk_w.
+  Proof.
+    induction ql as [|[|] ql IH]; cbn [theRegex_poslk_w_aux length];
+      rewrite ?negation_regex_w_size; unfold def_var_regex_w; cbn [pattern_size]; lia.
+  Qed.
+
+  Theorem theRegex_poslk_w_size: pattern_size theRegex_poslk_w <= 25 * qbf_size q.
+  Proof.
+    unfold theRegex_poslk_w, qbf_size.
+    pose proof theRegex_poslk_w_aux_size (fst q); pose proof check_formula_poslk_size; lia.
+  Qed.
+
   Definition ngroups_form: nat := match snd q with PosForm _ => 0 | NegForm _ => 1 end.
 
   Fixpoint ngroups_poslk (ql: list quantifier): nat :=
@@ -340,7 +406,8 @@ Section WarblreRegexEncoding.
 
     Lemma theRegex_poslk_w_aux_enc:
       forall ql n,
-        n + length ql = nvar -> RegexEncodingPoslk.num_notexists ql <= RegexEncodingPoslk.num_notexists (fst q) ->
+        n + length ql = nvar ->
+        RegexEncodingPoslk.num_notexists ql <= RegexEncodingPoslk.num_notexists (fst q) ->
         enc NB n (ngroups_poslk ql) (theRegex_poslk_w_aux ql)
           (RegexEncodingPoslk.theRegex_aux x_char semicolon_char n_char q (S n) ql).
     Proof.
@@ -379,3 +446,23 @@ Section WarblreRegexEncoding.
   End WellFormedPoslk.
 
 End WarblreRegexEncoding.
+
+Section Size.
+  Context {params: LindenParameters}.
+  Context (x_char semicolon_char n_char: Parameters.Character).
+
+  Theorem theString_size q:
+    length (theString q x_char semicolon_char n_char) <= 2 * qbf_size q.
+  Proof. unfold qbf_size; pose proof str_len q x_char semicolon_char n_char; lia. Qed.
+
+  Theorem reduction_size_linear q:
+      expanded_size (RegexEncoding.theRegex q x_char semicolon_char) <= 9 * qbf_size q /\
+      expanded_size (RegexEncodingPoslk.theRegex x_char semicolon_char n_char q) <=
+        31 * qbf_size q /\
+      length (theString q x_char semicolon_char n_char) <= 2 * qbf_size q.
+  Proof.
+    repeat split;
+      auto using theRegex_size, RegexEncodingPoslk.theRegex_poslk_size, theString_size.
+  Qed.
+
+End Size.
