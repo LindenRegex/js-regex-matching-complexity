@@ -1,5 +1,3 @@
-(* TODO: Upstream in Linden. *)
-
 From Linden Require Import Regex Parameters Semantics Chars StrictSuffix Tree Groups
   FunctionalSemantics FunctionalUtils GroupMapLemmas EquivLemmas Equivalence FlatMap.
 From Linden.Rewriting Require Import ProofSetup.

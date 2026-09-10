@@ -60,7 +60,6 @@ Section HardnessPoslk.
     intros c next pref. unfold read_char. rewrite char_match_refl. reflexivity.
   Qed.
 
-  (* TODO Move to Linden *)
   Lemma gm_add_close_open:
     forall startIdx endIdx, startIdx <= endIdx ->
       forall gm gid, GroupMap.close endIdx gid (GroupMap.open startIdx gid gm) =

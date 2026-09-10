@@ -1,5 +1,3 @@
-(* TODO: Upstream in Warblre. *)
-
 From Warblre Require Import Patterns Numeric Node NodeProps StaticSemantics Result
   Base EarlyErrors Parameters RegExpRecord Semantics Frontend Notation Errors Typeclasses Match.
 From Stdlib Require Import List Lia PeanoNat ZArith.
