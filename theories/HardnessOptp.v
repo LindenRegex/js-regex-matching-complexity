@@ -416,7 +416,6 @@ Section LexSatWarblre.
 
   Lemma lexsat_w_exec_result (flags: RegExpFlags) (rer: RegExpRecord):
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       rer = rer_of wr flags ->
       exists inst,
         regExpInitialize wr flags = Success inst /\

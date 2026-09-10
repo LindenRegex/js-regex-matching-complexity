@@ -74,7 +74,7 @@ Section EndToEnd.
   Qed.
 
   Context (x_char semicolon_char n_char: Parameters.Character).
-  Context (global ignoreCase multiline dotAll: bool).
+  Context (hasIndices global ignoreCase multiline dotAll: bool).
 
   (* We set the `sticky` flag to true (anchored search). *)
   Let flags := reg_exp_flags hasIndices global ignoreCase multiline dotAll tt true.
@@ -267,7 +267,7 @@ Section EndToEnd.
       intros s inp.
       split; [apply (fuel_budget_source wr inp)|].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]].
+                  eq_refl eq_refl) as [inst [INIT RES]].
       exists inst, (linden_result rer lr inp).
       split; [exact INIT|]; split; [apply compute_result_poly; reflexivity | exact RES].
     Qed.
@@ -360,7 +360,7 @@ Section EndToEnd.
         auto using theRegex_w_size, theString_size, lexsat_w_earlyErrors,
           lexsat_w_nolk, lexsat_w_nolb.
       destruct (lexsat_w_exec_result x_char semicolon_char nv pf wf_pf n_char flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]].
+                  eq_refl eq_refl) as [inst [INIT RES]].
       exists inst; split; [exact INIT|]; eapply exec_array_transfer; [exact RES|].
       apply lexsat_answer_flags with (flags := flags); auto.
     Qed.
@@ -539,7 +539,7 @@ Section EndToEnd.
       destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
         as [best (PARSE & LEN & EXECP)].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]].
+                  eq_refl eq_refl) as [inst [INIT RES]].
       exists inst, best; rewrite EXECP; auto.
     Qed.
   End OptpMembership.

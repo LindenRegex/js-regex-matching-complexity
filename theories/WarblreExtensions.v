@@ -143,15 +143,47 @@ End CharPos.
 Definition defined_bits {A} (l: list (option A)): list bool :=
   List.map (fun o => match o with Some _ => true | None => false end) l.
 
+Definition capture_substring {params: Parameters} (S: Parameters.String)
+    (c: option Notation.CaptureRange): option Parameters.String :=
+  match c with
+  | None => None
+  | Some cr =>
+      Some (String.substring S
+              (String.getStringIndex S (Z.to_nat (Notation.CaptureRange.startIndex cr)))
+              (String.getStringIndex S (Z.to_nat (Notation.CaptureRange.endIndex cr))))
+  end.
+
+Definition capture_record {params: Parameters} (S: Parameters.String)
+    (c: option Notation.CaptureRange): option MatchRecord :=
+  match c with
+  | None => None
+  | Some cr =>
+      Some (MatchRecord.mk
+              (String.getStringIndex S (Z.to_nat (Notation.CaptureRange.startIndex cr)))
+              (String.getStringIndex S (Z.to_nat (Notation.CaptureRange.endIndex cr))))
+  end.
+
+Definition match_substring {params: Parameters}
+    (S: Parameters.String) (ms: Notation.MatchState): Parameters.String :=
+  String.substring S 0
+    (String.getStringIndex S (Z.to_nat (Notation.MatchState.endIndex ms))).
+
 Definition exec_agrees {params: Parameters}
     (R: RegExpInstance) (S: Parameters.String) (res: option Notation.MatchState): Prop :=
   match regExpExec R S, res with
   | Success (Null _), None => True
   | Success (Exotic A _), Some ms =>
-      defined_bits (List.tl (ExecArrayExotic.array A))
-      = defined_bits (Notation.MatchState.captures ms)
+      ExecArrayExotic.index A = 0 /\
+      ExecArrayExotic.input A = S /\
+      ExecArrayExotic.array A
+      = Some (match_substring S ms)
+        :: List.map (capture_substring S) (Notation.MatchState.captures ms)
   | _, _ => False
   end.
+
+Lemma defined_bits_captures {params: Parameters} (S: Parameters.String) cs:
+    defined_bits (List.map (capture_substring S) cs) = defined_bits cs.
+Proof. unfold defined_bits; rewrite map_map; apply map_ext; now intros []. Qed.
 
 (* Laws on the string operations of [Parameters] needed by [regExpBuiltinExec] *)
 Class StringLaws {params: Parameters}: Prop := {
@@ -282,68 +314,111 @@ Section ExecSucceeds.
   Local Hint Extern 1 (_ <= _) => lia : core.
 
   Lemma getMatchString_ok a b: a <= b -> b <= String.length S ->
-      exists v, getMatchString S (MatchRecord.mk a b) = Success v.
+      getMatchString S (MatchRecord.mk a b) = Success (String.substring S a b).
   Proof.
-    intros AB%Nat.leb_le BS%Nat.leb_le; unfold getMatchString; cbn; rewrite AB, BS; cbn; eauto.
+    intros AB%Nat.leb_le BS%Nat.leb_le; unfold getMatchString; cbn; now rewrite AB, BS.
   Qed.
 
-  Lemma capture_ok c: Match.CaptureRange.Valid str c ->
-      (exists v, capture_to_record S c = Success v)
-      /\ (exists v, capture_to_value S c = Success v).
+  Lemma getMatchIndexPair_ok a b: a <= b -> b <= String.length S ->
+      getMatchIndexPair S (MatchRecord.mk a b) = Success (a, b).
   Proof.
-    inversion 1; subst; cbn; [|now eauto].
+    intros AB%Nat.leb_le BS%Nat.leb_le; unfold getMatchIndexPair; cbn; now rewrite AB, BS.
+  Qed.
+
+  Lemma capture_to_record_ok c: Match.CaptureRange.Valid str c ->
+      capture_to_record S c = Success (capture_record S c).
+  Proof.
+    destruct 1; cbn; [|reflexivity].
     unfold Match.IteratorOn, match_record in *; rewrite !from_int_ok by lia; cbn.
-    rewrite (proj2 (Nat.leb_le _ _)) by (apply getStringIndex_mono; lia); cbn.
-    edestruct getMatchString_ok as [? ->];
-      [apply getStringIndex_mono; lia | apply getStringIndex_length; lia
-      | cbn [Result.bind]; eauto].
+    now rewrite (proj2 (Nat.leb_le _ _)) by auto using getStringIndex_mono.
+  Qed.
+
+  Lemma capture_to_value_ok c: Match.CaptureRange.Valid str c ->
+      capture_to_value S c = Success (capture_substring S c).
+  Proof.
+    destruct 1; cbn; [|reflexivity].
+    unfold Match.IteratorOn, match_record in *; rewrite !from_int_ok by lia; cbn.
+    rewrite (proj2 (Nat.leb_le _ _)) by auto using getStringIndex_mono; cbn.
+    now rewrite getMatchString_ok by auto using getStringIndex_mono, getStringIndex_length.
+  Qed.
+
+  Lemma capture_record_pair c: Match.CaptureRange.Valid str c ->
+    forall mr, capture_record S c = Some mr ->
+      exists p, getMatchIndexPair S mr = Success p.
+  Proof.
+    destruct 1; cbn; intros ? [= <-]; unfold Match.IteratorOn in *.
+    eexists; auto using getMatchIndexPair_ok, getStringIndex_mono, getStringIndex_length.
   Qed.
 
   Notation WForall := (@Warblre.utils.List.List.Forall.Forall _ MatchError _).
+
+  Lemma captures_to_array_ok: forall cs, WForall cs (Match.CaptureRange.Valid str) ->
+      captures_to_array S cs = Success (List.map (capture_substring S) cs).
+  Proof.
+    induction cs as [|c cs IH]; [easy|]; intros []%Warblre.utils.List.List.Forall.cons_inv.
+    cbn [captures_to_array]; now rewrite capture_to_value_ok, IH by assumption.
+  Qed.
+
+  Lemma captures_to_indices_ok: forall cs, WForall cs (Match.CaptureRange.Valid str) ->
+      captures_to_indices S cs = Success (List.map (capture_record S) cs).
+  Proof.
+    induction cs as [|c cs IH]; [easy|]; intros []%Warblre.utils.List.List.Forall.cons_inv.
+    cbn [captures_to_indices]; now rewrite capture_to_record_ok, IH by assumption.
+  Qed.
+
+  Lemma makeMatchIndicesArray_ok: forall cs, WForall cs (Match.CaptureRange.Valid str) ->
+      exists v, makeMatchIndicesArray S (List.map (capture_record S) cs) = Success v.
+  Proof.
+    induction cs as [|c cs IH]; cbn [List.map makeMatchIndicesArray]; [eauto|];
+      intros [Vc F]%Warblre.utils.List.List.Forall.cons_inv; destruct (IH F) as [? ->].
+    destruct (capture_record S c) as [mr|] eqn:E;
+      [destruct (capture_record_pair c Vc mr E) as [? ->]|];
+      cbn [Result.bind]; eauto.
+  Qed.
+
+  Lemma makeMatchIndicesGroupList_ok: forall cs gns,
+      WForall cs (Match.CaptureRange.Valid str) -> length gns = length cs ->
+      exists v, makeMatchIndicesGroupList S (List.map (capture_record S) cs) gns = Success v.
+  Proof.
+    induction cs as [|c cs IH]; intros [|gn gns] F LEN; cbn [length] in LEN; try discriminate;
+      cbn [List.map makeMatchIndicesGroupList]; [eauto|].
+    apply Warblre.utils.List.List.Forall.cons_inv in F as [Vc F];
+      destruct (IH gns F ltac:(lia)) as [? ->].
+    destruct (capture_record S c) as [mr|] eqn:E;
+      [destruct (capture_record_pair c Vc mr E) as [? ->]|];
+      destruct gn; cbn [Result.bind]; eauto.
+  Qed.
+
+  Lemma MakeMatchIndicesGroups_ok mr cs gns hasGroups:
+      WForall cs (Match.CaptureRange.Valid str) -> length gns = length cs ->
+      exists v,
+        MakeMatchIndicesGroups S (mr :: List.map (capture_record S) cs) gns hasGroups
+        = Success v.
+  Proof.
+    intros F LEN; unfold MakeMatchIndicesGroups.
+    rewrite (proj2 (Nat.eqb_eq _ _)) by (cbn; rewrite length_map; lia).
+    destruct (makeMatchIndicesGroupList_ok cs gns F LEN) as [? ->], hasGroups;
+      cbn [Result.bind negb]; eauto.
+  Qed.
 
   (* Group names are read by position, starting at [i]. *)
   Lemma captures_ok (r: Patterns.Regex): forall cs i,
       WForall cs (Match.CaptureRange.Valid str) -> 1 <= i ->
       i + length cs <= 1 + StaticSemantics.countLeftCapturingParensWithin_impl r ->
-      (exists v, captures_to_array S cs = Success v /\ length v = length cs)
-      /\ (exists v, captures_to_indices S cs = Success v)
-      /\ (exists v, captures_to_groupnames r cs i = Success v)
+      (exists v, captures_to_groupnames r cs i = Success v /\ length v = length cs)
       /\ (exists v, captures_to_groupsmap r S cs i = Success v).
   Proof.
     induction cs as [|c cs IH]; intros i F LO HI;
-      cbn [captures_to_array captures_to_indices captures_to_groupnames
-           captures_to_groupsmap length] in *; [eauto 10|].
+      cbn [captures_to_groupnames captures_to_groupsmap length] in *; [eauto|].
     apply Warblre.utils.List.List.Forall.cons_inv in F as [Vc F];
-      destruct (capture_ok c Vc) as [[? ->] [? ->]].
+      rewrite capture_to_value_ok by assumption.
     destruct (nth_group_ok r i ltac:(lia)) as (gn & ? & ? & ->),
-             (IH (i + 1) F ltac:(lia) ltac:(lia)) as [(? & -> & <-) [[? ->] [[? ->] [? ->]]]].
-    destruct gn; cbn; eauto 10.
-  Qed.
-
-  Lemma capture_to_value_defined c v:
-      capture_to_value S c = Success v ->
-      match v with Some _ => true | None => false end
-      = match c with Some _ => true | None => false end.
-  Proof.
-    destruct c as [cr|]; intro E; cbn in E; [|now injection E as <-]; destruct cr; cbn in E;
-      do 2 (destruct NonNegInt.from_int; cbn in E; [|discriminate]);
-      destruct match_record; cbn in E; [|discriminate];
-      destruct getMatchString; cbn in E; [|discriminate]; now injection E as <-.
-  Qed.
-
-  Lemma captures_to_array_defined: forall cs v,
-      captures_to_array S cs = Success v -> defined_bits v = defined_bits cs.
-  Proof.
-    induction cs as [|c cs IH]; intros v E; cbn in E; [now injection E as <-|].
-    destruct (capture_to_value S c) eqn:CV; cbn in E; [|discriminate].
-    destruct (captures_to_array S cs) eqn:?; cbn in E; [|discriminate].
-    injection E as <-; unfold defined_bits; cbn [List.map]; f_equal;
-      eauto using capture_to_value_defined.
+             (IH (i + 1) F ltac:(lia) ltac:(lia)) as [(? & -> & <-) [? ->]].
+    destruct gn; cbn; eauto.
   Qed.
 
   Lemma regExpBuiltinExec_sticky_exotic R ms:
       RegExpFlags.y (RegExpInstance.originalFlags R) = true ->
-      RegExpFlags.d (RegExpInstance.originalFlags R) = false ->
       RegExpInstance.lastIndex R = 0%Z ->
       RegExpInstance.regExpMatcher R str 0 = Success (Some ms) ->
       Match.MatchState.Valid str (RegExpInstance.regExpRecord R) ms ->
@@ -351,9 +426,13 @@ Section ExecSucceeds.
       = RegExpRecord.capturingGroupsCount (RegExpInstance.regExpRecord R) ->
       exists A R',
         regExpBuiltinExec R S = Success (Exotic A R') /\
-        defined_bits (List.tl (ExecArrayExotic.array A)) = defined_bits (Notation.MatchState.captures ms).
+        ExecArrayExotic.index A = 0 /\
+        ExecArrayExotic.input A = S /\
+        ExecArrayExotic.array A
+        = Some (match_substring S ms)
+          :: List.map (capture_substring S) (Notation.MatchState.captures ms).
   Proof.
-    intros STICKY NOIND LAST MATCH (_ & (? & ?) & LENC & VCAPS) CAPS; unfold regExpBuiltinExec.
+    intros STICKY LAST MATCH (_ & (? & ?) & LENC & VCAPS) CAPS; unfold regExpBuiltinExec.
     rewrite LAST, STICKY, Bool.andb_false_r, (Nat.add_comm _ 2); simpl;
       rewrite MATCH; cbn [Result.bind].
     rewrite (proj2 (EqDec.inversion_false _ _)) by discriminate; cbn [Result.bind negb].
@@ -361,13 +440,16 @@ Section ExecSucceeds.
       RegExpInstance.originalSource RegExpInstance.originalFlags RegExpInstance.regExpRecord].
     unfold captures_to_groups_map, captures_to_group_names, match_record.
     rewrite from_int_ok by lia; cbn [Result.bind].
-    rewrite NOIND, LENC, Nat.eqb_refl; cbn [Result.bind negb Nat.leb].
-    edestruct getMatchString_ok as [? ->];
-      [solve [lia | apply getStringIndex_length; lia] .. | cbn [Result.bind]].
-    edestruct captures_ok as [(? & ARR & L2) [[? ->] [[? ->] [? ->]]]]; [eassumption | lia | lia |].
-    rewrite ARR; cbn [Result.bind length]; rewrite L2, LENC, Nat.add_1_r, Nat.eqb_refl; cbn [negb].
-    destruct (StaticSemantics.defines_groups _); cbn [Result.bind];
-      eauto using captures_to_array_defined.
+    rewrite LENC, Nat.eqb_refl; cbn [Result.bind negb Nat.leb].
+    rewrite getMatchString_ok by auto using getStringIndex_length; cbn [Result.bind].
+    rewrite captures_to_array_ok by eassumption; cbn [Result.bind length].
+    rewrite length_map, LENC, Nat.add_1_r, Nat.eqb_refl.
+    edestruct captures_ok as [(gns & -> & LGN) [? ->]]; [eassumption | lia | lia |].
+    rewrite captures_to_indices_ok by eassumption; cbn [Result.bind].
+    rewrite getMatchIndexPair_ok by auto using getStringIndex_length.
+    edestruct makeMatchIndicesArray_ok as [? ->]; [eassumption|].
+    edestruct MakeMatchIndicesGroups_ok as [? ->]; [eassumption | exact LGN |].
+    destruct (StaticSemantics.defines_groups _), (RegExpFlags.d _); do 2 eexists; repeat split.
   Qed.
 
   Lemma none_iff_false {A} (res: option A) (b: bool):
@@ -400,7 +482,7 @@ Section ExecSucceeds.
       end.
   Proof.
     intros ARR ANS; unfold exec_agrees in ARR; destruct res, (regExpExec R S) as [[|]|]; try easy.
-    now rewrite ARR.
+    destruct ARR as (_ & _ & ->); cbn [List.tl]; now rewrite (defined_bits_captures S).
   Qed.
 
 
@@ -429,10 +511,9 @@ Section ExecSucceeds.
 
     Lemma exec_sticky:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       forall res, m str 0 = Success res -> exec_agrees inst S res.
     Proof.
-      intros STICKY NOIND [ms|] MATCH; unfold exec_agrees, regExpExec.
+      intros STICKY [ms|] MATCH; unfold exec_agrees, regExpExec.
       - edestruct regExpBuiltinExec_sticky_exotic with (R := inst) (ms := ms) as (? & ? & -> & ?);
           cbn; eauto using inst_valid, inst_caps.
       - destruct (proj2 (regExpBuiltinExec_sticky inst None STICKY eq_refl MATCH) eq_refl)

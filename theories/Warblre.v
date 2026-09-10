@@ -212,14 +212,12 @@ Section MatchesTransport.
 
     Corollary matches_regExpExec_result flags:
         RegExpFlags.y flags = true ->
-        RegExpFlags.d flags = false ->
         rer = rer_of wr flags ->
         exists inst,
           regExpInitialize wr flags = Success inst /\
           exec_agrees inst str (EquivMain.compilePattern wr rer str 0).
     Proof.
-      intros STICKY NOIND Heqrer;
-        destruct matcher_shape as [m [res (COMP & EXEC & RES)]]; rewrite RES.
+      intros STICKY Heqrer; destruct matcher_shape as [m [res (COMP & EXEC & RES)]]; rewrite RES.
       eexists; split; [eauto using exec_initialize|].
       eauto using exec_sticky, EarlyErrors.earlyErrors, linden_StringLaws.
     Qed.
@@ -269,42 +267,33 @@ Section MatchesTransport.
           regExpInitialize wr flags = Success inst /\
           ((exists inst', regExpExec inst str = Success (Null inst')) <-> b = false).
     Proof.
-      intros ? Heqrer.
-      pose proof matches_shape flags Heqrer as [m [res [INIT [EXEC IFF]]]].
-      eexists; split; [exact INIT|]; unfold regExpExec.
-      apply iff_trans with (B := res = None);
-        [apply (@regExpBuiltinExec_sticky (@LWParameters params) str _ res); simpl; auto
-        |now apply none_iff_false].
+      intros STICKY [inst [INIT RES]]%(matches_regExpExec_result flags STICKY); exists inst.
+      destruct (exec_null_exotic _ _ _ RES) as [-> _]; eauto using none_iff_false, matches_warblre.
     Qed.
 
     Corollary matches_regExpExec_exotic flags:
         RegExpFlags.y flags = true ->
-        RegExpFlags.d flags = false ->
         rer = rer_of wr flags ->
         exists inst,
           regExpInitialize wr flags = Success inst /\
           ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <-> b = true).
     Proof.
-      intros STICKY NOIND [inst [INIT RES]]%(matches_regExpExec_result flags STICKY NOIND).
-      exists inst; split; [exact INIT|]; destruct (exec_null_exotic _ _ _ RES) as [_ ->].
-      apply matches_warblre.
+      intros STICKY [inst [INIT RES]]%(matches_regExpExec_result flags STICKY); exists inst.
+      destruct (exec_null_exotic _ _ _ RES) as [_ ->]; eauto using matches_warblre.
     Qed.
 
   End AnyRecord.
 
   Corollary matches_regExpExec_result_flags flags rer:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       rer = rer_of wr flags ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         exec_agrees inst str (to_MatchState (linden_result rer lr (init_input str))
                                             (RegExpRecord.capturingGroupsCount rer)).
   Proof.
-    intros STICKY NOIND Heqrer.
-    pose proof (f_equal RegExpRecord.capturingGroupsCount Heqrer) as CAPS.
-    destruct (matches_regExpExec_result rer CAPS flags STICKY NOIND Heqrer) as [inst [INIT RES]].
-    exists inst; split; [exact INIT | now rewrite <- warblre_result].
+    intros STICKY Heqrer; pose proof (f_equal RegExpRecord.capturingGroupsCount Heqrer) as CAPS.
+    rewrite <- (warblre_result rer CAPS); eauto using matches_regExpExec_result.
   Qed.
 End MatchesTransport.
 
@@ -452,7 +441,6 @@ Section WarblreHardness.
 
     Theorem qbf_regex_warblre_frontend_exotic:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <->
@@ -461,7 +449,6 @@ Section WarblreHardness.
 
     Theorem qbf_regex_warblre_frontend_all:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       regex_test wr flags str (qbf_true q).
     Proof.
       intros; apply frontend_all;
@@ -563,7 +550,6 @@ Section WarblreHardnessPoslk.
 
     Theorem qbf_poslk_warblre_frontend_exotic:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <->
@@ -572,7 +558,6 @@ Section WarblreHardnessPoslk.
 
     Theorem qbf_poslk_warblre_frontend_all:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       regex_test wr flags str (qbf_true q).
     Proof.
       intros; apply frontend_all;
