@@ -79,7 +79,7 @@ Section EndToEnd.
   Qed.
 
   Context (x_char semicolon_char n_char: Parameters.Character).
-  Context (global ignoreCase multiline dotAll: bool).
+  Context (hasIndices global ignoreCase multiline dotAll: bool).
 
   (* We set the `sticky` flag to true (anchored search). *)
   Let flags := reg_exp_flags hasIndices global ignoreCase multiline dotAll tt true.
@@ -290,7 +290,7 @@ Section EndToEnd.
       intros s inp.
       split; [apply (fuel_budget_source wr inp)|].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]].
+                  eq_refl eq_refl) as [inst [INIT RES]].
       exists inst, (linden_result rer lr inp).
       split; [exact INIT|]; split; [apply pspace_algo_poly; reflexivity | exact RES].
     Qed.
@@ -383,7 +383,7 @@ Section EndToEnd.
       split; [split; [apply lexsat_w_nolk | apply lexsat_w_nolb]; exact wf_pf|].
       split; [exact (lexsat_w_frag x_char semicolon_char nv pf wf_pf)|].
       destruct (lexsat_w_exec_result x_char semicolon_char nv pf wf_pf n_char flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]].
+                  eq_refl eq_refl) as [inst [INIT RES]].
       exists inst; split; [exact INIT | eapply exec_array_transfer; [exact RES|]].
       now apply (lexsat_answer_flags x_char semicolon_char n_char flags rer nv pf
                    wf_pf x_semicolon_neq eq_refl).
@@ -569,7 +569,7 @@ Section EndToEnd.
       destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
         as [best OPTP].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]]; destruct OPTP as (? & ? & EXECP).
+                  eq_refl eq_refl) as [inst [INIT RES]]; destruct OPTP as (? & ? & EXECP).
       exists inst, best; unfold linden_result, first_leaf in RES; rewrite EXECP; auto 10.
     Qed.
   End OptpMembership.

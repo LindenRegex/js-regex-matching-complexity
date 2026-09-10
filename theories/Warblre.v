@@ -213,17 +213,16 @@ Section MatchesTransport.
 
     Corollary matches_regExpExec_result flags:
         RegExpFlags.y flags = true ->
-        RegExpFlags.d flags = false ->
         rer = rer_of wr flags ->
         exists inst,
           regExpInitialize wr flags = Success inst /\
           exec_agrees inst str (EquivMain.compilePattern wr rer str 0).
     Proof.
-      intros STICKY NOIND Heqrer.
+      intros STICKY Heqrer.
       pose proof compiled_shape flags Heqrer as [m [res (COMP & INIT & EXEC & RES)]].
       eexists; split; [exact INIT|]; rewrite RES.
       exact (@exec_sticky (@LWParameters params) str _ wr flags rer m
-               (EarlyErrors.earlyErrors _ EE) COMP Heqrer STICKY NOIND res EXEC).
+               (EarlyErrors.earlyErrors _ EE) COMP Heqrer STICKY res EXEC).
     Qed.
 
     Context (b: bool).
@@ -285,14 +284,13 @@ Section MatchesTransport.
 
     Corollary matches_regExpExec_exotic flags:
         RegExpFlags.y flags = true ->
-        RegExpFlags.d flags = false ->
         rer = rer_of wr flags ->
         exists inst,
           regExpInitialize wr flags = Success inst /\
           ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <-> b = true).
     Proof.
-      intros STICKY NOIND Heqrer.
-      destruct (matches_regExpExec_result flags STICKY NOIND Heqrer) as [inst [INIT RES]].
+      intros STICKY Heqrer.
+      destruct (matches_regExpExec_result flags STICKY Heqrer) as [inst [INIT RES]].
       exists inst; split; [exact INIT|]; rewrite <- matches_warblre.
       exact (proj2 (exec_null_exotic str inst _ RES)).
     Qed.
@@ -301,18 +299,17 @@ Section MatchesTransport.
 
   Corollary matches_regExpExec_result_flags flags rer:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       rer = rer_of wr flags ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         exec_agrees inst str (to_MatchState (linden_result rer lr (init_input str))
                                             (RegExpRecord.capturingGroupsCount rer)).
   Proof.
-    intros STICKY NOIND Heqrer.
+    intros STICKY Heqrer.
     assert (CAPS: RegExpRecord.capturingGroupsCount rer
                   = StaticSemantics.countLeftCapturingParensWithin wr nil)
       by (now rewrite Heqrer).
-    destruct (matches_regExpExec_result rer CAPS flags STICKY NOIND Heqrer) as [inst [INIT RES]].
+    destruct (matches_regExpExec_result rer CAPS flags STICKY Heqrer) as [inst [INIT RES]].
     exists inst; split; [exact INIT | now rewrite <- warblre_result].
   Qed.
 End MatchesTransport.
@@ -467,7 +464,6 @@ Section WarblreHardness.
 
     Theorem qbf_regex_warblre_frontend_exotic:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <->
@@ -476,7 +472,6 @@ Section WarblreHardness.
 
     Theorem qbf_regex_warblre_frontend_all:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       regex_test wr flags str (qbf_true q).
     Proof.
       intros; apply frontend_all;
@@ -581,7 +576,6 @@ Section WarblreHardnessPoslk.
 
     Theorem qbf_poslk_warblre_frontend_exotic:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <->
@@ -590,7 +584,6 @@ Section WarblreHardnessPoslk.
 
     Theorem qbf_poslk_warblre_frontend_all:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       regex_test wr flags str (qbf_true q).
     Proof.
       intros; apply frontend_all;
