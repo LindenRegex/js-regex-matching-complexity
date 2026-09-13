@@ -1,8 +1,10 @@
+From JsRegexOptp Require Import QbfPrenex.
+From JsRegexOptp Require Import Basics.
 From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
-From Linden Require Import Parameters Chars Groups Semantics Tree Tactics.
+From Linden Require Import Chars Groups Semantics Tree Tactics.
 From Linden.Rewriting Require Import ProofSetup.
 From Warblre Require Import Parameters RegExpRecord Base.
-Require Import List Lia.
+From Stdlib Require Import List Lia.
 Import ListNotations.
 
 Section Proofs.
@@ -30,35 +32,10 @@ Section Proofs.
   Definition inp_of_idx (i: nat) :=
     Input (List.skipn i str) (List.rev (List.firstn i str)).
 
-  Lemma list_sum_repeat:
-    forall k n: nat, list_sum (repeat k n) = n*k.
-  Proof.
-    clear n. induction n.
-    - simpl. reflexivity.
-    - simpl. rewrite IHn0. reflexivity.
-  Qed.
-
-  Lemma concat_repeat_len {A: Type}:
-    forall (l: list A) n, length (concat (repeat l n)) = length l * n.
-  Proof.
-    clear n. intros l n.
-    rewrite concat_length, map_repeat, list_sum_repeat. apply Nat.mul_comm.
-  Qed.
-
   Lemma str_len: length str = 2*(n+m)+1.
   Proof.
     unfold str, theString.
-    rewrite app_length, concat_repeat_len. reflexivity.
-  Qed.
-
-  Lemma rev_concat_repeat {A: Type}:
-    forall (l: list A) i, rev (concat (repeat l i)) = concat (repeat (rev l) i).
-  Proof.
-    induction i.
-    - reflexivity.
-    - replace (S i) with (i + 1) at 1 by lia. simpl.
-      rewrite repeat_app, concat_app, rev_app_distr. simpl.
-      rewrite app_nil_r. congruence.
+    rewrite length_app, concat_repeat_len. reflexivity.
   Qed.
 
   Lemma inp_of_idx_even:
@@ -99,7 +76,7 @@ Section Proofs.
   Lemma idx_inp_of_idx:
     forall i, i <= length str -> idx (inp_of_idx i) = i.
   Proof.
-    intros i LE. unfold idx, inp_of_idx. rewrite rev_length.
+    intros i LE. unfold idx, inp_of_idx. rewrite length_rev.
     apply firstn_length_le. auto.
   Qed.
 
@@ -118,26 +95,6 @@ Section Proofs.
           apply firstn_length_le. lia.
         }
         rewrite firstn_app_2. rewrite SKIPN, rev_app_distr. simpl. reflexivity.
-  Qed.
-
-  Lemma skipn_concat_repeat {A: Type}:
-    forall (l: list A) n i,
-      skipn (i * length l) (concat (repeat l n)) = concat (repeat l (n - i)).
-  Proof.
-    clear n. intros l n i. induction i.
-    - rewrite Nat.sub_0_r. reflexivity.
-    - destruct (Nat.lt_decidable i n).
-      + replace (n - i) with (S (n - S i)) in IHi by lia.
-        simpl in *.
-        rewrite <- skipn_skipn, IHi, skipn_app, skipn_all, Nat.sub_diag. reflexivity.
-      + replace (n - S i) with 0 by lia. simpl.
-        rewrite skipn_all2. 2: {
-          rewrite concat_repeat_len.
-          rewrite (Nat.mul_comm (length l) n).
-          change (length l + i * length l) with ((S i) * length l).
-          apply Nat.mul_le_mono_r. lia.
-        }
-        reflexivity.
   Qed.
 
   Lemma substr_var:
@@ -189,7 +146,7 @@ Section Proofs.
 
   Lemma read_backref_var_sat:
     forall (gm: group_map) (v: variable) (i: nat),
-      i < m -> wf_var n v -> wf_gm q gm ->
+      i < m -> wf_var n v -> wf_gm n gm ->
       gm_satisfies_var gm v = true -> read_backref rer gm v (inp_of_idx (2*(n+i))) forward = Some ([x_char], inp_of_idx (2*(n+i)+1)).
   Proof.
     intros gm v i INB_i WF_v WF_GM SAT.
@@ -201,8 +158,9 @@ Section Proofs.
       unfold gm_satisfies_var in SAT. rewrite FOUND in SAT. discriminate.
     }
     unfold read_backref. rewrite NOTFOUND.
+    unfold var_range.
     rewrite inp_of_idx_even at 1. 2: lia.
-    rewrite app_length, concat_length, map_repeat, list_sum_repeat. simpl length.
+    rewrite length_app, length_concat, map_repeat, list_sum_repeat. simpl length.
     replace (2*(v-1)+1-2*(v-1)) with 1 by lia.
     replace (S _ <=? 1) with false. 2: {
       symmetry. rewrite PeanoNat.Nat.leb_gt. lia.
@@ -215,7 +173,7 @@ Section Proofs.
 
   Lemma read_backref_var_unsat:
     forall (gm: group_map) (v: variable) (i: nat),
-      i < m -> wf_gm q gm ->
+      i < m -> wf_gm n gm ->
       gm_satisfies_var gm v = false -> read_backref rer gm v (inp_of_idx (2*(n+i))) forward = Some ([], inp_of_idx (2*(n+i))).
   Proof.
     intros gm v i INB_i WF_GM UNSAT. unfold gm_satisfies_var in UNSAT.
@@ -265,7 +223,7 @@ Section Proofs.
     (* Let lit be a well-formed literal and gm be a valid group map. *)
     forall (i: nat) (lit: literal) (inp: input) (gm: group_map),
       i < m -> wf_literal n lit ->
-      inp = inp_of_idx (2*(n+i)) -> wf_gm q gm ->
+      inp = inp_of_idx (2*(n+i)) -> wf_gm n gm ->
       (* Let t be the tree of r_lit with input inp(2*(n+i)) for some 0 ≤ i < m and group map gm. *)
       forall t, is_tree rer [Areg (check_literal_regex x_char lit)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -361,7 +319,7 @@ Section Proofs.
     (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map and 0 <= i < m. *)
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
       i < m -> wf_clause n c ->
-      inp = inp_of_idx (2*(n+i)) -> wf_gm q gm ->
+      inp = inp_of_idx (2*(n+i)) -> wf_gm n gm ->
       (* Let t be the tree of r with input inp(2*(n+i)) and group map gm. *)
       forall t, is_tree rer [Areg (check_clause_regex_aux x_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -456,34 +414,11 @@ Section Proofs.
     rewrite char_match_x_semicolon. reflexivity.
   Qed.
 
-
-  Lemma FlatMap_empty_iff {X Y: Type}:
-    forall (lx: list X) (f: X -> list Y -> Prop) (ly: list Y),
-      FlatMap.determ f -> FlatMap.FlatMap lx f ly ->
-      (ly <> [] <-> exists (x: X) (fx: list Y), In x lx /\ f x fx /\ fx <> []).
-  Proof.
-    intros lx f ly DETERM. induction 1.
-    - simpl. firstorder.
-    - specialize (IHFlatMap DETERM).
-      destruct ly as [|y ly].
-      + simpl. rewrite IHFlatMap. split; try solve[firstorder].
-        intros [x0 [fx H0]].
-        destruct H0. destruct H0.
-        * subst x0. exfalso. specialize (DETERM x [] fx).
-          rewrite <- DETERM in H1 by tauto. destruct H1. contradiction.
-        * firstorder.
-      + split. 2: rewrite <- app_comm_cons; discriminate.
-        intros _. exists x. exists (y :: ly). split.
-        * left. reflexivity.
-        * split; [auto|discriminate].
-  Qed.
-
-  (* Lemma specifying the behavior of the regex that checks a clause. *)
   Lemma check_clause_regex_spec:
     (* Let r be the regex checking the validity of a well-formed clause c, gm a valid group map, and 0 <= i < m. *)
     forall (i: nat) (c: clause) (inp: input) (gm: group_map),
       i < m -> wf_clause n c ->
-      inp = inp_of_idx (2*(n+i)) -> wf_gm q gm ->
+      inp = inp_of_idx (2*(n+i)) -> wf_gm n gm ->
       (* Let t be the tree of r on input inp(2*(n+i)) and group map gm. *)
       forall t, is_tree rer [Areg (check_clause_regex x_char semicolon_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -551,7 +486,7 @@ Section Proofs.
   Lemma check_conjunct_regex_spec:
     (* Let r be the regex checking the validity of the conjunction of clauses, and gm a valid group map. *)
     forall (inp: input) (gm: group_map),
-      inp = inp_of_idx (2*n) -> wf_gm q gm ->
+      inp = inp_of_idx (2*n) -> wf_gm n gm ->
       (* Let t be the tree of r on input inp(2*n) and group map gm. *)
       forall t, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev pos_form))] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -573,7 +508,7 @@ Section Proofs.
       split.
       + intros lf [EQ_lf|[]]. subst lf inp. f_equal. f_equal. lia.
       + split. * reflexivity. * discriminate.
-    - rewrite app_length, rev_app_distr. simpl.
+    - rewrite length_app, rev_app_distr. simpl.
       intros ? ? t TREE lflist EQ_lflist.
       inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
       rewrite app_nil_r in CONT. simpl in CONT.
@@ -673,7 +608,7 @@ Section Proofs.
   Lemma check_formula_regex_spec:
     (* Let r be the regex checking the validity of the possibly negated formula, and gm a valid group map. *)
     forall (inp: input) (gm: group_map),
-      inp = inp_of_idx (2*n) -> wf_gm q gm ->
+      inp = inp_of_idx (2*n) -> wf_gm n gm ->
       (* Let t be the tree of r on input inp(2*n) and group map gm. *)
       forall t, is_tree rer [Areg (check_formula_regex x_char semicolon_char form)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
@@ -814,23 +749,9 @@ Section Proofs.
     - reflexivity.
   Qed.
 
-  Lemma skipn_head {A: Type}:
-    forall (l: list A) (a: A) (i: nat), i < length l ->
-      skipn i l = nth i l a :: skipn (S i) l.
-  Proof.
-    clear q WF_q str n quants m pos_form form x_char semicolon_char n_char x_semicolon_neq params rer.
-    induction l.
-    - intros a i. simpl. lia.
-    - intros a' i. simpl. destruct i as [|i].
-      + simpl. reflexivity.
-      + intro INB. assert (i < length l) by lia.
-        simpl. rewrite IHl with (a := a') by auto.
-        reflexivity.
-  Qed.
-
   Lemma wf_gm_add:
-    forall gm, wf_gm q gm ->
-      forall i, i <= n -> wf_gm q (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm).
+    forall gm, wf_gm n gm ->
+      forall i, i <= n -> wf_gm n (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm).
   Proof.
     intros gm WF_gm i LE.
     unfold wf_gm in *. intros gid LE_GID.
@@ -869,18 +790,6 @@ Section Proofs.
     - intros [-> ->]. reflexivity.
   Qed.
 
-  Lemma app_nonempty_iff {A: Type}:
-    forall l1 l2: list A, l1 ++ l2 <> [] <-> l1 <> [] \/ l2 <> [].
-  Proof.
-    intros l1 l2. split.
-    - intro NONEMPTY. destruct l1 as [|x l1].
-      + right. auto.
-      + left. discriminate.
-    - intros [NONEMPTY1 | NONEMPTY2].
-      + destruct l1 as [|x l1]; try contradiction; discriminate.
-      + destruct l1 as [|x l1]; try discriminate; auto.
-  Qed.
-
   Theorem theRegex_aux_spec:
     (* We perform backwards induction on i ∈ {1, ..., n+1}. *)
     forall np1_minus_i i, i = n + 1 - np1_minus_i ->
@@ -888,7 +797,7 @@ Section Proofs.
     i <> 0 -> i <= n + 1 ->
       (* Let gm be a valid group map... *)
       forall gm: group_map,
-        wf_gm q gm ->
+        wf_gm n gm ->
         (* ... such that gm(i), gm(i+1), ..., gm(n) are undefined. *)
         (forall j, i <= j -> j <= n -> GroupMap.find j gm = None) ->
         forall inp qtail t,
@@ -1115,7 +1024,6 @@ Section Proofs.
           -- contradiction.
   Qed.
 
-
   (* TODO Move to Linden *)
   Definition regex_matches_string (rer: RegExpRecord) (r: regex) (s: LWParameters.string): Prop :=
     forall t: tree, is_tree rer [Areg r] (init_input s) GroupMap.empty forward t ->
@@ -1127,7 +1035,7 @@ Section Proofs.
     apply GroupMap.Facts.empty_o.
   Qed.
 
-  Lemma emptygm_wf: wf_gm q GroupMap.empty.
+  Lemma emptygm_wf: wf_gm n GroupMap.empty.
   Proof.
     unfold wf_gm. intros gid LE. left. apply emptygm_find. 
   Qed.
@@ -1162,3 +1070,24 @@ Section Proofs.
       apply H. unfold quants, form. rewrite equiv_gm_env_true. auto.
   Qed.
 End Proofs.
+
+Section PCNF.
+  Context {params: LindenParameters}.
+  Context (pq: pqbf).
+  Hypothesis (WF_pq: wf_pqbf pq).
+  Context (x_char semicolon_char n_char: Character).
+  Context (rer: RegExpRecord).
+  Hypothesis (x_semicolon_neq:
+    Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char).
+
+  Notation q := (qbf_of_pqbf pq).
+
+
+  Theorem pcnf_regex:
+    regex_matches_string rer (theRegex q x_char semicolon_char)
+      (theString q x_char semicolon_char n_char) <-> pqbf_true pq = true.
+  Proof.
+    rewrite <- qbf_of_pqbf_true; auto using qbf_regex, wf_qbf_of_pqbf.
+  Qed.
+
+End PCNF.
