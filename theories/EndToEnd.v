@@ -54,40 +54,28 @@ Section EndToEnd.
 
   (* TODO explain *)
   Theorem membership_state_size_bound:
-    forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (r: regex) (act: actions),
+    forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (act: actions),
       let lr := linden_of wr in
-      expanded_size r <= expanded_size lr ->
-      MembershipProof.act_from_regex r inp act dir ->
+      MembershipProof.act_from_regex lr inp act dir ->
       let n := expanded_size lr in
-      let acts := n + Nat.div2 (n * S n) in
       let frame := (1 + length (input_str inp)) * actions_size act in
-      actions_size act <= acts /\
-      (forall lk rlk, In (Areg (Lookaround lk rlk)) act ->
-                      expanded_size rlk <= expanded_size lr) /\
+      actions_size act <= n + Nat.div2 (n * S n) /\
       (no_lower_bound lr ->
        fuel_budget lr inp * frame
        <= S (3 * (1 + length (input_str inp)) * pattern_size wr * S (3 * pattern_size wr))
           * ((1 + length (input_str inp))
              * (3 * pattern_size wr * S (3 * pattern_size wr)))).
   Proof.
-    intros * LE AFR; cbv zeta.
-    pose proof MembershipProof.actions_size_bound' _ _ _ _ AFR _ eq_refl as ACT.
-    pose proof triangle_even (expanded_size r).
+    intros * AFR; cbv zeta.
+    pose proof MembershipProof.actions_size_bound' AFR as ACT.
+    split; [exact ACT|intro NLB].
+    apply PeanoNat.Nat.mul_le_mono;
+      [now apply fuel_budget_source|apply PeanoNat.Nat.mul_le_mono_l].
+    pose proof expanded_size_pos lr.
+    pose proof expanded_size_nolb lr NLB.
+    pose proof (linden_of_size wr: regex_size lr <= pattern_size wr).
     pose proof triangle_even (expanded_size lr).
-    assert (ACTS: actions_size act <= expanded_size lr
-                                      + Nat.div2 (expanded_size lr * S (expanded_size lr)))
-      by nia.
-    split; [exact ACTS|split].
-    - intros lk rlk IN; apply In_nth_error in IN as [i NTH].
-      pose proof MembershipProof.chunk_size_bound _ _ _ _ AFR i _ eq_refl as [CHK _].
-      rewrite (MembershipProof.nth_error_skipn act _ i NTH) in CHK; simpl in CHK; lia.
-    - intro NLB.
-      apply PeanoNat.Nat.mul_le_mono;
-        [now apply fuel_budget_source|apply PeanoNat.Nat.mul_le_mono_l].
-      pose proof expanded_size_pos lr.
-      pose proof expanded_size_nolb lr NLB.
-      pose proof (linden_of_size wr: regex_size lr <= pattern_size wr).
-      nia.
+    nia.
   Qed.
 
   Context (x_char semicolon_char n_char: Parameters.Character).
