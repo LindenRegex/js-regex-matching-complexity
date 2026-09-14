@@ -1036,18 +1036,17 @@ Section MembershipProof.
   Qed.
 
   (* The main corollary for bounding the size of the list of actions *)
-  Corollary actions_size_bound':
-    forall r inp act dir, act_from_regex r inp act dir ->
-      forall n, n = expanded_size r ->
-        actions_size act <= n + PeanoNat.Nat.div2 (n * S n).
+  Corollary actions_size_bound' {r inp act dir}:
+      act_from_regex r inp act dir ->
+      actions_size act
+      <= expanded_size r + PeanoNat.Nat.div2 (expanded_size r * S (expanded_size r)).
   Proof.
-    intros r inp act dir AFR n EQ_n.
+    intro AFR.
     pose proof actions_size_bound r inp act dir AFR 0 act eq_refl.
-    pose proof chunk_size_bound r inp act dir AFR 0 act eq_refl.
-    apply proj2 in H0.
+    pose proof chunk_size_bound r inp act dir AFR 0 act eq_refl as [_ CHK].
     pose proof sum_to_n_bound (num_checks act) (expanded_size r).
-    pose proof sum_to_n_n_formula n.
-    rewrite <- EQ_n in *. lia.
+    pose proof sum_to_n_n_formula (expanded_size r).
+    lia.
   Qed.
 
   Lemma is_strict_suffix_incr:
