@@ -70,7 +70,7 @@ Section OptpAlgo.
         | SLeaf lf => Success lf
         | SFail => NoMatch
         | SGo c' => optp_algo dir c' cs
-        | SBranch hi lo => optp_algo dir (if b then lo else hi) cs
+        | SBranch hi lo => optp_algo dir (if b then hi else lo) cs
         end
     end.
 
@@ -92,31 +92,31 @@ Section OptpAlgo.
     | None => forall cs, length cs = n -> res cs = NoMatch
     | Some lf =>
         exists cs0, length cs0 = n /\ res cs0 = Success lf /\
-                 forall cs, length cs = n -> res cs <> NoMatch -> bits_le cs0 cs = true
+                 forall cs, length cs = n -> res cs <> NoMatch -> bits_le cs cs0 = true
     end.
 
   Local Ltac guess :=
     intros [|[] cs] LEN; cbn in LEN; try discriminate; injection LEN as LEN.
 
   Lemma optp_spec_choice n res res1 res2 o1 o2:
-      (forall cs, res (false :: cs) = res1 cs) ->
-      (forall cs, res (true :: cs) = res2 cs) ->
+      (forall cs, res (true :: cs) = res1 cs) ->
+      (forall cs, res (false :: cs) = res2 cs) ->
       optp_spec n res1 o1 -> optp_spec n res2 o2 ->
       optp_spec (S n) res (seqop o1 o2).
   Proof.
     intros EL ER [NOF1 S1] [NOF2 S2].
     assert (NOF: forall cs, length cs = S n -> res cs <> Out_of_fuel)
-      by (guess; [rewrite ER; apply NOF2 | rewrite EL; apply NOF1]; assumption).
+      by (guess; [rewrite EL; apply NOF1 | rewrite ER; apply NOF2]; assumption).
     destruct o1 as [lf1|]; cbn [seqop]; split; try assumption.
-    - destruct S1 as [cs0 [LEN0 [SUCC MIN]]].
-      exists (false :: cs0); split; [cbn; lia|]; split; [now rewrite EL|].
-      guess; intros NM; cbn; [reflexivity | apply MIN; [assumption|]; now rewrite EL in NM].
+    - destruct S1 as [cs0 [LEN0 [SUCC MAX]]].
+      exists (true :: cs0); split; [cbn; lia|]; split; [now rewrite EL|].
+      guess; intros NM; cbn; [apply MAX; [assumption|]; now rewrite EL in NM | reflexivity].
     - destruct o2 as [lf2|].
-      + destruct S2 as [cs0 [LEN0 [SUCC MIN]]].
-        exists (true :: cs0); split; [cbn; lia|]; split; [now rewrite ER|].
-        guess; intros NM; cbn; [apply MIN; [assumption|]; now rewrite ER in NM
-                              | exfalso; rewrite EL in NM; apply NM, S1; assumption].
-      + guess; [rewrite ER; apply S2 | rewrite EL; apply S1]; assumption.
+      + destruct S2 as [cs0 [LEN0 [SUCC MAX]]].
+        exists (false :: cs0); split; [cbn; lia|]; split; [now rewrite ER|].
+        guess; intros NM; cbn; [exfalso; rewrite EL in NM; apply NM, S1; assumption
+                              | apply MAX; [assumption|]; now rewrite ER in NM].
+      + guess; [rewrite EL; apply S1 | rewrite ER; apply S2]; assumption.
   Qed.
 
   Lemma optp_spec_step n res res' o:
@@ -132,7 +132,7 @@ Section OptpAlgo.
   Lemma optp_spec_const n o: optp_spec n (fun _ => res_of o) o.
   Proof.
     destruct o as [lf|]; split; intros; try discriminate; auto.
-    exists (repeat false n); rewrite repeat_length; auto using bits_le_zeros.
+    exists (repeat true n); rewrite repeat_length; auto using bits_le_ones.
   Qed.
 
   Lemma optp_spec_done n res o:
@@ -168,7 +168,7 @@ Section OptpAlgo.
           | eapply optp_spec_step; [optp_unfold | optp_rec R]
           | eapply optp_spec_choice; [optp_unfold | optp_unfold | optp_rec R | optp_rec R] ].
 
-  Theorem optp_min_spec fuel:
+  Theorem optp_max_spec fuel:
     forall act inp gm dir t,
       actions_no_lookaround act ->
       compute_tree rer act inp gm dir fuel = Some t ->
@@ -189,24 +189,24 @@ Section OptpAlgo.
   Definition optp_run (r: regex) (inp: input): list bool -> match_result :=
     optp_algo forward (Cfg [Areg r] inp GroupMap.empty).
 
-  Definition no_match (m: match_result): bool :=
-    match m with Success _ => false | _ => true end.
+  Definition matched (m: match_result): bool :=
+    match m with Success _ => true | _ => false end.
 
   Definition optp_output (r: regex) (inp: input) (cs: list bool): list bool :=
-    no_match (optp_run r inp cs) :: cs.
+    matched (optp_run r inp cs) :: cs.
 
   Lemma optp_output_length r inp cs: length (optp_output r inp cs) = S (length cs).
   Proof. reflexivity. Qed.
 
   Definition exec_of_parse (r: regex) (inp: input) (bs: list bool): option leaf :=
     match bs with
-    | false :: cs => match optp_run r inp cs with Success lf => Some lf | _ => None end
+    | true :: cs => match optp_run r inp cs with Success lf => Some lf | _ => None end
     | _ => None
     end.
 
   Definition parse_spec (r: regex) (inp: input) (n: nat) (bs: list bool): Prop :=
     (exists cs0, length cs0 = n /\ bs = optp_output r inp cs0) /\
-    (forall cs, length cs = n -> bits_le bs (optp_output r inp cs) = true).
+    (forall cs, length cs = n -> bits_le (optp_output r inp cs) bs = true).
 
   Lemma parse_spec_unique r inp n b1 b2:
       parse_spec r inp n b1 -> parse_spec r inp n b2 -> b1 = b2.
@@ -216,16 +216,16 @@ Section OptpAlgo.
       optp_spec n (optp_run r inp) o ->
       exists best, parse_spec r inp n best /\ exec_of_parse r inp best = o.
   Proof.
-    intros [_ SPEC]; unfold parse_spec, optp_output, no_match.
+    intros [_ SPEC]; unfold parse_spec, optp_output, matched.
     destruct o as [lf|].
-    - destruct SPEC as [cs0 [LEN0 [SUCC MIN]]]; exists (false :: cs0).
+    - destruct SPEC as [cs0 [LEN0 [SUCC MAX]]]; exists (true :: cs0).
       split; [|cbn [exec_of_parse]; now rewrite SUCC]; split; [exists cs0; now rewrite SUCC|].
       intros cs LEN; destruct (optp_run r inp cs) eqn:RES; cbn;
-        [reflexivity | reflexivity | apply MIN; [assumption | congruence]].
-    - exists (true :: repeat false n).
-      split; [|reflexivity]; split; [exists (repeat false n) | intros cs LEN].
+        [reflexivity | reflexivity | apply MAX; [assumption | congruence]].
+    - exists (false :: repeat true n).
+      split; [|reflexivity]; split; [exists (repeat true n) | intros cs LEN].
       + rewrite (SPEC _ (repeat_length _ _)); split; [apply repeat_length | reflexivity].
-      + rewrite (SPEC cs LEN); cbn; now apply bits_le_zeros.
+      + rewrite (SPEC cs LEN); cbn; now apply bits_le_ones.
   Qed.
 
   Theorem parse_determines_exec r inp fuel t n best:
@@ -237,48 +237,48 @@ Section OptpAlgo.
   Proof.
     intros ? ? ? PARSE.
     destruct (optp_spec_parse r inp n (tree_res t GroupMap.empty inp forward))
-      as [b [P E]]; [apply optp_min_spec with (fuel := fuel) (t := t); cbn; auto|].
+      as [b [P E]]; [apply optp_max_spec with (fuel := fuel) (t := t); cbn; auto|].
     now rewrite (parse_spec_unique r inp n best b PARSE P).
   Qed.
 
-  Definition minb (b1 b2: list bool): list bool := if bits_le b1 b2 then b1 else b2.
+  Definition maxb (b1 b2: list bool): list bool := if bits_le b1 b2 then b2 else b1.
 
-  Lemma minb_le_l b1 b2: bits_le (minb b1 b2) b1 = true.
+  Lemma maxb_le_l b1 b2: bits_le b1 (maxb b1 b2) = true.
+  Proof. unfold maxb; destruct (bits_le b1 b2) eqn:B; auto using bits_le_refl. Qed.
+
+  Lemma maxb_le_r b1 b2: bits_le b2 (maxb b1 b2) = true.
   Proof.
-    unfold minb; destruct (bits_le b1 b2) eqn:B; [apply bits_le_refl|].
+    unfold maxb; destruct (bits_le b1 b2) eqn:B; [apply bits_le_refl|].
     destruct (bits_le_total b1 b2); congruence.
   Qed.
 
-  Lemma minb_le_r b1 b2: bits_le (minb b1 b2) b2 = true.
-  Proof. unfold minb; destruct (bits_le b1 b2) eqn:B; auto using bits_le_refl. Qed.
-
-  Fixpoint min_out (f: list bool -> list bool) (n: nat): list bool :=
+  Fixpoint max_out (f: list bool -> list bool) (n: nat): list bool :=
     match n with
     | 0 => f []
     | S n =>
-        minb (min_out (fun cs => f (false :: cs)) n) (min_out (fun cs => f (true :: cs)) n)
+        maxb (max_out (fun cs => f (false :: cs)) n) (max_out (fun cs => f (true :: cs)) n)
     end.
 
-  Lemma min_out_spec n:
+  Lemma max_out_spec n:
     forall f,
-      (exists cs, length cs = n /\ min_out f n = f cs) /\
-      (forall cs, length cs = n -> bits_le (min_out f n) (f cs) = true).
+      (exists cs, length cs = n /\ max_out f n = f cs) /\
+      (forall cs, length cs = n -> bits_le (f cs) (max_out f n) = true).
   Proof.
-    induction n as [|n IH]; intro f; cbn [min_out].
+    induction n as [|n IH]; intro f; cbn [max_out].
     - split; [exists []; auto|]; intros [|b cs]; [intros _; apply bits_le_refl | discriminate].
-    - destruct (IH (fun cs => f (false :: cs))) as [[cs0 [LEN0 EQ0]] MIN0].
-      destruct (IH (fun cs => f (true :: cs))) as [[cs1 [LEN1 EQ1]] MIN1]; split.
-      + unfold minb; destruct bits_le; [exists (false :: cs0) | exists (true :: cs1)];
+    - destruct (IH (fun cs => f (false :: cs))) as [[cs0 [LEN0 EQ0]] MAX0].
+      destruct (IH (fun cs => f (true :: cs))) as [[cs1 [LEN1 EQ1]] MAX1]; split.
+      + unfold maxb; destruct bits_le; [exists (true :: cs1) | exists (false :: cs0)];
           (split; [cbn; lia | assumption]).
-      + guess; [eapply bits_le_trans; [apply minb_le_r | now apply MIN1]
-               | eapply bits_le_trans; [apply minb_le_l | now apply MIN0]].
+      + guess; [eapply bits_le_trans; [now apply MAX1 | apply maxb_le_r]
+               | eapply bits_le_trans; [now apply MAX0 | apply maxb_le_l]].
   Qed.
 
   Definition parse (r: regex) (inp: input) (n: nat): list bool :=
-    min_out (optp_output r inp) n.
+    max_out (optp_output r inp) n.
 
   Theorem parse_parse_spec r inp n: parse_spec r inp n (parse r inp n).
-  Proof. apply min_out_spec. Qed.
+  Proof. apply max_out_spec. Qed.
 
   Lemma is_tree_compute: forall r inp t n,
       is_tree rer [Areg r] inp GroupMap.empty forward t ->

@@ -33,7 +33,7 @@ Qed.
 Lemma bits_le_total b1: forall b2, bits_le b1 b2 = true \/ bits_le b2 b1 = true.
 Proof. induction b1 as [|[] b1 IH]; intros [|[] b2]; cbn; auto. Qed.
 
-Lemma bits_le_zeros n: forall b, length b = n -> bits_le (repeat false n) b = true.
+Lemma bits_le_ones n: forall b, length b = n -> bits_le b (repeat true n) = true.
 Proof.
   induction n as [|n IH]; intros [|[] b] LEN; cbn in *;
     try discriminate; try reflexivity; apply IH; lia.
