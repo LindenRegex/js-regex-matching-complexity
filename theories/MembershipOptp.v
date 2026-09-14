@@ -282,16 +282,21 @@ Section OptpAlgo.
 
   Lemma is_tree_compute: forall r inp t n,
       is_tree rer [Areg r] inp GroupMap.empty forward t ->
-      n > MembershipProof.actions_fuel r inp [Areg r] forward ->
+      n > MembershipProof.actions_fuel inp [Areg r] forward ->
       compute_tree rer [Areg r] inp GroupMap.empty forward n = Some t.
   Proof.
-    eauto using MembershipProof.compute_tree_of_is_tree, MembershipProof.afr_refl.
+    intros r inp t n TREE FUEL.
+    pose proof MembershipProof.functional_terminates' r inp [Areg r] forward
+      (MembershipProof.supported_regex_all r) (MembershipProof.afr_refl r inp) n FUEL
+      GroupMap.empty rer.
+    destruct compute_tree as [t'|] eqn:COMPUTE; [|congruence].
+    f_equal; eauto using compute_is_tree, is_tree_determ.
   Qed.
 
   Theorem optp_membership_exec r inp t n:
       no_lookaround r ->
       is_tree rer [Areg r] inp GroupMap.empty forward t ->
-      n > MembershipProof.actions_fuel r inp [Areg r] forward ->
+      n > MembershipProof.actions_fuel inp [Areg r] forward ->
       exec_of_parse r inp (parse r inp n) = tree_res t GroupMap.empty inp forward.
   Proof.
     intros; apply parse_determines_exec with (fuel := n) (t := t) (n := n);
@@ -302,27 +307,25 @@ Section OptpAlgo.
     forall str, no_lookaround r -> MembershipProof.regex_lookaround_fuel str r = 0.
   Proof. induction r; cbn; intuition (rewrite ?IHr, ?IHr1, ?IHr2; auto). Qed.
 
-  Lemma core_size_nolk r:
-      no_lookaround r -> MembershipProof.core_size r = Basics.expanded_size r.
-  Proof. unfold MembershipProof.core_size; induction r; cbn; intuition nia. Qed.
-
   Theorem poly_fuel_nolk inp r:
       no_lookaround r ->
-      MembershipProof.actions_fuel r inp [Areg r] forward
-      = MembershipProof.iter_size r * remaining_length inp forward
-        + Basics.expanded_size r.
+      MembershipProof.actions_fuel inp [Areg r] forward
+      = (1 + remaining_length inp forward) * Basics.expanded_size r.
   Proof.
-    intro NLK; rewrite MembershipProof.actions_fuel_init,
-      regex_lookaround_fuel_nolk, core_size_nolk by assumption; lia.
+    intro NLK.
+    unfold MembershipProof.actions_fuel, MembershipProof.actions_fuel_nolk.
+    simpl MembershipProof.first_check_input. cbv match.
+    simpl MembershipProof.chunk_size. simpl MembershipProof.actions_lookaround_fuel.
+    rewrite regex_lookaround_fuel_nolk by assumption.
+    rewrite PeanoNat.Nat.add_0_r. lia.
   Qed.
 
   Corollary poly_bits inp r:
       no_lookaround r -> no_lower_bound r ->
-      S (MembershipProof.actions_fuel r inp [Areg r] forward) <= guess_budget r inp.
+      S (MembershipProof.actions_fuel inp [Areg r] forward) <= guess_budget r inp.
   Proof.
     intros NLK NLB; unfold guess_budget; rewrite poly_fuel_nolk by assumption.
-    pose proof core_size_nolk r NLK; pose proof expanded_size_nolb r NLB.
-    unfold MembershipProof.core_size in *; nia.
+    pose proof expanded_size_nolb r NLB; nia.
   Qed.
 
   Corollary optp_membership_poly r inp t:
@@ -335,7 +338,7 @@ Section OptpAlgo.
         exec_of_parse r inp best = tree_res t GroupMap.empty inp forward.
   Proof.
     intros NLK NLB ? n.
-    assert (FUEL: n > MembershipProof.actions_fuel r inp [Areg r] forward)
+    assert (FUEL: n > MembershipProof.actions_fuel inp [Areg r] forward)
       by (pose proof poly_bits inp r NLK NLB; unfold n, guess_budget in *; lia).
     pose proof parse_parse_spec r inp n as PARSE.
     exists (parse r inp n); split; [assumption|]; split.

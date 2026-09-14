@@ -15,7 +15,9 @@ Section EndToEnd.
   (* The fuel budget definition; it is a polynomial in the string size and the expanded regex size. *)
   Remark fuel_budget_value:
     forall (r: regex) (inp: input),
-      fuel_budget r inp = S ((1 + length (input_str inp)) * expanded_size r).
+      fuel_budget r inp
+      = S ((1 + length (input_str inp))
+           * (expanded_size r + expanded_size r * expanded_size r)).
   Proof. reflexivity. Qed.
 
   (* The guess budget definition; it is a polynomial in the string size and the regex size. *)
@@ -48,14 +50,14 @@ Section EndToEnd.
 
   (* We measure the size of a list of actions by expanding its lower-bounded quantifiers
      and giving weight 1 to Acheck and Aclose actions. *)
-  Local Notation actions_size := (MembershipProof.act_wt expanded_size 1).
+  Local Notation actions_size := MembershipProof.actions_size.
 
   (* TODO explain *)
   Theorem membership_state_size_bound:
     forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (r: regex) (act: actions),
       let lr := linden_of wr in
       expanded_size r <= expanded_size lr ->
-      MembershipProof.act_from_regex r dir act ->
+      MembershipProof.act_from_regex r inp act dir ->
       let n := expanded_size lr in
       let acts := n + Nat.div2 (n * S n) in
       let frame := (1 + length (input_str inp)) * actions_size act in
@@ -64,27 +66,25 @@ Section EndToEnd.
                       expanded_size rlk <= expanded_size lr) /\
       (no_lower_bound lr ->
        fuel_budget lr inp * frame
-       <= S (3 * (1 + length (input_str inp)) * pattern_size wr)
+       <= S (3 * (1 + length (input_str inp)) * pattern_size wr * S (3 * pattern_size wr))
           * ((1 + length (input_str inp))
              * (3 * pattern_size wr * S (3 * pattern_size wr)))).
   Proof.
     intros * LE AFR; cbv zeta.
-    pose proof MembershipProof.actions_size_bound' AFR as ACT; cbv zeta in ACT.
-    pose proof MembershipProof.chunk_bound AFR as OK.
+    pose proof MembershipProof.actions_size_bound' _ _ _ _ AFR _ eq_refl as ACT.
     pose proof triangle_even (expanded_size r).
     pose proof triangle_even (expanded_size lr).
     assert (ACTS: actions_size act <= expanded_size lr
                                       + Nat.div2 (expanded_size lr * S (expanded_size lr)))
       by nia.
     split; [exact ACTS|split].
-    - clear -LE OK; intros lk rlk IN; revert IN.
-      induction OK as [_|a l CH _ IH]; intro IN; [contradiction|].
-      simpl in IN; destruct IN as [->|IN]; [|now auto].
-      unfold MembershipProof.chunk_ok in CH; simpl in CH; lia.
+    - intros lk rlk IN; apply In_nth_error in IN as [i NTH].
+      pose proof MembershipProof.chunk_size_bound _ _ _ _ AFR i _ eq_refl as [CHK _].
+      rewrite (MembershipProof.nth_error_skipn act _ i NTH) in CHK; simpl in CHK; lia.
     - intro NLB.
       apply PeanoNat.Nat.mul_le_mono;
         [now apply fuel_budget_source|apply PeanoNat.Nat.mul_le_mono_l].
-      pose proof MembershipProof.expanded_size_pos lr.
+      pose proof expanded_size_pos lr.
       pose proof expanded_size_nolb lr NLB.
       pose proof (linden_of_size wr: regex_size lr <= pattern_size wr).
       nia.
@@ -258,7 +258,9 @@ Section EndToEnd.
       forall (inp: input),
         (* - if the regex has no lower-bounded quantifiers, then the fuel budget corresponding to matching the regex on the string is polynomial in the input and regex sizes, *)
         (no_lower_bound lr ->
-         fuel_budget lr inp <= S (3 * (1 + length (input_str inp)) * pattern_size wr)) /\
+         fuel_budget lr inp
+         <= S (3 * (1 + length (input_str inp)) * pattern_size wr
+               * S (3 * pattern_size wr))) /\
         exists m lf,
           (* - compiling the regex `wr` into a Warblre `Matcher` succeeds, *)
           Semantics.compilePattern wr rer = Success m /\
@@ -281,7 +283,9 @@ Section EndToEnd.
       forall (s: LWParameters.string),
         let inp := init_input s in
         (* - if the regex does not have lower-bounded quantifiers, then the fuel budget corresponding to matching the regex on the string is polynomial in the regex and string sizes, *)
-        (no_lower_bound lr -> fuel_budget lr inp <= S (3 * (1 + length s) * pattern_size wr)) /\
+        (no_lower_bound lr ->
+         fuel_budget lr inp
+         <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
         exists inst lf,
           (* - compiling the regex in the Warblre sense succeeds (this is most of what regExpInitialize does), *)
           regExpInitialize wr flags = Success inst /\

@@ -67,7 +67,7 @@ Section TranslationSize.
   Corollary fuel_budget_source wr inp:
       no_lower_bound (linden_of wr) ->
       fuel_budget (linden_of wr) inp
-      <= S (3 * (1 + length (input_str inp)) * pattern_size wr).
+      <= S (3 * (1 + length (input_str inp)) * pattern_size wr * S (3 * pattern_size wr)).
   Proof.
     intro NLB; unfold fuel_budget.
     pose proof expanded_size_nolb _ NLB; pose proof linden_of_size wr; nia.
@@ -344,15 +344,20 @@ Section MembershipTransport.
   Qed.
 
   Lemma fuel_budget_spec (r: regex) inp:
-      fuel_budget r inp > MembershipProof.actions_fuel r inp [Areg r] forward.
-  Proof. pose proof poly_fuel_linear r inp; unfold fuel_budget; lia. Qed.
+      fuel_budget r inp > MembershipProof.actions_fuel inp [Areg r] forward.
+  Proof.
+    pose proof MembershipProof.poly_fuel inp r.
+    pose proof remaining_le_full_length inp forward.
+    unfold fuel_budget; nia.
+  Qed.
 
   Lemma pspace_algo_poly inp:
       res_to_leaf (pspace_algo rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
       = Some (linden_result rer lr inp).
   Proof.
-    now pose proof functional_terminates' _ inp (afr_refl lr forward) (fuel_budget_spec lr inp)
-      GroupMap.empty rer as ALGO%compute_tree_None_compute_tr%pspace_algo_correctness.
+    now pose proof functional_terminates' lr inp [Areg lr] forward (supported_regex_all lr)
+      (afr_refl lr inp) _ (fuel_budget_spec lr inp) GroupMap.empty rer
+      as ALGO%compute_tree_None_compute_tr%pspace_algo_correctness.
   Qed.
 End MembershipTransport.
 

@@ -24,7 +24,8 @@ Section Basics.
     end.
 
   Definition fuel_budget (r: regex) (inp: input): nat :=
-    S ((1 + length (input_str inp)) * expanded_size r).
+    S ((1 + length (input_str inp))
+       * (expanded_size r + expanded_size r * expanded_size r)).
 
   Definition guess_budget (r: regex) (inp: input): nat :=
     S (3 * ((1 + remaining_length inp forward) * regex_size r)).
@@ -38,6 +39,9 @@ Section Basics.
     end.
 
   Lemma size_le_expanded r: regex_size r <= expanded_size r.
+  Proof. induction r; cbn; nia. Qed.
+
+  Lemma expanded_size_pos r: 1 <= expanded_size r.
   Proof. induction r; cbn; nia. Qed.
 
   Fixpoint no_neg_lookaround (r: regex): Prop :=
