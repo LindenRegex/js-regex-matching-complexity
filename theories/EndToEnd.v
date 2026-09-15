@@ -73,6 +73,19 @@ Section EndToEnd.
     pose proof triangle_even (expanded_size (linden_of wr)); nia.
   Qed.
 
+  Corollary compute_result_terminates:
+    forall (rer: RegExpRecord) (r: regex) (inp: input) (act: actions) (dir: Direction),
+      MembershipProof.act_from_regex r inp act dir ->
+      forall fuel, fuel > MembershipProof.actions_fuel inp act dir ->
+        forall gm, compute_result rer act inp gm dir fuel <> Out_of_fuel.
+  Proof.
+    intros rer r inp act dir AFR fuel FUEL gm.
+    pose proof MembershipProof.functional_terminates' r inp act dir AFR fuel FUEL gm rer as NN.
+    destruct (FunctionalSemantics.compute_tree rer act inp gm dir fuel) as [t|] eqn:CT; [|congruence].
+    pose proof MembershipProof.compute_result_correctness _ _ _ _ _ _ _ CT as CORR.
+    destruct (compute_result rer act inp gm dir fuel); cbn in CORR; congruence.
+  Qed.
+
   Context (x_char semicolon_char n_char: Parameters.Character).
   Context (hasIndices global ignoreCase multiline dotAll: bool).
 
@@ -550,7 +563,8 @@ Definition end_to_end_results :=
   (@fuel_budget_value, @guess_budget_value, @regex_test_unfold, @optp_output_width,
    @pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
    @pspace_hardness_noneglk_e2e, @pspace_membership_matcher, @pspace_membership_e2e,
-   @membership_state_size_bound, @optp_hardness_matcher, @optp_hardness_e2e,
+   @membership_state_size_bound, @compute_result_terminates,
+   @optp_hardness_matcher, @optp_hardness_e2e,
    @optp_hardness_machine, @optp_hardness_machine_w, @optp_membership_matcher,
    @optp_membership_e2e).
 Print Assumptions end_to_end_results.
