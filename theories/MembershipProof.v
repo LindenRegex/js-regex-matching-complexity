@@ -98,6 +98,10 @@ Section PSPACE_algo.
         end
     end.
 
+  Definition pspace_algo (r: regex) (s: LWParameters.string): match_result :=
+    compute_result [Areg r] (init_input s) GroupMap.empty forward
+      (fuel_budget r (init_input s)).
+
   Definition res_to_leaf (mr:match_result) : option (option leaf) :=
     match mr with
     | Out_of_fuel => None
