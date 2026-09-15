@@ -80,7 +80,7 @@ Section EndToEnd.
         forall gm, compute_result rer act inp gm dir fuel <> Out_of_fuel.
   Proof.
     intros rer r inp act dir AFR fuel FUEL gm.
-    pose proof MembershipProof.functional_terminates' r inp act dir AFR fuel FUEL gm rer as NN.
+    pose proof MembershipProof.functional_terminates' rer r inp act dir AFR fuel FUEL gm as NN.
     destruct (FunctionalSemantics.compute_tree rer act inp gm dir fuel) as [t|] eqn:CT; [|congruence].
     pose proof MembershipProof.compute_result_correctness _ _ _ _ _ _ _ CT as CORR.
     destruct (compute_result rer act inp gm dir fuel); cbn in CORR; congruence.
@@ -264,15 +264,16 @@ Section EndToEnd.
       (* for any input string, *)
       forall (s: LWParameters.string),
         let inp := init_input s in
-        (* - if the regex does not have lower-bounded quantifiers, then the fuel budget that `pspace_algo` runs with is polynomial in the regex and string sizes, *)
+        (* - if the regex does not have lower-bounded quantifiers, then the fuel budget corresponding to matching the regex on the string is polynomial in the regex and string sizes, *)
         (no_lower_bound lr ->
          fuel_budget lr inp
          <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
         exists inst lf,
           (* - compiling the regex in the Warblre sense succeeds (this is most of what regExpInitialize does), *)
           regExpInitialize wr flags = Success inst /\
-          (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds, yielding a result `lf`... *)
-          res_to_leaf (pspace_algo rer lr s) = Some lf /\
+          (* - running the PSPACE algorithm with the fuel budget, the regex `lr` and the string `s` succeeds, yielding a result `lf`... *)
+          res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward
+                         (fuel_budget lr inp)) = Some lf /\
           (* ... that matches the Warblre result of matching `wr` on `s`. *)
           exec_agrees inst s (to_MatchState lf (RegExpRecord.capturingGroupsCount rer)).
     Proof.
