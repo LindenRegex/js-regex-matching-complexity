@@ -12,13 +12,13 @@ Section Proofs.
   Context (q: qbf).
   Hypothesis (WF_q: wf_qbf q).
 
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
   Context (rer: RegExpRecord).
-  Hypothesis (x_semicolon_neq: Character.canonicalize rer x_char <>
+  Hypothesis (a_semicolon_neq: Character.canonicalize rer a_char <>
     Character.canonicalize rer semicolon_char).
 
   (* The string *)
-  Let str := theString q x_char semicolon_char n_char.
+  Let str := theString q a_char semicolon_char z_char.
   (* Number of variables *)
   Let n := List.length (fst q).
   (* The quantifiers *)
@@ -41,8 +41,8 @@ Section Proofs.
   Lemma inp_of_idx_even:
     forall i, i <= n + m ->
       inp_of_idx (2*i) = Input
-        (List.concat (List.repeat [x_char; semicolon_char] (n+m-i)) ++ [n_char])
-        (List.concat (List.repeat [semicolon_char; x_char] i)).
+        (List.concat (List.repeat [a_char; semicolon_char] (n+m-i)) ++ [z_char])
+        (List.concat (List.repeat [semicolon_char; a_char] i)).
   Proof.
     induction i.
     - simpl. intros _. unfold inp_of_idx.
@@ -99,14 +99,14 @@ Section Proofs.
 
   Lemma substr_var:
     forall v, wf_var n v ->
-      forall i, substr (inp_of_idx i) (2*(v-1)) (2*(v-1)+1) = [x_char].
+      forall i, substr (inp_of_idx i) (2*(v-1)) (2*(v-1)+1) = [a_char].
   Proof.
     intros v WF_v i. unfold inp_of_idx, substr.
     replace (2*(v-1)+1-2*(v-1)) with 1 by lia.
     setoid_rewrite input_str_inp_of_idx.
     unfold wf_var in WF_v. assert (WF_v': v - 1 < n) by lia.
     unfold str, theString.
-    rewrite (Nat.mul_comm 2 (v - 1)). change 2 with (length [x_char; semicolon_char]).
+    rewrite (Nat.mul_comm 2 (v - 1)). change 2 with (length [a_char; semicolon_char]).
     rewrite skipn_app, skipn_concat_repeat.
     fold n m.
     destruct (n + m - (v - 1)) eqn:?; try lia. reflexivity.
@@ -126,20 +126,20 @@ Section Proofs.
     unfold char_match. simpl. apply EqDec.reflb.
   Qed.
 
-  Lemma char_match_x_semicolon:
-    char_match rer x_char (CdSingle semicolon_char) = false.
+  Lemma char_match_a_semicolon:
+    char_match rer a_char (CdSingle semicolon_char) = false.
   Proof.
     unfold char_match. simpl. apply EqDec_neqb. auto.
   Qed.
 
-  Lemma char_match_semicolon_x:
-    char_match rer semicolon_char (CdSingle x_char) = false.
+  Lemma char_match_semicolon_a:
+    char_match rer semicolon_char (CdSingle a_char) = false.
   Proof.
     unfold char_match. simpl. apply EqDec_neqb. auto.
   Qed.
 
-  Lemma char_match_x:
-    char_match rer x_char (CdSingle x_char) = true.
+  Lemma char_match_a:
+    char_match rer a_char (CdSingle a_char) = true.
   Proof.
     unfold char_match. simpl. apply EqDec.reflb.
   Qed.
@@ -147,7 +147,7 @@ Section Proofs.
   Lemma read_backref_var_sat:
     forall (gm: group_map) (v: variable) (i: nat),
       i < m -> wf_var n v -> wf_gm n gm ->
-      gm_satisfies_var gm v = true -> read_backref rer gm v (inp_of_idx (2*(n+i))) forward = Some ([x_char], inp_of_idx (2*(n+i)+1)).
+      gm_satisfies_var gm v = true -> read_backref rer gm v (inp_of_idx (2*(n+i))) forward = Some ([a_char], inp_of_idx (2*(n+i)+1)).
   Proof.
     intros gm v i INB_i WF_v WF_GM SAT.
     unfold wf_gm in WF_GM. unfold wf_var in WF_v.
@@ -180,13 +180,13 @@ Section Proofs.
     unfold read_backref. destruct GroupMap.find; try discriminate. reflexivity.
   Qed.
 
-  Lemma read_char_x_even:
-    forall i, i < n+m -> read_char rer (CdSingle x_char) (inp_of_idx (2*i)) forward = Some (x_char, inp_of_idx (2*i+1)).
+  Lemma read_char_a_even:
+    forall i, i < n+m -> read_char rer (CdSingle a_char) (inp_of_idx (2*i)) forward = Some (a_char, inp_of_idx (2*i+1)).
   Proof.
     intros i INB. rewrite inp_of_idx_even by lia.
     simpl. assert (n + m - i <> 0) by lia.
     destruct (n + m - i) eqn:?; try contradiction. simpl.
-    rewrite char_match_x.
+    rewrite char_match_a.
     f_equal. f_equal.
     replace (i + (i + 0) + 1) with (S (i + (i + 0))) by lia.
     rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len; lia. }
@@ -194,8 +194,8 @@ Section Proofs.
     rewrite Heqn0. simpl. unfold advance_input'. simpl. reflexivity.
   Qed.
 
-  Lemma read_char_x_odd:
-    forall i, i < n+m -> read_char rer (CdSingle x_char) (inp_of_idx (2*i+1)) forward = None.
+  Lemma read_char_a_odd:
+    forall i, i < n+m -> read_char rer (CdSingle a_char) (inp_of_idx (2*i+1)) forward = None.
   Proof.
     intros i INB. replace (2 * i + 1) with (S (2 * i)) by lia.
     rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len. lia. }
@@ -225,7 +225,7 @@ Section Proofs.
       i < m -> wf_literal n lit ->
       inp = inp_of_idx (2*(n+i)) -> wf_gm n gm ->
       (* Let t be the tree of r_lit with input inp(2*(n+i)) for some 0 ≤ i < m and group map gm. *)
-      forall t, is_tree rer [Areg (check_literal_regex x_char lit)] inp gm forward t ->
+      forall t, is_tree rer [Areg (check_literal_regex a_char lit)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
           (* Then: *)
           (* - if gm satisfies lit, then t has exactly one leaf, (inp(2*(n+i)+1), gm), *)
@@ -282,7 +282,7 @@ Section Proofs.
         2: { rewrite read_backref_var_unsat with (i := i) in READ_BACKREF; auto. discriminate. }
         rewrite read_backref_var_unsat with (i := i) in READ_BACKREF; auto. injection READ_BACKREF as <- <-.
         inversion TREECONT; subst.
-        2: { (* The read cannot fail *) exfalso. setoid_rewrite read_char_x_even in READ; try lia. discriminate. }
+        2: { (* The read cannot fail *) exfalso. setoid_rewrite read_char_a_even in READ; try lia. discriminate. }
         inversion TREECONT0; subst. simpl. f_equal. f_equal.
         replace (n + i + (n + i + 0) + 1) with (S (n + i + (n + i + 0))) by lia.
         rewrite <- advance_input_inp_of_idx. 2: { rewrite str_len; lia. }
@@ -296,7 +296,7 @@ Section Proofs.
         rewrite read_backref_var_sat with (i := i) in READ_BACKREF; auto. 2: { inversion WF_lit; subst. auto. }
         injection READ_BACKREF as <- <-.
         inversion TREECONT; subst.
-        1: { (* The read cannot succeed *) exfalso. setoid_rewrite read_char_x_odd in READ; try lia. discriminate. }
+        1: { (* The read cannot succeed *) exfalso. setoid_rewrite read_char_a_odd in READ; try lia. discriminate. }
         left. reflexivity.
   Qed.
 
@@ -311,7 +311,7 @@ Section Proofs.
     assert (n + m - (n + i) <> 0) by lia.
     unfold advance_input'.
     destruct (n+m-(n+i)) eqn:?; try contradiction. simpl.
-    intro ABS. inversion ABS. rewrite H1 in x_semicolon_neq. contradiction.
+    intro ABS. inversion ABS. rewrite H1 in a_semicolon_neq. contradiction.
   Qed.
 
   (* Lemma specifying the behavior of the regex checking the validity of a clause, without the separator. *)
@@ -321,7 +321,7 @@ Section Proofs.
       i < m -> wf_clause n c ->
       inp = inp_of_idx (2*(n+i)) -> wf_gm n gm ->
       (* Let t be the tree of r with input inp(2*(n+i)) and group map gm. *)
-      forall t, is_tree rer [Areg (check_clause_regex_aux x_char c)] inp gm forward t ->
+      forall t, is_tree rer [Areg (check_clause_regex_aux a_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
           (* Then: *)
           (* - all the leaves of lf are either (inp(2*(n+i)+1), gm) or (inp(2*(n+i)), gm), *)
@@ -411,7 +411,7 @@ Section Proofs.
     rewrite inp_of_idx_even by lia. simpl.
     assert (n+m-i <> 0) by lia.
     destruct (n+m-i) eqn:?; try contradiction. simpl.
-    rewrite char_match_x_semicolon. reflexivity.
+    rewrite char_match_a_semicolon. reflexivity.
   Qed.
 
   Lemma check_clause_regex_spec:
@@ -420,7 +420,7 @@ Section Proofs.
       i < m -> wf_clause n c ->
       inp = inp_of_idx (2*(n+i)) -> wf_gm n gm ->
       (* Let t be the tree of r on input inp(2*(n+i)) and group map gm. *)
-      forall t, is_tree rer [Areg (check_clause_regex x_char semicolon_char c)] inp gm forward t ->
+      forall t, is_tree rer [Areg (check_clause_regex a_char semicolon_char c)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
           (* Then: *)
           (* - all the leaves of t, if any, are equal to (inp(2*(n+i+1)), gm), *)
@@ -432,9 +432,9 @@ Section Proofs.
     unfold check_clause_regex in TREE.
     inversion TREE; subst r1 r2 cont inp0 gm0 dir t0. rewrite app_nil_r in CONT.
     simpl in CONT.
-    pose proof leaves_concat rer inp gm forward [Areg (check_clause_regex_aux x_char c)]
+    pose proof leaves_concat rer inp gm forward [Areg (check_clause_regex_aux a_char c)]
       [Areg (Regex.Character (CdSingle semicolon_char))] t as CONCAT.
-    assert (exists taux: tree, is_tree rer [Areg (check_clause_regex_aux x_char c)] inp gm forward taux). {
+    assert (exists taux: tree, is_tree rer [Areg (check_clause_regex_aux a_char c)] inp gm forward taux). {
       eexists. apply compute_tr_is_tree.
     }
     destruct H as [taux TREE_aux].
@@ -488,7 +488,7 @@ Section Proofs.
     forall (inp: input) (gm: group_map),
       inp = inp_of_idx (2*n) -> wf_gm n gm ->
       (* Let t be the tree of r on input inp(2*n) and group map gm. *)
-      forall t, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev pos_form))] inp gm forward t ->
+      forall t, is_tree rer [Areg (check_conjunct_regex a_char semicolon_char (rev pos_form))] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
           (* Then: *)
           (* - all the leaves of t (if any) are equal to (inp(2*(n+m)), gm), *)
@@ -512,13 +512,13 @@ Section Proofs.
       intros ? ? t TREE lflist EQ_lflist.
       inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
       rewrite app_nil_r in CONT. simpl in CONT.
-      assert (SUBTREE: exists tsub: tree, is_tree rer [Areg (check_conjunct_regex x_char semicolon_char (rev pos_form0))] inp gm forward tsub). {
+      assert (SUBTREE: exists tsub: tree, is_tree rer [Areg (check_conjunct_regex a_char semicolon_char (rev pos_form0))] inp gm forward tsub). {
         eexists. apply compute_tr_is_tree.
       }
       destruct SUBTREE as [tsub SUBTREE].
       specialize_prove IHpos_form0. { rewrite Forall_app in WF_clauses. tauto. }
       specialize (IHpos_form0 ltac:(lia) tsub SUBTREE).
-      pose proof leaves_concat rer inp gm forward [Areg (check_conjunct_regex x_char semicolon_char (rev pos_form0))] [Areg (check_clause_regex x_char semicolon_char x)] _ _ CONT SUBTREE as CONCAT.
+      pose proof leaves_concat rer inp gm forward [Areg (check_conjunct_regex a_char semicolon_char (rev pos_form0))] [Areg (check_clause_regex a_char semicolon_char x)] _ _ CONT SUBTREE as CONCAT.
       rewrite <- EQ_lflist in CONCAT.
       remember (tree_leaves tsub gm inp forward) as lflist_sub. specialize (IHpos_form0 lflist_sub eq_refl).
       pose proof check_clause_regex_spec (length pos_form0) x as SPEC_check_x. 
@@ -591,7 +591,7 @@ Section Proofs.
             inversion WF_clauses. auto.
           }
           specialize (SPEC_check_x EQ_inpsub WF_GM).
-          assert (exists t: tree, is_tree rer [Areg (check_clause_regex x_char semicolon_char x)] inpsub gm forward t). {
+          assert (exists t: tree, is_tree rer [Areg (check_clause_regex a_char semicolon_char x)] inpsub gm forward t). {
             eexists. apply compute_tr_is_tree.
           }
           destruct H as [tclause TREE_clause].
@@ -610,7 +610,7 @@ Section Proofs.
     forall (inp: input) (gm: group_map),
       inp = inp_of_idx (2*n) -> wf_gm n gm ->
       (* Let t be the tree of r on input inp(2*n) and group map gm. *)
-      forall t, is_tree rer [Areg (check_formula_regex x_char semicolon_char form)] inp gm forward t ->
+      forall t, is_tree rer [Areg (check_formula_regex a_char semicolon_char form)] inp gm forward t ->
         forall lflist, lflist = tree_leaves t gm inp forward ->
           (* Then: *)
           (* - all the leaves of t (if any) leave the group map unchanged, *)
@@ -677,7 +677,7 @@ Section Proofs.
       i <> 0 -> i <= n -> inp = inp_of_idx (2*(i-1)) ->
       forall (t: tree) (gm: group_map),
         (* Let t be the tree of r on input inp(2*(i-1)) and group map gm. *)
-        is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward t ->
+        is_tree rer [Areg (def_var_regex a_char semicolon_char i)] inp gm forward t ->
         (* Then t has two leaves: *)
         tree_leaves t gm inp forward = [
           (* - (inp(2*i), gm.add(i, range(i))), *)
@@ -693,18 +693,18 @@ Section Proofs.
     inversion ISTREE1. subst gid r1 cont inp0 gm0 dir t1.
     inversion TREECONT.
     2: { subst cd cont inp0 gm0 dir treecont. exfalso. subst inp.
-    rewrite read_char_x_even in READ by lia. discriminate. }
+    rewrite read_char_a_even in READ by lia. discriminate. }
     subst cd cont inp0 gm0 dir treecont.
     inversion TREECONT0. subst gid cont inp0 gm0 dir tcont.
     inversion TREECONT1. 2: { subst cd cont inp0 gm0 dir treecont. exfalso.
-    subst inp. rewrite read_char_x_even in READ by lia. injection READ as <- <-.
+    subst inp. rewrite read_char_a_even in READ by lia. injection READ as <- <-.
     setoid_rewrite read_char_semicolon_odd in READ0; try lia. discriminate. }
     subst cd cont inp0 gm0 dir treecont.
     inversion TREECONT2. subst inp0 gm0 dir tcont.
-    inversion ISTREE2. 2: { subst cd cont inp0 gm0 dir t2. exfalso. subst inp. rewrite read_char_x_even in READ1 by lia. discriminate. }
+    inversion ISTREE2. 2: { subst cd cont inp0 gm0 dir t2. exfalso. subst inp. rewrite read_char_a_even in READ1 by lia. discriminate. }
     subst cd cont inp0 gm0 dir t2.
     inversion TREECONT3. 2: { subst cd cont inp0 gm0 dir tcont. exfalso.
-    subst inp. rewrite read_char_x_even in READ1 by lia. injection READ1 as <- <-.
+    subst inp. rewrite read_char_a_even in READ1 by lia. injection READ1 as <- <-.
     setoid_rewrite read_char_semicolon_odd in READ2; try lia. discriminate. }
     subst cd cont inp0 gm0 dir tcont.
     inversion TREECONT4. subst inp0 gm0 dir tcont0.
@@ -805,7 +805,7 @@ Section Proofs.
           inp = inp_of_idx (2*(i-1)) ->
           qtail = List.skipn (i-1) quants ->
           (* ... and t := T(R(i), inp, gm, →). *)
-          is_tree rer [Areg (theRegex_aux q x_char semicolon_char i qtail)] inp gm forward t ->
+          is_tree rer [Areg (theRegex_aux q a_char semicolon_char i qtail)] inp gm forward t ->
           (* Then: *)
           (* - t has a leaf iff gm satisfies F_i *)
           (tree_leaves t gm inp forward <> [] <-> gm_satisfies_qbf_aux gm i qtail form = true) /\
@@ -844,10 +844,10 @@ Section Proofs.
       + (* Exists *)
         inversion TREE. subst r1 r2 cont inp0 gm0 dir t0.
         rewrite app_nil_r in CONT. simpl in CONT.
-        assert (exists tsub: tree, is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward tsub) as [tsub TREE_sub]. {
+        assert (exists tsub: tree, is_tree rer [Areg (def_var_regex a_char semicolon_char i)] inp gm forward tsub) as [tsub TREE_sub]. {
           eexists. apply compute_tr_is_tree.
         }
-        pose proof leaves_concat rer inp gm forward [Areg (def_var_regex x_char semicolon_char i)] [Areg (theRegex_aux q x_char semicolon_char (S i) (skipn i quants))] t tsub CONT TREE_sub as CONCAT.
+        pose proof leaves_concat rer inp gm forward [Areg (def_var_regex a_char semicolon_char i)] [Areg (theRegex_aux q a_char semicolon_char (S i) (skipn i quants))] t tsub CONT TREE_sub as CONCAT.
         pose proof def_var_regex_spec i inp i_INB ltac:(lia) EQ_inp tsub gm TREE_sub as DEF_SPEC.
         rewrite DEF_SPEC in CONCAT. clear DEF_SPEC.
         remember (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm) as gmpos.
@@ -932,9 +932,9 @@ Section Proofs.
           inversion TREECONT. subst inp0 gm0 dir treecont.
           inversion TREELK. subst r1 r2 cont inp0 gm0 dir t.
           rewrite app_nil_r in CONT. simpl seq_list in CONT.
-          assert (exists treelksub: tree, is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward treelksub). { eexists; apply compute_tr_is_tree. }
+          assert (exists treelksub: tree, is_tree rer [Areg (def_var_regex a_char semicolon_char i)] inp gm forward treelksub). { eexists; apply compute_tr_is_tree. }
           destruct H as [treelksub TREELKSUB].
-          pose proof leaves_concat rer inp gm forward [Areg (def_var_regex x_char semicolon_char i)] [Areg (theRegex_aux q x_char semicolon_char (S i) (skipn i quants))] treelk treelksub CONT TREELKSUB as CONCAT.
+          pose proof leaves_concat rer inp gm forward [Areg (def_var_regex a_char semicolon_char i)] [Areg (theRegex_aux q a_char semicolon_char (S i) (skipn i quants))] treelk treelksub CONT TREELKSUB as CONCAT.
           pose proof def_var_regex_spec i inp ltac:(auto) ltac:(lia) EQ_inp treelksub gm TREELKSUB as DEF_SPEC.
           remember (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm) as gmpos.
           rewrite DEF_SPEC in CONCAT.
@@ -979,9 +979,9 @@ Section Proofs.
           simpl.
           inversion TREELK. subst r1 r2 cont inp0 gm0 dir t.
           simpl seq_list in CONT. rewrite app_nil_r in CONT.
-          assert (exists treelksub: tree, is_tree rer [Areg (def_var_regex x_char semicolon_char i)] inp gm forward treelksub). { eexists; apply compute_tr_is_tree. }
+          assert (exists treelksub: tree, is_tree rer [Areg (def_var_regex a_char semicolon_char i)] inp gm forward treelksub). { eexists; apply compute_tr_is_tree. }
           destruct H as [treelksub TREELKSUB].
-          pose proof leaves_concat rer inp gm forward [Areg (def_var_regex x_char semicolon_char i)] [Areg (theRegex_aux q x_char semicolon_char (S i) (skipn i quants))] treelk treelksub CONT TREELKSUB as CONCAT.
+          pose proof leaves_concat rer inp gm forward [Areg (def_var_regex a_char semicolon_char i)] [Areg (theRegex_aux q a_char semicolon_char (S i) (skipn i quants))] treelk treelksub CONT TREELKSUB as CONCAT.
           pose proof def_var_regex_spec i inp ltac:(auto) ltac:(lia) EQ_inp treelksub gm TREELKSUB as DEF_SPEC.
           remember (GroupMap.add i (GroupMap.Range (2*(i-1)) (Some (2*(i-1)+1))) gm) as gmpos.
           rewrite DEF_SPEC in CONCAT.
@@ -1042,7 +1042,7 @@ Section Proofs.
   
 
   Theorem qbf_regex:
-    regex_matches_string rer (theRegex q x_char semicolon_char) str <->
+    regex_matches_string rer (theRegex q a_char semicolon_char) str <->
     qbf_true q = true.
   Proof.
     pose proof theRegex_aux_spec n 1 ltac:(lia) ltac:(lia) ltac:(lia) GroupMap.empty ltac:(apply emptygm_wf).
@@ -1052,7 +1052,7 @@ Section Proofs.
     specialize (H (inp_of_idx 0) quants).
     split.
     - intro MATCHES. unfold regex_matches_string in MATCHES.
-      assert (exists t: tree, is_tree rer [Areg (theRegex q x_char semicolon_char)] (init_input str) GroupMap.empty forward t) as [t TREE]. {
+      assert (exists t: tree, is_tree rer [Areg (theRegex q a_char semicolon_char)] (init_input str) GroupMap.empty forward t) as [t TREE]. {
         eexists. apply compute_tr_is_tree.
       }
       specialize (MATCHES t TREE).
@@ -1075,17 +1075,17 @@ Section PCNF.
   Context {params: LindenParameters}.
   Context (pq: pqbf).
   Hypothesis (WF_pq: wf_pqbf pq).
-  Context (x_char semicolon_char n_char: Character).
+  Context (a_char semicolon_char z_char: Character).
   Context (rer: RegExpRecord).
-  Hypothesis (x_semicolon_neq:
-    Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char).
+  Hypothesis (a_semicolon_neq:
+    Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char).
 
   Notation q := (qbf_of_pqbf pq).
 
 
   Theorem pcnf_regex:
-    regex_matches_string rer (theRegex q x_char semicolon_char)
-      (theString q x_char semicolon_char n_char) <-> pqbf_true pq = true.
+    regex_matches_string rer (theRegex q a_char semicolon_char)
+      (theString q a_char semicolon_char z_char) <-> pqbf_true pq = true.
   Proof.
     rewrite <- qbf_of_pqbf_true; auto using qbf_regex, wf_qbf_of_pqbf.
   Qed.
