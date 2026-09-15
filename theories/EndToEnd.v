@@ -78,13 +78,7 @@ Section EndToEnd.
       MembershipProof.act_from_regex r inp act dir ->
       forall fuel, fuel > MembershipProof.actions_fuel inp act dir ->
         forall gm, compute_result rer act inp gm dir fuel <> Out_of_fuel.
-  Proof.
-    intros rer r inp act dir AFR fuel FUEL gm.
-    pose proof MembershipProof.functional_terminates' rer r inp act dir AFR fuel FUEL gm as NN.
-    destruct (FunctionalSemantics.compute_tree rer act inp gm dir fuel) as [t|] eqn:CT; [|congruence].
-    pose proof MembershipProof.compute_result_correctness _ _ _ _ _ _ _ CT as CORR.
-    destruct (compute_result rer act inp gm dir fuel); cbn in CORR; congruence.
-  Qed.
+  Proof. eauto using MembershipProof.result_terminates'. Qed.
 
   Context (a_char semicolon_char z_char: Parameters.Character).
   Context (hasIndices global ignoreCase multiline dotAll: bool).
@@ -238,21 +232,11 @@ Section EndToEnd.
       exists b, pspace_algo rer lr s = Some b /\
                 (matches_at rer lr (init_input s) <-> b = true).
     Proof.
-      destruct (is_tree_productivity rer [Areg lr] (init_input s) GroupMap.empty forward)
-        as [t TREE].
-      destruct (pspace_algo rer lr s) as [b|] eqn:ALGO.
-      2: {
-        exfalso; unfold pspace_algo in ALGO.
-        destruct compute_result eqn:CR; try discriminate.
-        revert CR; apply MembershipProof.result_terminates' with (r := lr) (dir := forward);
-          [apply MembershipProof.afr_refl | lia].
-      }
-      exists b; split; [reflexivity|]; rewrite (matches_at_tree TREE); destruct b.
-      - split; [reflexivity | intros _].
-        destruct (proj1 (pspace_algo_true_correct rer lr s t TREE) ALGO) as [lf LF].
-        congruence.
-      - rewrite (proj1 (pspace_algo_false_correct rer lr s t TREE) ALGO).
-        split; [congruence | discriminate].
+      setoid_rewrite matches_at_compute_tr; unfold pspace_algo, first_leaf.
+      generalize (MembershipProof.compute_result_spec lr (init_input s) _ forward
+                    (MembershipProof.afr_refl _ _ _) _ (le_n _) GroupMap.empty rer _
+                    (compute_tr_is_tree rer)).
+      destruct compute_result; intros [= <-]; eexists; easy.
     Qed.
 
     Lemma pspace_algo_fuel_poly (s: LWParameters.string):
