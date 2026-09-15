@@ -673,14 +673,50 @@ Section OptpAlgo.
   Qed.
 
   Corollary poly_bits inp r:
-      no_lookaround r -> no_lower_bound r ->
-      S (MembershipProof.actions_fuel inp [Areg r] forward) <= guess_budget r inp.
+      no_lookaround r ->
+      S (MembershipProof.actions_fuel inp [Areg r] forward) <= expanded_budget r inp.
   Proof.
-    intros NLK NLB; unfold guess_budget; rewrite poly_fuel_nolk by assumption.
-    pose proof expanded_size_nolb r NLB; nia.
+    intro NLK; unfold expanded_budget; rewrite poly_fuel_nolk by assumption; lia.
+  Qed.
+
+  Theorem optp_membership_fuel r inp t n:
+      no_lookaround r ->
+      is_tree rer [Areg r] inp GroupMap.empty forward t ->
+      n > MembershipProof.actions_fuel inp [Areg r] forward ->
+      exists best,
+        parse_spec r inp n best /\
+        length best = S n /\
+        exec_of_parse r inp best = tree_res t GroupMap.empty inp forward.
+  Proof.
+    intros NLK TREE FUEL.
+    pose proof parse_parse_spec r inp n as PARSE.
+    exists (parse r inp n); split; [assumption|]; split.
+    - destruct PARSE as [[cs0 [LEN0 ->]] _]; now rewrite optp_output_length, LEN0.
+    - now apply optp_membership_exec.
   Qed.
 
   Corollary optp_membership_poly r inp t:
+      no_lookaround r ->
+      is_tree rer [Areg r] inp GroupMap.empty forward t ->
+      let n := expanded_budget r inp in
+      exists best,
+        parse_spec r inp n best /\
+        length best = S n /\
+        exec_of_parse r inp best = tree_res t GroupMap.empty inp forward.
+  Proof.
+    intros NLK TREE n; apply (optp_membership_fuel r inp t n NLK TREE).
+    pose proof poly_bits inp r NLK; unfold n, expanded_budget in *; lia.
+  Qed.
+
+  Corollary poly_bits_nolb inp r:
+      no_lookaround r -> no_lower_bound r ->
+      S (MembershipProof.actions_fuel inp [Areg r] forward) <= guess_budget r inp.
+  Proof.
+    intros NLK NLB; pose proof poly_bits inp r NLK;
+      pose proof expanded_budget_le_guess_budget r inp NLB; lia.
+  Qed.
+
+  Corollary optp_membership_poly_nolb r inp t:
       no_lookaround r -> no_lower_bound r ->
       is_tree rer [Areg r] inp GroupMap.empty forward t ->
       let n := guess_budget r inp in
@@ -689,13 +725,8 @@ Section OptpAlgo.
         length best = S n /\
         exec_of_parse r inp best = tree_res t GroupMap.empty inp forward.
   Proof.
-    intros NLK NLB ? n.
-    assert (FUEL: n > MembershipProof.actions_fuel inp [Areg r] forward)
-      by (pose proof poly_bits inp r NLK NLB; unfold n, guess_budget in *; lia).
-    pose proof parse_parse_spec r inp n as PARSE.
-    exists (parse r inp n); split; [assumption|]; split.
-    - destruct PARSE as [[cs0 [LEN0 ->]] _]; now rewrite optp_output_length, LEN0.
-    - now apply optp_membership_exec.
+    intros NLK NLB TREE n; apply (optp_membership_fuel r inp t n NLK TREE).
+    pose proof poly_bits_nolb inp r NLK NLB; unfold n, guess_budget in *; lia.
   Qed.
 
 End OptpAlgo.

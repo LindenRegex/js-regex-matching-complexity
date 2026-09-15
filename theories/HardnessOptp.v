@@ -523,7 +523,7 @@ Section Fragment.
   Proof.
     intros WF_q pf EQ ALL z_char rer NEQ t TREE r inp ?.
     destruct (theRegex_frag q pf EQ ALL) as [NLK NLB].
-    destruct (optp_membership_poly rer r inp t NLK NLB TREE) as [best (PARSE & LEN & EXEC)].
+    destruct (optp_membership_poly_nolb rer r inp t NLK NLB TREE) as [best (PARSE & LEN & EXEC)].
     exists best; do 2 (split; [assumption|]); rewrite EXEC.
     now apply (reduction_valid q WF_q a_char semicolon_char z_char rer NEQ ALL pf EQ t TREE).
   Qed.

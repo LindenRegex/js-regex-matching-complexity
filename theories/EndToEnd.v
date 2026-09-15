@@ -31,10 +31,10 @@ Section EndToEnd.
            * (expanded_size r + expanded_size r * expanded_size r)).
   Proof. reflexivity. Qed.
 
-  (* The guess budget definition; it is a polynomial in the string size and the regex size. *)
-  Remark guess_budget_value:
+  (* The guess budget definition; it is a polynomial in the string size and the expanded regex size. *)
+  Remark expanded_budget_value:
     forall (r: regex) (inp: input),
-      guess_budget r inp = S (3 * ((1 + remaining_length inp forward) * regex_size r)).
+      expanded_budget r inp = S ((1 + remaining_length inp forward) * expanded_size r).
   Proof. reflexivity. Qed.
 
   (* The definition of regex_test: `regex_test wr flags s b` holds if both of the following are true:
@@ -561,19 +561,18 @@ Section EndToEnd.
     (* The Linden equivalent of `wr`. *)
     Let lr := linden_of wr.
 
-    (* We assume that the regex has neither lookarounds nor lower-bounded quantifiers. *)
+    (* We assume that the regex has no lookarounds. *)
     Hypothesis lr_nolk: no_lookaround lr.
-    Hypothesis lr_nolb: no_lower_bound lr.
 
     (* OptP-membership theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_membership_matcher:
       (* Let `inp` be an input (an input string and an index into that string). *)
       forall (inp: input),
         (* Let `n` be the guess budget corresponding to matching `lr` on `inp`. *)
-        let n := guess_budget lr inp in
+        let n := expanded_budget lr inp in
         (* Then:
-           - `n` is polynomial in the remaining length of `inp` and the size of `wr`, *)
-        n <= S (3 * (1 + remaining_length inp forward) * pattern_size wr) /\
+           - `n` is polynomial in the remaining length of `inp` and the expanded size of `wr`, *)
+        n <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr) /\
         exists m best,
           (* - compiling `wr` succeeds, *)
           Semantics.compilePattern wr rer = Success m /\
@@ -587,8 +586,8 @@ Section EndToEnd.
                                      (RegExpRecord.capturingGroupsCount rer)).
     Proof.
       intros inp ?.
-      split; [apply guess_budget_source|].
-      destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
+      split; [apply expanded_budget_source|].
+      destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best (PARSE & LEN & EXECP)].
       destruct (matcher_at_input wr rer no_early_errors eq_refl) as [m (COMP & MATCH)].
       exists m, best; rewrite MATCH, EXECP; auto 10.
@@ -600,10 +599,10 @@ Section EndToEnd.
       forall (s: LWParameters.string),
         let inp := init_input s in
         (* Let `n` be the guess budget corresponding to matching `lr` on `s`. *)
-        let n := guess_budget lr inp in
+        let n := expanded_budget lr inp in
         (* Then:
-           - `n` is polynomial in the length of `s` and the size of `wr`, *)
-        n <= S (3 * (1 + length s) * pattern_size wr) /\
+           - `n` is polynomial in the length of `s` and the expanded size of `wr`, *)
+        n <= S ((1 + length s) * pattern_expanded_size wr) /\
         exists inst best,
           (* - compiling `wr` succeeds (this is essentially what `regExpInitialize` does), *)
           regExpInitialize wr flags = Success inst /\
@@ -616,8 +615,8 @@ Section EndToEnd.
                                             (RegExpRecord.capturingGroupsCount rer)).
     Proof.
       intros s inp ?.
-      split; [apply (guess_budget_source wr inp)|].
-      destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
+      split; [apply (expanded_budget_source wr inp)|].
+      destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best OPTP].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
                   eq_refl eq_refl) as [inst [INIT RES]]; destruct OPTP as (? & ? & EXECP).
@@ -628,7 +627,7 @@ Section EndToEnd.
 End EndToEnd.
 
 Definition end_to_end_results :=
-  (@expanded_size_bounds, @fuel_budget_value, @guess_budget_value, @regex_test_unfold,
+  (@expanded_size_bounds, @fuel_budget_value, @expanded_budget_value, @regex_test_unfold,
    @optp_output_width,
    @pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
    @pspace_hardness_noneglk_e2e, @pspace_membership_matcher, @pspace_membership_e2e,

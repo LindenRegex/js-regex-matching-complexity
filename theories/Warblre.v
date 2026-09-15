@@ -59,11 +59,6 @@ Section TranslationSize.
       [eapply warblre_to_linden_size, TR | cbn; apply pattern_size_pos].
   Qed.
 
-  Corollary guess_budget_source wr inp:
-      guess_budget (linden_of wr) inp
-      <= S (3 * (1 + remaining_length inp forward) * pattern_size wr).
-  Proof. unfold guess_budget; pose proof linden_of_size wr; nia. Qed.
-
   Lemma atomesc_expanded_size:
     forall ae nm lr, atomesc_to_linden ae nm = Success lr -> expanded_size lr = 1.
   Proof.
