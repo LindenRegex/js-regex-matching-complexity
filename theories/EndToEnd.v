@@ -12,6 +12,17 @@ Import ListNotations.
 Section EndToEnd.
   Context {params: LindenParameters}.
 
+  (* The expanded regex size and the AST size are within a constant factor of each other,
+     as long as the regex has no lower-bounded quantifiers. *)
+  Remark expanded_size_bounds:
+    forall (r: regex),
+      (* - the AST size never exceeds the expanded size, for any regex, *)
+      regex_size r <= expanded_size r /\
+      (* - and if no quantifier has a nonzero lower bound, then expanding a quantifier at
+           most triples its size, so the expanded size stays within a factor 3 of the AST size. *)
+      (no_lower_bound r -> expanded_size r <= 3 * regex_size r).
+  Proof. split; [apply size_le_expanded | apply expanded_size_nolb]. Qed.
+
   (* The fuel budget definition; it is a polynomial in the string size and the expanded regex size. *)
   Remark fuel_budget_value:
     forall (r: regex) (inp: input),
@@ -617,7 +628,8 @@ Section EndToEnd.
 End EndToEnd.
 
 Definition end_to_end_results :=
-  (@fuel_budget_value, @guess_budget_value, @regex_test_unfold, @optp_output_width,
+  (@expanded_size_bounds, @fuel_budget_value, @guess_budget_value, @regex_test_unfold,
+   @optp_output_width,
    @pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
    @pspace_hardness_noneglk_e2e, @pspace_membership_matcher, @pspace_membership_e2e,
    @membership_state_size_bound, @compute_result_terminates,
