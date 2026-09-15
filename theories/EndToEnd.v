@@ -124,8 +124,8 @@ Section EndToEnd.
 
     (* PSPACE-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_matcher:
-      (* the size of the regex `wr` is linear in the size of the PQBF, *)
-      pattern_size wr <= 8 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF, *)
+      pattern_expanded_size wr <= 9 * pqbf_size pq /\
       (* so is the length of the string, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
@@ -151,8 +151,8 @@ Section EndToEnd.
 
     (* End-to-end PSPACE-hardness theorem: *)
     Theorem pspace_hardness_e2e:
-      (* the size of the regex `wr` is linear in the size of the PQBF, *)
-      pattern_size wr <= 8 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF, *)
+      pattern_expanded_size wr <= 9 * pqbf_size pq /\
       (* so is the length of the string, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
@@ -198,8 +198,8 @@ Section EndToEnd.
 
     (* PSPACE-hardness theorem without negative lookarounds, in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_noneglk_matcher:
-      (* the size of the regex `wr` is linear in the size of the PQBF `pq`, *)
-      pattern_size wr <= 25 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF `pq`, *)
+      pattern_expanded_size wr <= 31 * pqbf_size pq /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
@@ -228,8 +228,8 @@ Section EndToEnd.
 
     (* End-to-end PSPACE-hardness theorem without negative lookarounds: *)
     Theorem pspace_hardness_noneglk_e2e:
-      (* the size of the regex `wr` is linear in the size of the PQBF `pq`, *)
-      pattern_size wr <= 25 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF `pq`, *)
+      pattern_expanded_size wr <= 31 * pqbf_size pq /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex `wr` passes the early errors check, *)
@@ -375,8 +375,8 @@ Section EndToEnd.
 
     (* OptP-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_hardness_matcher:
-      (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 11 * pos_formula_size pf /\
+      (* the expanded size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
@@ -410,8 +410,8 @@ Section EndToEnd.
 
     (* End-to-end OptP-hardness theorem: *)
     Theorem optp_hardness_e2e:
-      (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 11 * pos_formula_size pf /\
+      (* the expanded size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
@@ -464,7 +464,7 @@ Section EndToEnd.
       (* Let `n` be the guess budget corresponding to matching `r` on `s`. *)
       let n := expanded_budget r inp in
       (* Then:
-         - the sizes of `r` and `s` are linear in the size of `pf`, *)
+         - the expanded size of `r` and the length of `s` are linear in the size of `pf`, *)
       expanded_size r <= 12 * pos_formula_size pf /\
       length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
@@ -514,8 +514,8 @@ Section EndToEnd.
       (* Let `n` be the guess budget corresponding to matching `wr` on `s`. *)
       let n := expanded_budget (linden_of wr) inp in
       (* Then:
-         - the sizes of `wr` and `s` are linear in the size of `pf`, *)
-      pattern_size wr <= 11 * pos_formula_size pf /\
+         - the expanded size of `wr` and the length of `s` are linear in the size of `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
       n <= S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
