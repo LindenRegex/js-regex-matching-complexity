@@ -18,9 +18,9 @@ Section OptpHardness.
   Context (q: qbf).
   Hypothesis (WF_q: wf_qbf q).
 
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
   Context (rer: RegExpRecord).
-  Hypothesis (x_semicolon_neq: Character.canonicalize rer x_char <>
+  Hypothesis (a_semicolon_neq: Character.canonicalize rer a_char <>
     Character.canonicalize rer semicolon_char).
 
   Hypothesis (ALL_EXISTS: forall qt, List.In qt (fst q) -> qt = Qbf.Exists).
@@ -28,15 +28,15 @@ Section OptpHardness.
   Local Notation n := (List.length (fst q)).
   Local Notation quants := (fst q).
   Local Notation form := (snd q).
-  Local Notation str := (theString q x_char semicolon_char n_char).
-  Local Notation ioi := (inp_of_idx q x_char semicolon_char n_char).
+  Local Notation str := (theString q a_char semicolon_char z_char).
+  Local Notation ioi := (inp_of_idx q a_char semicolon_char z_char).
 
   Local Notation with_var i gm := (GroupMap.add i (var_range i) gm).
-  Local Notation defvar i := (def_var_regex x_char semicolon_char i).
+  Local Notation defvar i := (def_var_regex a_char semicolon_char i).
 
-  Local Notation dvr_spec := (def_var_regex_spec q x_char semicolon_char n_char rer).
+  Local Notation dvr_spec := (def_var_regex_spec q a_char semicolon_char z_char rer).
   Local Notation cfr_spec :=
-    (check_formula_regex_spec q WF_q x_char semicolon_char n_char rer x_semicolon_neq).
+    (check_formula_regex_spec q WF_q a_char semicolon_char z_char rer a_semicolon_neq).
 
   Lemma all_exists_skipn k qt: List.In qt (List.skipn k quants) -> qt = Qbf.Exists.
   Proof.
@@ -73,7 +73,7 @@ Section OptpHardness.
 
   Lemma check_formula_first_gm inp gm t:
       inp = ioi (2*n) -> wf_gm n gm ->
-      is_tree rer [Areg (check_formula_regex x_char semicolon_char form)] inp gm forward t ->
+      is_tree rer [Areg (check_formula_regex a_char semicolon_char form)] inp gm forward t ->
       first_gm t gm inp = if gm_satisfies_formula gm form then Some gm else None.
   Proof.
     intros EQ_inp WF TREE.
@@ -165,7 +165,7 @@ Section OptpHardness.
       forall inp qtail t,
         inp = ioi (2*(i-1)) ->
         qtail = List.skipn (i-1) quants ->
-        is_tree rer [Areg (theRegex_aux q x_char semicolon_char i qtail)] inp gm0 forward t ->
+        is_tree rer [Areg (theRegex_aux q a_char semicolon_char i qtail)] inp gm0 forward t ->
         lexmax_at i gm0 (first_gm t gm0 inp).
   Proof.
     intros NZ LE gm0 WF0 UNDEF inp qtail t EQ_inp EQ_qtail TREE.
@@ -190,7 +190,7 @@ Section OptpHardness.
   Qed.
 
   Theorem theRegex_first_gm_lexmax t:
-      is_tree rer [Areg (theRegex q x_char semicolon_char)] (init_input str)
+      is_tree rer [Areg (theRegex q a_char semicolon_char)] (init_input str)
               GroupMap.empty forward t ->
       match first_gm t GroupMap.empty (init_input str) with
       | Some gm =>
@@ -211,7 +211,7 @@ Section OptpHardness.
   Qed.
 
   Theorem theRegex_first_gm_max t:
-      is_tree rer [Areg (theRegex q x_char semicolon_char)] (init_input str)
+      is_tree rer [Areg (theRegex q a_char semicolon_char)] (init_input str)
               GroupMap.empty forward t ->
       match first_gm t GroupMap.empty (init_input str) with
       | Some gm =>
@@ -232,7 +232,7 @@ Section OptpHardness.
   Theorem reduction_valid pf:
       form = PosForm pf ->
     forall t,
-      is_tree rer [Areg (theRegex q x_char semicolon_char)] (init_input str)
+      is_tree rer [Areg (theRegex q a_char semicolon_char)] (init_input str)
               GroupMap.empty forward t ->
       match first_gm t GroupMap.empty (init_input str) with
       | Some gm => is_lex_max_sat n pf (bits_of_gm n gm)
@@ -255,16 +255,16 @@ End OptpHardness.
 
 Section LexSatReduction.
   Context {params: LindenParameters}.
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
 
   Definition lexsat_qbf (nv: nat) (pf: pos_formula): qbf :=
     (List.repeat Qbf.Exists nv, PosForm pf).
 
   Definition lexsat_regex (nv: nat) (pf: pos_formula): regex :=
-    theRegex (lexsat_qbf nv pf) x_char semicolon_char.
+    theRegex (lexsat_qbf nv pf) a_char semicolon_char.
 
   Definition lexsat_string (nv: nat) (pf: pos_formula): LWParameters.string :=
-    theString (lexsat_qbf nv pf) x_char semicolon_char n_char.
+    theString (lexsat_qbf nv pf) a_char semicolon_char z_char.
 
   Lemma lexsat_qbf_num_vars nv pf: List.length (fst (lexsat_qbf nv pf)) = nv.
   Proof. apply repeat_length. Qed.
@@ -282,7 +282,7 @@ Section LexSatReduction.
   Proof. intro; constructor; rewrite repeat_length; now constructor. Qed.
 
   Context (rer: RegExpRecord).
-  Hypothesis (x_semicolon_neq: Character.canonicalize rer x_char <>
+  Hypothesis (a_semicolon_neq: Character.canonicalize rer a_char <>
     Character.canonicalize rer semicolon_char).
 
   Theorem lexsat_reduction nv pf:
@@ -297,7 +297,7 @@ Section LexSatReduction.
   Proof.
     intros WF t TREE.
     pose proof reduction_valid (lexsat_qbf nv pf) (lexsat_qbf_wf nv pf WF)
-      x_char semicolon_char n_char rer x_semicolon_neq
+      a_char semicolon_char z_char rer a_semicolon_neq
       ltac:(intros qt IN; eapply repeat_spec, IN) pf eq_refl t TREE as SPEC.
     now rewrite lexsat_qbf_num_vars in SPEC.
   Qed.
@@ -305,25 +305,25 @@ End LexSatReduction.
 
 Section Fragment.
   Context {params: LindenParameters}.
-  Context (x_char semicolon_char: Parameters.Character).
+  Context (a_char semicolon_char: Parameters.Character).
 
   Definition in_fragment (r: regex): Prop := no_lookaround r /\ no_lower_bound r.
 
   Local Ltac frag := unfold in_fragment in *; cbn in *; tauto.
 
-  Lemma def_var_regex_frag v: in_fragment (def_var_regex x_char semicolon_char v).
+  Lemma def_var_regex_frag v: in_fragment (def_var_regex a_char semicolon_char v).
   Proof. frag. Qed.
 
   Lemma check_clause_regex_frag c:
-    in_fragment (check_clause_regex x_char semicolon_char c).
+    in_fragment (check_clause_regex a_char semicolon_char c).
   Proof.
     unfold check_clause_regex.
-    enough (in_fragment (check_clause_regex_aux x_char c)) by frag.
+    enough (in_fragment (check_clause_regex_aux a_char c)) by frag.
     induction c as [|[] c IH]; frag.
   Qed.
 
   Lemma check_conjunct_regex_frag cl:
-    in_fragment (check_conjunct_regex x_char semicolon_char cl).
+    in_fragment (check_conjunct_regex a_char semicolon_char cl).
   Proof.
     induction cl as [|c cl IH]; [frag|]; pose proof check_clause_regex_frag c; frag.
   Qed.
@@ -331,7 +331,7 @@ Section Fragment.
   Lemma theRegex_aux_frag (q: qbf) pf:
       snd q = PosForm pf ->
     forall ql, (forall qt, List.In qt ql -> qt = Qbf.Exists) ->
-    forall v, in_fragment (theRegex_aux q x_char semicolon_char v ql).
+    forall v, in_fragment (theRegex_aux q a_char semicolon_char v ql).
   Proof.
     intro EQ; induction ql as [|qt ql IH]; intros ALL v.
     - cbn [theRegex_aux check_formula_regex]; rewrite EQ; apply check_conjunct_regex_frag.
@@ -343,14 +343,14 @@ Section Fragment.
   Theorem theRegex_frag (q: qbf) pf:
       snd q = PosForm pf ->
       (forall qt, List.In qt (fst q) -> qt = Qbf.Exists) ->
-      in_fragment (theRegex q x_char semicolon_char).
+      in_fragment (theRegex q a_char semicolon_char).
   Proof. intros EQ ALL; eapply theRegex_aux_frag; eauto. Qed.
 
   Theorem theRegex_w_nolk (q: qbf):
       wf_qbf q ->
     forall pf, snd q = PosForm pf ->
       (forall qt, List.In qt (fst q) -> qt = Qbf.Exists) ->
-      pattern_no_lookaround (theRegex_w q x_char semicolon_char).
+      pattern_no_lookaround (theRegex_w q a_char semicolon_char).
   Proof.
     intros WF pf EQ ALL; eapply warblre_to_linden_no_lookaround;
       [apply regex_encoding_wl, WF | apply (theRegex_frag q pf EQ ALL)].
@@ -360,14 +360,14 @@ Section Fragment.
       wf_qbf q ->
     forall pf, snd q = PosForm pf ->
       (forall qt, List.In qt (fst q) -> qt = Qbf.Exists) ->
-    forall n_char rer,
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+    forall z_char rer,
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
     forall t,
-      is_tree rer [Areg (theRegex q x_char semicolon_char)]
-              (init_input (theString q x_char semicolon_char n_char))
+      is_tree rer [Areg (theRegex q a_char semicolon_char)]
+              (init_input (theString q a_char semicolon_char z_char))
               GroupMap.empty forward t ->
-      let r := theRegex q x_char semicolon_char in
-      let inp := init_input (theString q x_char semicolon_char n_char) in
+      let r := theRegex q a_char semicolon_char in
+      let inp := init_input (theString q a_char semicolon_char z_char) in
       let nb := guess_budget r inp in
       exists best,
         parse_spec rer r inp nb best /\
@@ -378,34 +378,34 @@ Section Fragment.
         | None => forall b, List.length b = List.length (fst q) -> assign_cnf b pf = false
         end.
   Proof.
-    intros WF_q pf EQ ALL n_char rer NEQ t TREE r inp ?.
+    intros WF_q pf EQ ALL z_char rer NEQ t TREE r inp ?.
     destruct (theRegex_frag q pf EQ ALL) as [NLK NLB].
     destruct (optp_membership_poly rer r inp t NLK NLB TREE) as [best (PARSE & LEN & EXEC)].
     exists best; do 2 (split; [assumption|]); rewrite EXEC.
-    now apply (reduction_valid q WF_q x_char semicolon_char n_char rer NEQ ALL pf EQ t TREE).
+    now apply (reduction_valid q WF_q a_char semicolon_char z_char rer NEQ ALL pf EQ t TREE).
   Qed.
 
 End Fragment.
 
 Corollary lexsat_regex_frag {params: LindenParameters}
-    (x_char semicolon_char: Parameters.Character) nv pf:
-    in_fragment (lexsat_regex x_char semicolon_char nv pf).
+    (a_char semicolon_char: Parameters.Character) nv pf:
+    in_fragment (lexsat_regex a_char semicolon_char nv pf).
 Proof.
   unfold lexsat_regex; eapply theRegex_frag; [reflexivity | intros qt IN; eapply repeat_spec, IN].
 Qed.
 
 Section LexSatWarblre.
   Context {params: LindenParameters}.
-  Context (x_char semicolon_char: Parameters.Character) (nv: nat) (pf: pos_formula).
+  Context (a_char semicolon_char: Parameters.Character) (nv: nat) (pf: pos_formula).
   Hypothesis WF: wf_pos_formula nv pf.
 
-  Let wr := theRegex_w (lexsat_qbf nv pf) x_char semicolon_char.
+  Let wr := theRegex_w (lexsat_qbf nv pf) a_char semicolon_char.
 
   Lemma lexsat_w_earlyErrors: StaticSemantics.earlyErrors wr [] = Success false.
   Proof. apply wr_earlyErrors, lexsat_qbf_wf, WF. Qed.
 
   Lemma lexsat_w_to_linden:
-    lexsat_regex x_char semicolon_char nv pf = linden_of wr.
+    lexsat_regex a_char semicolon_char nv pf = linden_of wr.
   Proof. apply wr_to_linden, lexsat_qbf_wf, WF. Qed.
 
   Lemma lexsat_w_frag: in_fragment (linden_of wr).
@@ -429,8 +429,8 @@ Section LexSatWarblre.
     rewrite theRegex_w_ngroups by (apply lexsat_qbf_wf, WF); apply repeat_length.
   Qed.
 
-  Context (n_char: Parameters.Character).
-  Let s := lexsat_string x_char semicolon_char n_char nv pf.
+  Context (z_char: Parameters.Character).
+  Let s := lexsat_string a_char semicolon_char z_char nv pf.
 
   Lemma lexsat_w_matcher (rer: RegExpRecord):
       RegExpRecord.capturingGroupsCount rer
@@ -438,7 +438,7 @@ Section LexSatWarblre.
       exists m,
         Warblre.spec.Semantics.Semantics.compilePattern wr rer = Success m /\
         m s 0 = Success (to_MatchState (linden_result rer
-                           (lexsat_regex x_char semicolon_char nv pf) (init_input s)) nv).
+                           (lexsat_regex a_char semicolon_char nv pf) (init_input s)) nv).
   Proof.
     intro CAPS; destruct (matcher_result _ _ s lexsat_w_earlyErrors lexsat_w_to_linden
                             rer CAPS) as [m (COMP & EXEC)].
@@ -451,7 +451,7 @@ Section LexSatWarblre.
       exists inst,
         regExpInitialize wr flags = Success inst /\
         exec_agrees inst s
-          (to_MatchState (linden_result rer (lexsat_regex x_char semicolon_char nv pf)
+          (to_MatchState (linden_result rer (lexsat_regex a_char semicolon_char nv pf)
                             (init_input s)) (RegExpRecord.capturingGroupsCount rer)).
   Proof.
     intros; apply (matches_regExpExec_result_flags _ _ s lexsat_w_earlyErrors
@@ -460,23 +460,23 @@ Section LexSatWarblre.
 End LexSatWarblre.
 
 Lemma lexsat_answer {params: LindenParameters}
-    (x_char semicolon_char n_char: Parameters.Character) (rer: RegExpRecord) nv pf:
+    (a_char semicolon_char z_char: Parameters.Character) (rer: RegExpRecord) nv pf:
     wf_pos_formula nv pf ->
-    Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+    Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
     let q := lexsat_qbf nv pf in
-    match to_MatchState (linden_result rer (RegexEncoding.theRegex q x_char semicolon_char)
-                           (init_input (theString q x_char semicolon_char n_char))) nv with
+    match to_MatchState (linden_result rer (RegexEncoding.theRegex q a_char semicolon_char)
+                           (init_input (theString q a_char semicolon_char z_char))) nv with
     | Some ms => is_lex_max_sat nv pf (defined_bits (Notation.MatchState.captures ms))
     | None => forall b, length b = nv -> assign_cnf b pf = false
     end.
 Proof.
   intros WF NEQ; cbv zeta; unfold linden_result; set (t := compute_tr _ _ _ _ _).
   pose proof lexsat_qbf_wf nv pf WF as WFq.
-  assert (TREE: is_tree rer [Areg (lexsat_regex x_char semicolon_char nv pf)]
-                  (init_input (lexsat_string x_char semicolon_char n_char nv pf))
+  assert (TREE: is_tree rer [Areg (lexsat_regex a_char semicolon_char nv pf)]
+                  (init_input (lexsat_string a_char semicolon_char z_char nv pf))
                   GroupMap.empty forward t) by apply compute_tr_is_tree.
-  pose proof lexsat_reduction x_char semicolon_char n_char rer NEQ nv pf WF t TREE as RED.
-  pose proof theRegex_first_gm_max (lexsat_qbf nv pf) WFq x_char semicolon_char n_char rer NEQ
+  pose proof lexsat_reduction a_char semicolon_char z_char rer NEQ nv pf WF t TREE as RED.
+  pose proof theRegex_first_gm_max (lexsat_qbf nv pf) WFq a_char semicolon_char z_char rer NEQ
     ltac:(intros qt IN; eapply repeat_spec, IN) t TREE as WFGM.
   rewrite lexsat_qbf_num_vars, first_gm_first_leaf in WFGM; unfold lexsat_string in RED.
   destruct (first_leaf t _) as [[inp gm]|]; cbn [option_map snd] in RED, WFGM; [|exact RED].
@@ -484,20 +484,20 @@ Proof.
 Qed.
 
 Corollary lexsat_answer_flags {params: LindenParameters}
-    (x_char semicolon_char n_char: Parameters.Character)
+    (a_char semicolon_char z_char: Parameters.Character)
     (flags: RegExpFlags) (rer: RegExpRecord) nv pf:
     wf_pos_formula nv pf ->
-    Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+    Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
     let q := lexsat_qbf nv pf in
-    rer = rer_of (theRegex_w q x_char semicolon_char) flags ->
-    match to_MatchState (linden_result rer (RegexEncoding.theRegex q x_char semicolon_char)
-                           (init_input (theString q x_char semicolon_char n_char)))
+    rer = rer_of (theRegex_w q a_char semicolon_char) flags ->
+    match to_MatchState (linden_result rer (RegexEncoding.theRegex q a_char semicolon_char)
+                           (init_input (theString q a_char semicolon_char z_char)))
                         (RegExpRecord.capturingGroupsCount rer) with
     | Some ms => is_lex_max_sat nv pf (defined_bits (Notation.MatchState.captures ms))
     | None => forall b, length b = nv -> assign_cnf b pf = false
     end.
 Proof.
   intros WF ? ? RER.
-  rewrite (lexsat_ngroups x_char semicolon_char nv pf WF rer ltac:(now rewrite RER)).
+  rewrite (lexsat_ngroups a_char semicolon_char nv pf WF rer ltac:(now rewrite RER)).
   apply lexsat_answer; assumption.
 Qed.

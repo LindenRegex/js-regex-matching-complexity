@@ -91,7 +91,7 @@ Section EndToEnd.
     destruct (pspace_algo rer act inp gm dir fuel); cbn in CORR; congruence.
   Qed.
 
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
   Context (hasIndices global ignoreCase multiline dotAll: bool).
 
   (* We set the `sticky` flag to true (anchored search). *)
@@ -106,15 +106,15 @@ Section EndToEnd.
     (* The QBF' corresponding to the prenex QBF `pq`. *)
     Let q := qbf_of_pqbf pq.
     (* The regex corresponding to the translation of `q`. *)
-    Let wr := theRegex_w q x_char semicolon_char.
+    Let wr := theRegex_w q a_char semicolon_char.
     (* The string corresponding to the translation of `q`. *)
-    Let s := theString q x_char semicolon_char n_char.
+    Let s := theString q a_char semicolon_char z_char.
     (* The RegExpRecord corresponding to the flags and the Warblre regex. *)
     Let rer := rer_of wr flags.
 
     (* We require the canonicalized `a` character to be different from the canonicalized `;` character. *)
-    Hypothesis x_semicolon_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
+    Hypothesis a_semicolon_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char.
 
     (* PSPACE-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_matcher:
@@ -172,23 +172,23 @@ Section EndToEnd.
     (* The PQBF pq must be well-formed. *)
     Hypothesis wf_pq: wf_pqbf pq.
     (* Neither of the characters a and z must be line terminators. *)
-    Hypothesis n_no_line_terminator: ~In n_char Character.line_terminators.
-    Hypothesis x_no_line_terminator: ~In x_char Character.line_terminators.
+    Hypothesis z_no_line_terminator: ~In z_char Character.line_terminators.
+    Hypothesis a_no_line_terminator: ~In a_char Character.line_terminators.
 
     (* The QBF' corresponding to the prenex QBF `pq`. *)
     Let q := qbf_of_pqbf pq.
     (* The Warblre regex corresponding to the translation of `q` without negative lookarounds. *)
-    Let wr := theRegex_poslk_w q x_char semicolon_char n_char.
+    Let wr := theRegex_poslk_w q a_char semicolon_char z_char.
     (* The string corresponding to the translation of `q`. *)
-    Let s := theString q x_char semicolon_char n_char.
+    Let s := theString q a_char semicolon_char z_char.
     (* The RegExpRecord corresponding to the regex `wr` and the flags `flags`. *)
     Let rer := rer_of wr flags.
 
     (* We require the canonicalized `a` character to be different from the canonicalized `;` and `z` characters. *)
-    Hypothesis x_semicolon_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
-    Hypothesis x_n_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer n_char.
+    Hypothesis a_semicolon_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char.
+    Hypothesis a_z_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer z_char.
 
     (* PSPACE-hardness theorem without negative lookarounds, in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_noneglk_matcher:
@@ -318,15 +318,15 @@ Section EndToEnd.
 
     (* The Warblre regex corresponding to translating the formula `pf` into an instance of regex matching.
        We reuse the QBF translation by prepending existential quantifiers to the formula (this is what lexsat_qbf does). *)
-    Let wr := theRegex_w (lexsat_qbf nv pf) x_char semicolon_char.
+    Let wr := theRegex_w (lexsat_qbf nv pf) a_char semicolon_char.
     (* The string corresponding to translating the formula `pf` into an instance of regex matching. *)
-    Let s := lexsat_string x_char semicolon_char n_char nv pf.
+    Let s := lexsat_string a_char semicolon_char z_char nv pf.
     (* The RegExpRecord corresponding to matching the regex `wr` with the flags `flags`. *)
     Let rer := rer_of wr flags.
 
     (* We require the canonicalized `a` character to differ from the canonicalized `;` character. *)
-    Hypothesis x_semicolon_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
+    Hypothesis a_semicolon_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char.
 
     (* OptP-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_hardness_matcher:
@@ -356,10 +356,10 @@ Section EndToEnd.
     Proof.
       split; [rewrite <- lexsat_qbf_size; apply theRegex_w_size|].
       split; [rewrite <- lexsat_qbf_size; apply theString_size|].
-      split; [exact (lexsat_w_earlyErrors x_char semicolon_char nv pf wf_pf)|].
+      split; [exact (lexsat_w_earlyErrors a_char semicolon_char nv pf wf_pf)|].
       split; [split; [apply lexsat_w_nolk | apply lexsat_w_nolb]; exact wf_pf|].
-      split; [exact (lexsat_w_frag x_char semicolon_char nv pf wf_pf)|].
-      destruct (lexsat_w_matcher _ _ nv pf wf_pf n_char rer eq_refl) as [m (COMP & EXEC)].
+      split; [exact (lexsat_w_frag a_char semicolon_char nv pf wf_pf)|].
+      destruct (lexsat_w_matcher _ _ nv pf wf_pf z_char rer eq_refl) as [m (COMP & EXEC)].
       do 2 eexists; split; [exact COMP|]; split; [exact EXEC | now apply lexsat_answer].
     Qed.
 
@@ -392,14 +392,14 @@ Section EndToEnd.
     Proof.
       split; [rewrite <- lexsat_qbf_size; apply theRegex_w_size|].
       split; [rewrite <- lexsat_qbf_size; apply theString_size|].
-      split; [exact (lexsat_w_earlyErrors x_char semicolon_char nv pf wf_pf)|].
+      split; [exact (lexsat_w_earlyErrors a_char semicolon_char nv pf wf_pf)|].
       split; [split; [apply lexsat_w_nolk | apply lexsat_w_nolb]; exact wf_pf|].
-      split; [exact (lexsat_w_frag x_char semicolon_char nv pf wf_pf)|].
-      destruct (lexsat_w_exec_result x_char semicolon_char nv pf wf_pf n_char flags rer
+      split; [exact (lexsat_w_frag a_char semicolon_char nv pf wf_pf)|].
+      destruct (lexsat_w_exec_result a_char semicolon_char nv pf wf_pf z_char flags rer
                   eq_refl eq_refl) as [inst [INIT RES]].
       exists inst; split; [exact INIT | eapply exec_array_transfer; [exact RES|]].
-      now apply (lexsat_answer_flags x_char semicolon_char n_char flags rer nv pf
-                   wf_pf x_semicolon_neq eq_refl).
+      now apply (lexsat_answer_flags a_char semicolon_char z_char flags rer nv pf
+                   wf_pf a_semicolon_neq eq_refl).
     Qed.
   End OptpHardness.
 
@@ -409,10 +409,10 @@ Section EndToEnd.
       (* Let `pf` be a well-formed propositional formula with `nv` variables. *)
       wf_pos_formula nv pf ->
       (* Assume that the canonicalized `a` and `;` characters are different. *)
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
       (* Let (r, s) be the instance of regex matching corresponding to `pf`, where `r` is a Linden regex. *)
-      let r := lexsat_regex x_char semicolon_char nv pf in
-      let s := lexsat_string x_char semicolon_char n_char nv pf in
+      let r := lexsat_regex a_char semicolon_char nv pf in
+      let s := lexsat_string a_char semicolon_char z_char nv pf in
       let inp := init_input s in
       (* Let `n` be the guess budget corresponding to matching `r` on `s`. *)
       let n := guess_budget r inp in
@@ -440,24 +440,24 @@ Section EndToEnd.
         end.
   Proof.
     intros * WF NEQ; cbv zeta.
-    pose proof theRegex_size x_char semicolon_char (lexsat_qbf nv pf) as RS.
-    pose proof theString_size x_char semicolon_char n_char (lexsat_qbf nv pf) as SS.
+    pose proof theRegex_size a_char semicolon_char (lexsat_qbf nv pf) as RS.
+    pose proof theString_size a_char semicolon_char z_char (lexsat_qbf nv pf) as SS.
     pose proof size_le_expanded
-      (RegexEncoding.theRegex (lexsat_qbf nv pf) x_char semicolon_char) as AST.
+      (RegexEncoding.theRegex (lexsat_qbf nv pf) a_char semicolon_char) as AST.
     rewrite lexsat_qbf_size in RS, SS.
     split; [exact RS|]; split; [exact SS|].
-    split; [|split; [exact (lexsat_regex_frag x_char semicolon_char nv pf)|]].
+    split; [|split; [exact (lexsat_regex_frag a_char semicolon_char nv pf)|]].
     { unfold guess_budget, lexsat_regex, lexsat_string.
       replace (remaining_length
-                 (init_input (theString (lexsat_qbf nv pf) x_char semicolon_char n_char)) forward)
-        with (length (theString (lexsat_qbf nv pf) x_char semicolon_char n_char)) by reflexivity.
-      assert ((1 + length (theString (lexsat_qbf nv pf) x_char semicolon_char n_char))
-              * regex_size (RegexEncoding.theRegex (lexsat_qbf nv pf) x_char semicolon_char)
+                 (init_input (theString (lexsat_qbf nv pf) a_char semicolon_char z_char)) forward)
+        with (length (theString (lexsat_qbf nv pf) a_char semicolon_char z_char)) by reflexivity.
+      assert ((1 + length (theString (lexsat_qbf nv pf) a_char semicolon_char z_char))
+              * regex_size (RegexEncoding.theRegex (lexsat_qbf nv pf) a_char semicolon_char)
               <= (1 + 2 * lexsat_size nv pf) * (9 * lexsat_size nv pf))
         by (apply PeanoNat.Nat.mul_le_mono; lia).
       nia. }
-    destruct (lexsat_by_optp x_char semicolon_char _ (lexsat_qbf_wf nv pf WF) pf eq_refl
-                ltac:(intros qt IN; eapply repeat_spec, IN) n_char rer NEQ _
+    destruct (lexsat_by_optp a_char semicolon_char _ (lexsat_qbf_wf nv pf WF) pf eq_refl
+                ltac:(intros qt IN; eapply repeat_spec, IN) z_char rer NEQ _
                 (compute_tr_is_tree _)) as [best JOIN].
     rewrite lexsat_qbf_num_vars in JOIN; eauto.
   Qed.
@@ -468,11 +468,11 @@ Section EndToEnd.
       (* Let `pf` be a well-formed propositional formula with `nv` variables. *)
       wf_pos_formula nv pf ->
       (* Assume that the canonicalized `a` and `;` characters are different. *)
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
       (* Let (wr, s) be the instance of regex matching corresponding to `pf`,
          where `wr` is a Warblre (ECMAScript) regex. *)
-      let wr := theRegex_w (lexsat_qbf nv pf) x_char semicolon_char in
-      let s := lexsat_string x_char semicolon_char n_char nv pf in
+      let wr := theRegex_w (lexsat_qbf nv pf) a_char semicolon_char in
+      let s := lexsat_string a_char semicolon_char z_char nv pf in
       let inp := init_input s in
       (* Let `n` be the guess budget corresponding to matching `wr` on `s`. *)
       let n := guess_budget (linden_of wr) inp in
@@ -503,11 +503,11 @@ Section EndToEnd.
         end.
   Proof.
     intros * WF NEQ; cbv zeta.
-    rewrite <- (lexsat_w_to_linden x_char semicolon_char nv pf WF).
+    rewrite <- (lexsat_w_to_linden a_char semicolon_char nv pf WF).
     destruct (optp_hardness_machine rer nv pf WF NEQ) as (RS & SS & BUD & FRAG & MACHINE).
     split; [rewrite <- lexsat_qbf_size; apply theRegex_w_size|].
     split; [exact SS|]; split; [exact BUD|].
-    split; [exact (lexsat_w_earlyErrors x_char semicolon_char nv pf WF)|].
+    split; [exact (lexsat_w_earlyErrors a_char semicolon_char nv pf WF)|].
     split; [split; [apply lexsat_w_nolk | apply lexsat_w_nolb]; exact WF|].
     split; [exact FRAG | exact MACHINE].
   Qed.
