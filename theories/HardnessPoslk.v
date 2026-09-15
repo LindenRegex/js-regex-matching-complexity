@@ -480,15 +480,15 @@ Section HardnessPoslk.
         inversion TREE. subst r1 r2 cont inp0 gm0 dir t0. simpl in CONT.
         inversion CONT.
         2: {
-          (* The capture_z_regex always captures the n at the end, so the lookaround cannot fail *)
+          (* The capture_z_regex always captures the z at the end, so the lookaround cannot fail *)
           exfalso.
           subst lk r1 cont inp0 gm0 dir t.
-          pose proof capture_z_regex_spec (S n) as CAP_N_SPEC.
-          specialize (CAP_N_SPEC _ inp _ EQ_inp').
+          pose proof capture_z_regex_spec (S n) as CAP_Z_SPEC.
+          specialize (CAP_Z_SPEC _ inp _ EQ_inp').
           inversion TREELK. subst r1 r2 cont inp0 gm0 dir treelk.
-          specialize (CAP_N_SPEC gm t2 ISTREE2).
+          specialize (CAP_Z_SPEC gm t2 ISTREE2).
           unfold lk_result in FAIL_LK. simpl in FAIL_LK.
-          rewrite first_tree_leaf with (t := t2) in FAIL_LK. rewrite CAP_N_SPEC in FAIL_LK.
+          rewrite first_tree_leaf with (t := t2) in FAIL_LK. rewrite CAP_Z_SPEC in FAIL_LK.
           destruct (tree_res t1 gm inp forward) as [[]|]; try discriminate.
         }
         subst lk r1 cont inp0 gm0 dir t. clear CONT.
@@ -498,9 +498,9 @@ Section HardnessPoslk.
         specialize (H WF_gm t1).
         fold form in H. rewrite EQ_form in H. simpl in H.
         specialize (H ISTREE1).
-        pose proof capture_z_regex_spec (S n) as CAP_N_SPEC.
-        specialize (CAP_N_SPEC _ inp _ EQ_inp' gm t2 ISTREE2).
-        simpl. rewrite CAP_N_SPEC.
+        pose proof capture_z_regex_spec (S n) as CAP_Z_SPEC.
+        specialize (CAP_Z_SPEC _ inp _ EQ_inp' gm t2 ISTREE2).
+        simpl. rewrite CAP_Z_SPEC.
         specialize (H _ eq_refl).
         pose proof check_z_regex_spec (S n) _ inp _ ltac:(lia) EQ_inp' as CHECK_Z_SPEC.
         unfold lk_result in RES_LK. simpl in RES_LK. do 2 rewrite first_tree_leaf in RES_LK.
@@ -510,7 +510,7 @@ Section HardnessPoslk.
           specialize (CHECK_Z_SPEC gmcap).
           specialize_prove CHECK_Z_SPEC. { unfold wf_gm_n_i. right. unfold gmcap.
             setoid_rewrite GroupMap.Facts.add_eq_o; auto. }
-          rewrite CAP_N_SPEC in RES_LK. simpl in RES_LK. injection RES_LK as <-.
+          rewrite CAP_Z_SPEC in RES_LK. simpl in RES_LK. injection RES_LK as <-.
           fold gmcap in TREECONT.
           specialize (CHECK_Z_SPEC _ TREECONT).
           split.
@@ -617,14 +617,14 @@ Section HardnessPoslk.
         fold (inp_of_idx (2*(i-1))) in EQ_inp'. rewrite <- EQ_inp in EQ_inp'.
         inversion CONT.
         2: {
-          (* The capture_z_regex always captures the n at the end, so the lookaround cannot fail *)
+          (* The capture_z_regex always captures the z at the end, so the lookaround cannot fail *)
           exfalso.
           subst lk r1 cont inp0 gm0 dir t.
-          pose proof capture_z_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CAP_N_SPEC. specialize (CAP_N_SPEC _ inp _ EQ_inp').
+          pose proof capture_z_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CAP_Z_SPEC. specialize (CAP_Z_SPEC _ inp _ EQ_inp').
           inversion TREELK. subst r1 r2 cont inp0 gm0 dir treelk.
-          specialize (CAP_N_SPEC gm t2 ISTREE2).
+          specialize (CAP_Z_SPEC gm t2 ISTREE2).
           unfold lk_result in FAIL_LK. simpl in FAIL_LK.
-          rewrite first_tree_leaf with (t := t2) in FAIL_LK. rewrite CAP_N_SPEC in FAIL_LK.
+          rewrite first_tree_leaf with (t := t2) in FAIL_LK. rewrite CAP_Z_SPEC in FAIL_LK.
           destruct (tree_res t1 gm inp forward) as [[]|]; try discriminate.
         }
         subst lk r1 cont inp0 gm0 dir t. clear CONT.
@@ -673,30 +673,30 @@ Section HardnessPoslk.
         specialize (IHneg (inp_of_idx (i + (i + 0))) t1 ltac:(reflexivity) ltac:(auto)).
         setoid_rewrite H4 in IHpos. setoid_rewrite H5 in IHneg.
         (* End specializing IHnp1_minus_i *)
-        pose proof capture_z_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CAP_N_SPEC.
-        specialize (CAP_N_SPEC _ inp _ EQ_inp' _ _ ISTREE2). rewrite CAP_N_SPEC.
+        pose proof capture_z_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CAP_Z_SPEC.
+        specialize (CAP_Z_SPEC _ inp _ EQ_inp' _ _ ISTREE2). rewrite CAP_Z_SPEC.
         pose proof app_nonempty_iff ly ly0.
         (* About check_z_regex *)
         pose proof check_z_regex_spec (z_gid_at q (NotExists :: skipn i quants)) as CHECK_Z_SPEC.
         specialize CHECK_Z_SPEC with (k := _) (inp := inp) (pref := _) (2 := EQ_inp').
         specialize_prove CHECK_Z_SPEC. { unfold z_gid_at. fold quants n. destruct (snd q); simpl; lia. }
         destruct (ly ++ ly0) as [|lfnonneg ?] eqn:NONNEG_EMPTY.
-        * (* Non-negated QBF is false: we capture the n at the end. Prove True <-> True *)
+        * (* Non-negated QBF is false: we capture the z at the end. Prove True <-> True *)
           simpl.
-          set (gmsetn := GroupMap.add (z_gid_at q (NotExists :: skipn i quants)) _ gm).
-          specialize (CHECK_Z_SPEC gmsetn).
+          set (gmsetz := GroupMap.add (z_gid_at q (NotExists :: skipn i quants)) _ gm).
+          specialize (CHECK_Z_SPEC gmsetz).
           specialize_prove CHECK_Z_SPEC. {
-            unfold gmsetn, wf_gm_n_i.
+            unfold gmsetz, wf_gm_n_i.
             right. setoid_rewrite GroupMap.Facts.add_eq_o; reflexivity.
           }
           rewrite first_tree_leaf, <- H, <- H3, app_nil_r, NONNEG_EMPTY in RES_LK.
           simpl in RES_LK.
-          rewrite first_tree_leaf, CAP_N_SPEC in RES_LK. simpl in RES_LK.
+          rewrite first_tree_leaf, CAP_Z_SPEC in RES_LK. simpl in RES_LK.
           injection RES_LK as <-.
           specialize (CHECK_Z_SPEC treecont TREECONT).
           split.
           -- transitivity True; split; auto; intros _.
-             ++ apply CHECK_Z_SPEC. unfold gmsetn.
+             ++ apply CHECK_Z_SPEC. unfold gmsetz.
                 apply GroupMap.Facts.add_eq_o. reflexivity.
              ++ destruct ly eqn:LY_NIL; try discriminate.
                 destruct ly0 eqn:LY0_NIL; try discriminate.
@@ -713,10 +713,10 @@ Section HardnessPoslk.
              intros inp' gm' IN_lf'.
              specialize (CHECK_Z_SPEC (inp', gm') IN_lf').
              injection CHECK_Z_SPEC as _ ->.
-             intros j INB_j1 INB_j2. unfold gmsetn.
+             intros j INB_j1 INB_j2. unfold gmsetz.
              fold quants. fold n. symmetry.
              apply GroupMap.Facts.add_neq_o. unfold z_gid_at in *. simpl in *. destruct (snd q); lia.
-        * (* Non-negated QBF is true: we don't capture the n at the end. *)
+        * (* Non-negated QBF is true: we don't capture the z at the end. *)
           set (leaves := match (lfnonneg :: l) ++ _ with | [] => _ | (_, gm') :: _ => _ end).
           assert (leaves = []). {
             destruct lfnonneg as [inpnneg gmnneg]. simpl in leaves.

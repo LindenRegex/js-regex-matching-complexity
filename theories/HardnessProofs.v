@@ -218,7 +218,7 @@ Section Proofs.
       + simpl. f_equal. apply IHl.
   Qed.
 
-  (* Lemma specifying the behavior of the regex checking a literal (either \i or \i x).*)
+  (* Lemma specifying the behavior of the regex checking a literal (either \i or \i a).*)
   Lemma check_literal_regex_spec:
     (* Let lit be a well-formed literal and gm be a valid group map. *)
     forall (i: nat) (lit: literal) (inp: input) (gm: group_map),
