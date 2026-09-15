@@ -426,22 +426,18 @@ Section LexSatSize.
       pose proof lexsat_string_length nv pf; unfold pos_formula_size; lia.
   Qed.
 
-  Theorem lexsat_guess_budget_bound nv pf:
+  Theorem lexsat_expanded_budget_bound nv pf:
       uses_all_vars nv pf ->
-      guess_budget (lexsat_regex a_char semicolon_char nv pf)
-                   (init_input (lexsat_string a_char semicolon_char z_char nv pf)) <=
-        S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)).
+      expanded_budget (lexsat_regex a_char semicolon_char nv pf)
+                      (init_input (lexsat_string a_char semicolon_char z_char nv pf)) <=
+        S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)).
   Proof.
-    intro USES; unfold guess_budget.
-    pose proof lexsat_regex_ast_size_bound nv pf USES.
+    intro USES; unfold expanded_budget.
+    pose proof lexsat_regex_size_bound nv pf USES.
     pose proof lexsat_string_size_bound nv pf USES.
     replace (remaining_length (init_input (lexsat_string a_char semicolon_char z_char nv pf))
                forward)
       with (length (lexsat_string a_char semicolon_char z_char nv pf)) by reflexivity.
-    assert ((1 + length (lexsat_string a_char semicolon_char z_char nv pf))
-            * regex_size (lexsat_regex a_char semicolon_char nv pf)
-            <= (1 + 2 * pos_formula_size pf) * (11 * pos_formula_size pf))
-      by (apply Nat.mul_le_mono; lia).
     nia.
   Qed.
 End LexSatSize.
@@ -511,7 +507,7 @@ Section Fragment.
               GroupMap.empty forward t ->
       let r := theRegex q a_char semicolon_char in
       let inp := init_input (theString q a_char semicolon_char z_char) in
-      let nb := guess_budget r inp in
+      let nb := expanded_budget r inp in
       exists best,
         parse_spec rer r inp nb best /\
         length best = S nb /\
@@ -522,8 +518,8 @@ Section Fragment.
         end.
   Proof.
     intros WF_q pf EQ ALL z_char rer NEQ t TREE r inp ?.
-    destruct (theRegex_frag q pf EQ ALL) as [NLK NLB].
-    destruct (optp_membership_poly_nolb rer r inp t NLK NLB TREE) as [best (PARSE & LEN & EXEC)].
+    destruct (theRegex_frag q pf EQ ALL) as [NLK _].
+    destruct (optp_membership_poly rer r inp t NLK TREE) as [best (PARSE & LEN & EXEC)].
     exists best; do 2 (split; [assumption|]); rewrite EXEC.
     now apply (reduction_valid q WF_q a_char semicolon_char z_char rer NEQ ALL pf EQ t TREE).
   Qed.

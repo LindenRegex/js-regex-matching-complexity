@@ -462,13 +462,13 @@ Section EndToEnd.
       let s := lexsat_string a_char semicolon_char z_char nv pf in
       let inp := init_input s in
       (* Let `n` be the guess budget corresponding to matching `r` on `s`. *)
-      let n := guess_budget r inp in
+      let n := expanded_budget r inp in
       (* Then:
          - the sizes of `r` and `s` are linear in the size of `pf`, *)
       expanded_size r <= 12 * pos_formula_size pf /\
       length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
-      n <= S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
+      n <= S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
       (* - `r` has neither lookarounds nor lower-bounded quantifiers, *)
       (no_lookaround r /\ no_lower_bound r) /\
       (* - there exists a result `best` of the OptP algorithm on `r` and `s`, *)
@@ -489,7 +489,7 @@ Section EndToEnd.
     intros * WF USES NEQ; cbv zeta.
     split; [now apply lexsat_regex_size_bound|].
     split; [now apply lexsat_string_size_bound|].
-    split; [now apply lexsat_guess_budget_bound|].
+    split; [now apply lexsat_expanded_budget_bound|].
     split; [exact (lexsat_regex_frag a_char semicolon_char nv pf)|].
     destruct (lexsat_by_optp a_char semicolon_char _ (lexsat_qbf_wf nv pf WF) pf eq_refl
                 ltac:(intros qt IN; eapply repeat_spec, IN) z_char rer NEQ _
@@ -512,13 +512,13 @@ Section EndToEnd.
       let s := lexsat_string a_char semicolon_char z_char nv pf in
       let inp := init_input s in
       (* Let `n` be the guess budget corresponding to matching `wr` on `s`. *)
-      let n := guess_budget (linden_of wr) inp in
+      let n := expanded_budget (linden_of wr) inp in
       (* Then:
          - the sizes of `wr` and `s` are linear in the size of `pf`, *)
       pattern_size wr <= 11 * pos_formula_size pf /\
       length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
-      n <= S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
+      n <= S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
       (* - the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* - `wr` has neither lookarounds nor lower-bounded quantifiers, *)
