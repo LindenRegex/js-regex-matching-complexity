@@ -76,8 +76,8 @@ Section EndToEnd.
   Context (x_char semicolon_char n_char: Parameters.Character).
   Context (global ignoreCase multiline dotAll: bool).
 
-  (* We set the `hasIndices` flag to false, and the `sticky` flag to true (anchored search). *)
-  Let flags := reg_exp_flags false global ignoreCase multiline dotAll tt true.
+  (* We set the `sticky` flag to true (anchored search). *)
+  Let flags := reg_exp_flags hasIndices global ignoreCase multiline dotAll tt true.
 
   (** * PSPACE-hardness results *)
   Section PspaceHardness.
@@ -85,7 +85,7 @@ Section EndToEnd.
     (* The PQBF `pq` must be well-formed. *)
     Hypothesis wf_pq: wf_pqbf pq.
 
-    (* The QBFbar corresponding to the prenex QBF `pq`. *)
+    (* The QBF' corresponding to the prenex QBF `pq`. *)
     Let q := qbf_of_pqbf pq.
     (* The regex corresponding to the translation of `q`. *)
     Let wr := theRegex_w q x_char semicolon_char.
@@ -106,8 +106,8 @@ Section EndToEnd.
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
-      (* the regex does not have lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (* does not have lower-bounded quantifiers, *)
+      (pattern_no_lower_bound wr) /\ (no_lower_bound (linden_of wr)) /\
       (* compiling the regex `wr` with the flags `flags` (contained in `rer`) succeeds, *)
       exists m res,
         Semantics.compilePattern wr rer = Success m /\
@@ -130,7 +130,7 @@ Section EndToEnd.
       (* the regex passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* it has no lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (pattern_no_lower_bound wr) /\ (no_lower_bound (linden_of wr)) /\
       (* and `wr` has a match on `s` with the flags `flags` if and only if the PQBF `pq` is true. *)
       regex_test wr flags s (pqbf_true pq).
     Proof.
@@ -149,7 +149,7 @@ Section EndToEnd.
     Hypothesis n_no_line_terminator: ~In n_char Character.line_terminators.
     Hypothesis x_no_line_terminator: ~In x_char Character.line_terminators.
 
-    (* The QBFbar corresponding to the prenex QBF `pq`. *)
+    (* The QBF' corresponding to the prenex QBF `pq`. *)
     Let q := qbf_of_pqbf pq.
     (* The Warblre regex corresponding to the translation of `q` without negative lookarounds. *)
     Let wr := theRegex_poslk_w q x_char semicolon_char n_char.
@@ -172,10 +172,9 @@ Section EndToEnd.
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
-      (* has no negative lookarounds, *)
-      pattern_no_neg_lookaround wr /\
-      (* nor lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (* has no negative lookarounds nor lower-bounded quantifiers, *)
+      (pattern_no_neg_lookaround wr /\ pattern_no_lower_bound wr) /\
+      (no_neg_lookaround (linden_of wr) /\ no_lower_bound (linden_of wr)) /\
       (* compiling the regex `wr` with the flags `flags` (contained in `rer`) succeeds, *)
       exists m res,
         Semantics.compilePattern wr rer = Success m /\
@@ -185,9 +184,9 @@ Section EndToEnd.
         (res <> None <-> pqbf_true pq = true).
     Proof.
       pose proof wf_qbf_of_pqbf pq wf_pq; unfold q, wr, s, rer in *.
-      rewrite <- qbf_size_of_pqbf, <- qbf_of_pqbf_true; repeat apply conj;
-        auto using theRegex_poslk_w_size, theString_size, wr_poslk_earlyErrors,
-          theRegex_poslk_w_noneglk, wr_poslk_nolb, qbf_poslk_warblre_matcher.
+      rewrite <- qbf_size_of_pqbf, <- qbf_of_pqbf_true; auto 10 using theRegex_poslk_w_size,
+        theString_size, wr_poslk_earlyErrors, theRegex_poslk_w_noneglk, theRegex_poslk_w_nolb,
+        wr_poslk_noneglk, wr_poslk_nolb, qbf_poslk_warblre_matcher.
     Qed.
 
     (* End-to-end PSPACE-hardness theorem without negative lookarounds: *)
@@ -198,17 +197,16 @@ Section EndToEnd.
       length s <= 2 * pqbf_size pq /\
       (* the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
-      (* does not have negative lookarounds, *)
-      pattern_no_neg_lookaround wr /\
-      (* nor lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (* does not have negative lookarounds nor lower-bounded quantifiers, *)
+      (pattern_no_neg_lookaround wr /\ pattern_no_lower_bound wr) /\
+      (no_neg_lookaround (linden_of wr) /\ no_lower_bound (linden_of wr)) /\
       (* and `wr` has a match on `s` with the flags `flags` if and only if the PQBF `pq` is true. *)
       regex_test wr flags s (pqbf_true pq).
     Proof.
       pose proof wf_qbf_of_pqbf pq wf_pq; unfold q, wr, s, rer in *.
-      rewrite <- qbf_size_of_pqbf, <- qbf_of_pqbf_true; repeat apply conj;
-        auto using theRegex_poslk_w_size, theString_size, wr_poslk_earlyErrors,
-          theRegex_poslk_w_noneglk, wr_poslk_nolb, qbf_poslk_warblre_frontend_all.
+      rewrite <- qbf_size_of_pqbf, <- qbf_of_pqbf_true; auto 10 using theRegex_poslk_w_size,
+        theString_size, wr_poslk_earlyErrors, theRegex_poslk_w_noneglk, theRegex_poslk_w_nolb,
+        wr_poslk_noneglk, wr_poslk_nolb, qbf_poslk_warblre_frontend_all.
     Qed.
   End PspaceHardnessPoslk.
 
@@ -389,7 +387,7 @@ Section EndToEnd.
       n <= S (27 * lexsat_size nv pf * (1 + 2 * lexsat_size nv pf)) /\
       (* - `r` has neither lookarounds nor lower-bounded quantifiers, *)
       (no_lookaround r /\ no_lower_bound r) /\
-      (* - there exists a result `best` of regex parsing of `r` on `s`, *)
+      (* - there exists a result `best` of the OptP algorithm on `r` and `s`, *)
       exists best,
         parse_spec rer r inp n best /\
         (* of size `n+1`, *)
@@ -425,6 +423,52 @@ Section EndToEnd.
                 (lexsat_qbf_all_exists nv pf) n_char rer NEQ _
                 (compute_tr_is_tree _)) as [best JOIN].
     rewrite lexsat_qbf_num_vars in JOIN; eauto.
+  Qed.
+
+  (* OptP-hardness theorem in terms of the OptP machine and the ECMAScript pattern: *)
+  Theorem optp_hardness_machine_w:
+    forall (rer: RegExpRecord) nv pf,
+      (* Let `pf` be a well-formed propositional formula with `nv` variables. *)
+      wf_pos_formula nv pf ->
+      (* Assume that the canonicalized `a` and `;` characters are different. *)
+      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+      (* Let (wr, s) be the instance of regex matching corresponding to `pf`,
+         where `wr` is a Warblre (ECMAScript) regex. *)
+      let wr := theRegex_w (lexsat_qbf nv pf) x_char semicolon_char in
+      let s := lexsat_string x_char semicolon_char n_char nv pf in
+      let inp := init_input s in
+      (* Let `n` be the guess budget corresponding to matching `wr` on `s`. *)
+      let n := guess_budget (linden_of wr) inp in
+      (* Then:
+         - the sizes of `wr` and `s` are linear in the size of `pf`, *)
+      pattern_size wr <= 8 * lexsat_size nv pf /\
+      length s <= 2 * lexsat_size nv pf /\
+      (* - the budget is polynomial in the size of `pf`, *)
+      n <= S (27 * lexsat_size nv pf * (1 + 2 * lexsat_size nv pf)) /\
+      (* - the regex `wr` passes the early errors check, *)
+      StaticSemantics.earlyErrors wr [] = Success false /\
+      (* - `wr` has neither lookarounds nor lower-bounded quantifiers, *)
+      (pattern_no_lookaround wr /\ pattern_no_lower_bound wr) /\
+      (no_lookaround (linden_of wr) /\ no_lower_bound (linden_of wr)) /\
+      (* - there exists a result `best` of the OptP algorithm on `wr` and `s`, *)
+      exists best,
+        parse_spec rer (linden_of wr) inp n best /\
+        (* of size `n+1`, *)
+        length best = S n /\
+        (* and we can recover the result of the original instance of LEXICOGRAPHIC SAT from `best`,
+           by first recovering the capture groups from `best`: *)
+        match option_map snd (exec_of_parse rer (linden_of wr) inp best) with
+        (* - if `best` encodes a successful match, then we can recover the solution of the original
+        instance of LEXICOGRAPHIC SAT from the corresponding capture groups, *)
+        | Some gm => is_lex_max_sat nv pf (bits_of_gm nv gm)
+        (* - otherwise, the original instance of LEXICOGRAPHIC SAT has no solution. *)
+        | None => forall b, length b = nv -> assign_cnf b pf = false
+        end.
+  Proof.
+    intros * WF NEQ; cbv zeta; rewrite <- lexsat_w_to_linden by exact WF.
+    destruct (optp_hardness_machine rer nv pf WF NEQ) as (RS & SS & BUD & [] & MACHINE).
+    repeat apply conj; auto using lexsat_w_earlyErrors, lexsat_w_nolk, lexsat_w_nolb.
+    rewrite <- lexsat_qbf_size; apply theRegex_w_size.
   Qed.
 
   (** * OptP-membership results *)
@@ -503,8 +547,10 @@ Section EndToEnd.
 End EndToEnd.
 
 Definition end_to_end_results :=
-  (@pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
+  (@fuel_budget_value, @guess_budget_value, @regex_test_unfold, @optp_output_width,
+   @pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
    @pspace_hardness_noneglk_e2e, @pspace_membership_matcher, @pspace_membership_e2e,
    @membership_state_size_bound, @optp_hardness_matcher, @optp_hardness_e2e,
-   @optp_hardness_machine, @optp_membership_matcher, @optp_membership_e2e).
+   @optp_hardness_machine, @optp_hardness_machine_w, @optp_membership_matcher,
+   @optp_membership_e2e).
 Print Assumptions end_to_end_results.

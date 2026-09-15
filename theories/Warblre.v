@@ -491,10 +491,19 @@ Section WarblreHardnessPoslk.
   Lemma wr_poslk_nolb: no_lower_bound (linden_of wr).
   Proof. rewrite <- wr_poslk_to_linden; apply RegexEncodingPoslk.theRegex_poslk_nolb. Qed.
 
+  Lemma wr_poslk_noneglk: no_neg_lookaround (linden_of wr).
+  Proof. rewrite <- wr_poslk_to_linden; apply RegexEncodingPoslk.theRegex_poslk_noneglk. Qed.
+
   Theorem theRegex_poslk_w_noneglk: pattern_no_neg_lookaround wr.
   Proof.
     eauto using warblre_to_linden_no_neg_lookaround, regex_encoding_poslk_wl,
                 RegexEncodingPoslk.theRegex_poslk_noneglk.
+  Qed.
+
+  Theorem theRegex_poslk_w_nolb: pattern_no_lower_bound wr.
+  Proof.
+    eauto using warblre_to_linden_no_lower_bound, regex_encoding_poslk_wl,
+                RegexEncodingPoslk.theRegex_poslk_nolb.
   Qed.
 
   Local Hint Resolve wr_poslk_earlyErrors wr_poslk_to_linden : core.
