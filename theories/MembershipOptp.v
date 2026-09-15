@@ -286,9 +286,9 @@ Section OptpAlgo.
       compute_tree rer [Areg r] inp GroupMap.empty forward n = Some t.
   Proof.
     intros r inp t n TREE FUEL.
-    pose proof MembershipProof.functional_terminates' r inp [Areg r] forward
-      (MembershipProof.afr_refl r inp) n FUEL
-      GroupMap.empty rer.
+    pose proof MembershipProof.functional_terminates' rer r inp [Areg r] forward
+      (MembershipProof.afr_refl r inp forward) n FUEL
+      GroupMap.empty.
     destruct compute_tree as [t'|] eqn:COMPUTE; [|congruence].
     f_equal; eauto using compute_is_tree, is_tree_determ.
   Qed.
