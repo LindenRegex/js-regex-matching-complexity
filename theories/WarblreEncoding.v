@@ -21,7 +21,7 @@ Section WarblreRegexEncoding.
 
   Definition nat_to_positive (n: nat): positive_integer := BinPos.Pos.of_nat n.
 
-  (* <(x)|x>;.  No variable index: Warblre numbers capturing groups by position. *)
+  (* <(a)|a>;.  No variable index: Warblre numbers capturing groups by position. *)
   Definition def_var_regex_w: Patterns.Regex :=
     Patterns.Seq
       (Patterns.Disjunction

@@ -9,7 +9,7 @@ Section RegexEncoding.
 
   Context (a_char semicolon_char z_char: Parameters.Character).
 
-  (* Regex used to define a variable: <(_i x)|x>; *)
+  (* Regex used to define a variable: <(_i a)|a>; *)
   Definition def_var_regex (v: variable): regex :=
     Sequence
       (Disjunction

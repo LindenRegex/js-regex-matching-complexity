@@ -374,11 +374,11 @@ Section WarblreHardness.
   Context {params: LindenParameters}.
   Context (q: qbf).
   Hypothesis WF_q: wf_qbf q.
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
 
-  Let wr := theRegex_w q x_char semicolon_char.
-  Let lr := theRegex q x_char semicolon_char.
-  Let str := theString q x_char semicolon_char n_char.
+  Let wr := theRegex_w q a_char semicolon_char.
+  Let lr := theRegex q a_char semicolon_char.
+  Let str := theString q a_char semicolon_char z_char.
 
   Lemma wr_earlyErrors: StaticSemantics.earlyErrors wr [] = Success false.
   Proof. apply regex_encoding_w_earlyErrors, WF_q. Qed.
@@ -396,7 +396,7 @@ Section WarblreHardness.
 
   Section AnyRecord.
     Context (rer: RegExpRecord).
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
     Hypothesis CAPS: RegExpRecord.capturingGroupsCount rer =
       StaticSemantics.countLeftCapturingParensWithin wr nil.
@@ -420,7 +420,7 @@ Section WarblreHardness.
 
     Let rer := rer_of wr flags.
 
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
 
     Local Ltac flags_transport L := apply L with (lr := lr) (rer := rer); auto using qbf_matches.
@@ -463,11 +463,11 @@ Section WarblreHardnessPoslk.
   Context {params: LindenParameters}.
   Context (q: qbf).
   Hypothesis WF_q: wf_qbf q.
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
 
-  Let wr := theRegex_poslk_w q x_char semicolon_char n_char.
-  Let lr := RegexEncodingPoslk.theRegex x_char semicolon_char n_char q.
-  Let str := theString q x_char semicolon_char n_char.
+  Let wr := theRegex_poslk_w q a_char semicolon_char z_char.
+  Let lr := RegexEncodingPoslk.theRegex a_char semicolon_char z_char q.
+  Let str := theString q a_char semicolon_char z_char.
 
   Lemma wr_poslk_earlyErrors: StaticSemantics.earlyErrors wr [] = Success false.
   Proof. apply regex_encoding_poslk_w_earlyErrors, WF_q. Qed.
@@ -497,12 +497,12 @@ Section WarblreHardnessPoslk.
 
   Section AnyRecord.
     Context (rer: RegExpRecord).
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
-    Hypothesis x_n_neq: Character.canonicalize rer x_char <>
-      Character.canonicalize rer n_char.
-    Hypothesis n_not_lineterminator: ~In n_char Character.line_terminators.
-    Hypothesis x_not_lineterminator: ~In x_char Character.line_terminators.
+    Hypothesis a_z_neq: Character.canonicalize rer a_char <>
+      Character.canonicalize rer z_char.
+    Hypothesis z_not_lineterminator: ~In z_char Character.line_terminators.
+    Hypothesis a_not_lineterminator: ~In a_char Character.line_terminators.
     Hypothesis CAPS: RegExpRecord.capturingGroupsCount rer =
       StaticSemantics.countLeftCapturingParensWithin wr nil.
 
@@ -521,15 +521,15 @@ Section WarblreHardnessPoslk.
 
   Section FromFlags.
     Context (flags: RegExpFlags).
-    Hypothesis n_not_lineterminator: ~In n_char Character.line_terminators.
-    Hypothesis x_not_lineterminator: ~In x_char Character.line_terminators.
+    Hypothesis z_not_lineterminator: ~In z_char Character.line_terminators.
+    Hypothesis a_not_lineterminator: ~In a_char Character.line_terminators.
 
     Let rer := rer_of wr flags.
 
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
-    Hypothesis x_n_neq: Character.canonicalize rer x_char <>
-      Character.canonicalize rer n_char.
+    Hypothesis a_z_neq: Character.canonicalize rer a_char <>
+      Character.canonicalize rer z_char.
 
     Local Ltac poslk_transport L :=
       apply L with (lr := lr) (rer := rer); auto using qbf_poslk_matches.
