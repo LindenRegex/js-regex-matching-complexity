@@ -352,9 +352,9 @@ Section MembershipTransport.
       res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
       = Some (linden_result rer lr inp).
   Proof.
-    now pose proof functional_terminates' rer lr inp [Areg lr] forward
-      (afr_refl lr inp forward) _ (fuel_budget_spec lr inp) GroupMap.empty
-      as ALGO%compute_tree_None_compute_tr%compute_result_correctness.
+    unfold linden_result.
+    exact (compute_result_spec lr inp [Areg lr] forward (afr_refl lr inp forward)
+             _ (fuel_budget_spec lr inp) GroupMap.empty rer _ (compute_tr_is_tree rer)).
   Qed.
 End MembershipTransport.
 

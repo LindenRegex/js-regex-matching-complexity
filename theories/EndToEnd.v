@@ -85,10 +85,7 @@ Section EndToEnd.
         forall gm, compute_result rer act inp gm dir fuel <> Out_of_fuel.
   Proof.
     intros rer r inp act dir AFR fuel FUEL gm.
-    pose proof MembershipProof.functional_terminates' rer r inp act dir AFR fuel FUEL gm as NN.
-    destruct (FunctionalSemantics.compute_tree rer act inp gm dir fuel) as [t|] eqn:CT; [|congruence].
-    pose proof MembershipProof.compute_result_correctness _ _ _ _ _ _ _ CT as CORR.
-    destruct (compute_result rer act inp gm dir fuel); cbn in CORR; congruence.
+    exact (MembershipProof.result_terminates' r inp act dir AFR fuel FUEL gm rer).
   Qed.
 
   Context (a_char semicolon_char z_char: Parameters.Character).
