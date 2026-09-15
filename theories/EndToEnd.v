@@ -94,7 +94,7 @@ Section EndToEnd.
     (* The RegExpRecord corresponding to the flags and the Warblre regex. *)
     Let rer := rer_of wr flags.
 
-    (* We need the canonicalized x character to be different from the canonicalized semicolon character. *)
+    (* We require the canonicalized `a` character to be different from the canonicalized `;` character. *)
     Hypothesis x_semicolon_neq:
       Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
 
