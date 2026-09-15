@@ -6,7 +6,7 @@ From Warblre Require Import Base spec.RegExpRecord.
 Require Import List Lia Sorted.
 Import ListNotations.
 
-Section PSPACE_algo.
+Section ComputeResult.
 
   Context {params: LindenParameters}.
   Context (rer: RegExpRecord).
@@ -19,7 +19,7 @@ Section PSPACE_algo.
   Fixpoint compute_result (act: actions) (inp: input) (gm: group_map) (dir: Direction) (fuel:nat): match_result :=
     match fuel with
     | 0 => Out_of_fuel
-    | S fuel => 
+    | S fuel =>
         match act with
         | [] => Success (inp, gm)
         | Acheck strcheck :: cont =>
@@ -93,14 +93,10 @@ Section PSPACE_algo.
           match read_backref rer gm gid inp dir with
           | Some (br_str, nextinp) =>
             compute_result cont nextinp gm dir fuel
-          | None => NoMatch        
+          | None => NoMatch
           end
         end
     end.
-
-  Definition pspace_algo (r: regex) (s: LWParameters.string): match_result :=
-    compute_result [Areg r] (init_input s) GroupMap.empty forward
-      (fuel_budget r (init_input s)).
 
   Definition res_to_leaf (mr:match_result) : option (option leaf) :=
     match mr with
@@ -109,6 +105,7 @@ Section PSPACE_algo.
     | Success leaf => Some (Some leaf)
     end.
 
+  (* this might be deprecated now *)
   Theorem compute_result_correctness:
     forall fuel l i gm d tree,
       compute_tree rer l i gm d fuel = Some tree ->
@@ -151,7 +148,7 @@ Section PSPACE_algo.
         apply IHfuel in COMP1, COMP2. simpl in COMP1.
         subst. destruct greedy; simpl.
         * destruct compute_result eqn:COMPR; simpl in COMP1; inversion COMP1; simpl; auto.
-        * destruct (compute_result l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.   
+        * destruct (compute_result l i gm d fuel) eqn:COMPR; simpl in COMP2; inversion COMP2; simpl; auto.
     - destruct compute_tree eqn:COMP; [|inversion H].
       destruct lk_result eqn:LKRES.
       + destruct (compute_tree rer l i g d fuel) eqn:COMPNEXT; inversion H.
@@ -170,11 +167,148 @@ Section PSPACE_algo.
       + inversion H. auto.
     - destruct read_backref eqn:READ.
       + destruct p. apply read_backref_success_advance in READ as ADV.
-        destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.        
+        destruct compute_tree eqn:COMP; inversion H. subst. simpl. auto.
       + inversion H. auto.
-  Qed.   
-     
-End PSPACE_algo.
+  Qed.
+
+  Lemma destruct_delta:
+    forall d, d = NoI.N 0 \/ (exists del, d = (NoI.N 1 + del)%NoI).
+  Proof.
+    intros d. destruct d; auto.
+    - destruct n; eauto. right. exists (NoI.N n). auto.
+    - right. exists NoI.Inf. auto.
+  Qed.
+
+  Lemma simpl_delta_match:
+    forall X (x y:X) pred,
+      (match (NoI.N 1 + pred)%NoI with
+       | NoI.N 0 => x
+       | _ => y end) = y.
+  Proof. intros X x y pred. destruct pred; simpl; auto. Qed.
+
+  Lemma simpl_pred:
+    forall pred, noi_pred (NoI.N 1 + pred)%NoI = pred.
+  Proof. intros. destruct pred; simpl; auto. rewrite PeanoNat.Nat.sub_0_r. auto. Qed.
+
+  Lemma compute_result_is_tree:
+    forall fuel act inp gm dir leaf,
+      res_to_leaf (compute_result act inp gm dir fuel) = Some leaf ->
+      exists t, is_tree rer act inp gm dir t /\
+             tree_res t gm inp dir = leaf.
+  Proof.
+    intros fuel. induction fuel; intros.
+    { simpl in H. inversion H. }
+    simpl in H. destruct act.
+    { simpl in H. simpl. eexists. split; eauto. constructor. inversion H. auto. }
+    destruct a.
+    2:{ destruct is_strict_suffix eqn:ISS.
+        - apply IHfuel in H as [t [CT LF]]. eexists. split.
+          + constructor. apply is_strict_suffix_correct. auto. eauto. + auto.
+        - simpl in H. inversion H. eexists. split.
+          + apply tree_check_fail. rewrite <- is_strict_suffix_correct.
+            rewrite ISS. auto. + auto. }
+    2:{ apply IHfuel in H as [t [CT LF]]. eexists; split.
+        + constructor. eauto. + auto. }
+    destruct r.
+    - apply IHfuel in H as [t [CT LF]]. eexists. split.
+      + constructor. apply CT. + auto.
+    - destruct read_char eqn:READ.
+      + destruct p. apply IHfuel in H as [t' [CT LF]]. eexists. split.
+        * eapply tree_char; eauto.
+        * simpl. apply read_char_success_advance in READ. apply advance_input_success in READ.
+          subst. auto.
+      + eexists. split.
+        * constructor. auto.
+        * simpl. simpl in H. inversion H. auto.
+    - destruct compute_result eqn:CR1.
+      + inversion H.
+      + apply f_equal with (f:=res_to_leaf) in CR1.
+        apply IHfuel in CR1 as [t1 [CT1 LF1]].
+        apply IHfuel in H as [t2 [CT2 LF2]]. eexists; split.
+        * constructor; eauto.
+        * simpl. rewrite LF1. simpl. auto.
+      + apply f_equal with (f:=res_to_leaf) in CR1.
+        apply IHfuel in CR1 as [t1 [CT1 LF1]].
+        (* we need productivity to guess what the tree of the second branch is *)
+        specialize (is_tree_productivity rer (Areg r2::act) inp gm dir) as [t IT].
+        eexists. split.
+        * constructor; eauto.
+        * simpl. rewrite LF1. simpl. inversion H. auto.
+    - simpl in H. apply IHfuel in H as [t [CT LF]].
+      eexists. split; eauto. constructor; auto.
+    - destruct min.
+      (* forced *)
+      2:{ apply IHfuel in H as [t [CT LF]]. eexists. split; eauto.
+          constructor; eauto. auto. }
+      specialize (destruct_delta delta) as [DONE|[pred FREE]]; subst.
+      (* done *)
+      { apply IHfuel in H as [t [CT LF]]. eexists. split; eauto.
+        constructor. auto. }
+      (* free *)
+      destruct greedy.
+      + (* we need productivity to guess what the tree of the untaken branch is *)
+        specialize (is_tree_productivity rer act inp gm dir) as [tskip ITskip].
+        rewrite simpl_delta_match in H. rewrite simpl_pred in H.
+        destruct compute_result eqn:CR; try solve[inversion H].
+        * clear ITskip. apply IHfuel in H as [ts [CTs LFs]].
+          apply f_equal with (f:=res_to_leaf) in CR.
+          apply IHfuel in CR as [t [CT LF]]. eexists. split.
+          ** eapply tree_quant_free; eauto.
+          ** simpl. rewrite LF. simpl. auto.
+        * apply f_equal with (f:=res_to_leaf) in CR.
+          apply IHfuel in CR as [t [CT LF]]. eexists. split.
+          ** eapply tree_quant_free; eauto.
+          ** simpl. rewrite LF. simpl. inversion H. auto.
+      + (* we need productivity to guess what the tree of the untaken branch is *)
+        specialize (is_tree_productivity rer (Areg r :: Acheck inp :: Areg (Quantified false 0 pred r)::act) inp (GroupMap.reset (def_groups r) gm) dir) as [titer ITiter].
+        rewrite simpl_delta_match in H. rewrite simpl_pred in H.
+        destruct compute_result eqn:CR; try solve[inversion H].
+        * clear ITiter. apply IHfuel in H as [ts [CTs LFs]].
+          apply f_equal with (f:=res_to_leaf) in CR.
+          apply IHfuel in CR as [t [CT LF]]. eexists. split.
+          ** eapply tree_quant_free; eauto.
+          ** simpl. rewrite LF. simpl. auto.
+        * apply f_equal with (f:=res_to_leaf) in CR.
+          apply IHfuel in CR as [t [CT LF]]. eexists. split.
+          ** eapply tree_quant_free; eauto.
+          ** simpl. rewrite LF. simpl. inversion H. auto.
+    - destruct compute_result eqn:CR; try solve[inversion H].
+      + apply f_equal with (f:=res_to_leaf) in CR.
+        apply IHfuel in CR as [t [CT LF]].
+        destruct positivity eqn:POS.
+        * eexists. split.
+          ** eapply tree_lk_fail; eauto. unfold lk_result. rewrite POS, LF. auto.
+          ** inversion H. auto.
+        * apply IHfuel in H as [ta [CTa LFa]].
+          eexists. split.
+          ** eapply tree_lk; eauto. unfold lk_result. rewrite POS, LF. auto.
+          ** simpl. rewrite POS, LF. auto.
+      + destruct l. apply f_equal with (f:=res_to_leaf) in CR.
+        apply IHfuel in CR as [t [CT LF]].
+        destruct positivity eqn:POS.
+        * apply IHfuel in H as [ta [CTa LFa]].
+          eexists. split.
+          ** eapply tree_lk; eauto. unfold lk_result. rewrite POS, LF. auto.
+          ** simpl. rewrite POS, LF. auto.
+        * eexists. split.
+          ** eapply tree_lk_fail; eauto. unfold lk_result. rewrite POS, LF. auto.
+          ** inversion H. auto.
+    - apply IHfuel in H as [t [CT LF]]. eexists. split.
+      + constructor. eauto. + auto.
+    - destruct anchor_satisfied eqn:ANC.
+      + apply IHfuel in H as [t [CT LF]]. eexists. split.
+        * constructor; eauto. * auto.
+      + eexists. split.
+        * apply tree_anchor_fail. auto. * inversion H. auto.
+    - destruct read_backref eqn:BACK.
+      + destruct p. apply IHfuel in H as [t [CT LF]]. eexists. split.
+        * eapply tree_backref; eauto.
+        * apply read_backref_success_advance in BACK. subst. auto.
+      + eexists. split.
+        * apply tree_backref_fail. auto. * inversion H. auto.
+Qed.
+
+End ComputeResult.
 
 Section MembershipProof.
   Context {params: LindenParameters}.
@@ -190,7 +324,7 @@ Section MembershipProof.
 
   (* Formalizing when an input, list of actions and direction come from a supported regex *)
   Inductive act_from_regex (r: regex): input -> actions -> Direction -> Prop :=
-  | afr_refl: forall inp, act_from_regex r inp [Areg r] forward
+  | afr_refl: forall inp dir, act_from_regex r inp [Areg r] dir
   | afr_pop_check: forall inp inpcheck l dir,
       strict_suffix inp inpcheck dir ->
       act_from_regex r inp (Acheck inpcheck :: l) dir ->
@@ -272,7 +406,7 @@ Section MembershipProof.
     | Acheck inpcheck :: q => inpcheck :: actions_checks q
     | _ :: q => actions_checks q
     end.
-  
+
   Lemma afr_checks_ordered:
     forall r inp act dir,
       act_from_regex r inp act dir -> Sorted (input_le dir) (inp :: actions_checks act).
@@ -305,7 +439,7 @@ Section MembershipProof.
       List.nth_error act i = Some (Acheck inpcheck) ->
       exists greedy delta r,
         List.nth_error act (S i) = Some (Areg (Quantified greedy 0 delta r)).
-  
+
   Lemma afr_checks_fby_quant:
     forall r inp act dir, act_from_regex r inp act dir -> checks_fby_quant act.
   Proof.
@@ -395,7 +529,7 @@ Section MembershipProof.
         * split.
           -- intros _. exists i. left. reflexivity.
           -- intros _. exists i. reflexivity.
-        * firstorder. discriminate. 
+        * firstorder. discriminate.
     - split.
       + intros [inpcheck' IN]. apply In_nth_error in IN.
         destruct IN as [i IN]. exists i. exists inpcheck'. auto.
@@ -449,7 +583,7 @@ Section MembershipProof.
     | Acheck _ :: _ | [] => 0
     | Aclose _ :: l | Areg _ :: l => 1 + chunk_length l
     end.
-  
+
   Fixpoint last_chunk_size (act: actions): nat :=
     match first_check_input act, act with
     | Some _, _::q => last_chunk_size q
@@ -497,7 +631,7 @@ Section MembershipProof.
     | Aclose _ :: l => 1 + actions_fuel' l
     | [] => 0 (* should not happen *)
     end.
-  
+
   (* The actual actions fuel, which starts by treating the first regex specially if there are at least two chunks *)
   Definition actions_fuel_nolk (inp: input) (act: actions) (dir: Direction): nat :=
     match first_check_input act with
@@ -668,7 +802,7 @@ Section MembershipProof.
       specialize (IHact i _ eq_refl).
       destruct (first_check_input (skipn i act)) as [inpchknext | ] eqn:SNDCHK.
       * specialize (IHact _ eq_refl).
-        assert (last_chunk_size (skipn i act) = last_chunk_size act). { 
+        assert (last_chunk_size (skipn i act) = last_chunk_size act). {
           pose proof last_chunk_size_skipn (a :: act) i inpchk FSTCHK_NTH1.
           simpl in H. rewrite FSTCHK in H. auto.
         }
@@ -699,7 +833,7 @@ Section MembershipProof.
     - simpl. reflexivity.
     - simpl in *. rewrite H. reflexivity.
   Qed.
-  
+
   Lemma last_chunk_size_lt_regex:
     forall r inp act dir,
       act_from_regex r inp act dir ->
@@ -760,13 +894,13 @@ Section MembershipProof.
     | Acheck _ :: l | Aclose _ :: l => 1 + actions_size l
     | Areg r :: l => expanded_size r + actions_size l
     end.
-  
+
   Fixpoint sum_to_n (n_min_i: nat) (n: nat) {struct n_min_i} :=
     match n_min_i with
     | 0 => n
     | S n_min_i' => (n - n_min_i) + sum_to_n n_min_i' n
     end.
-  
+
   Definition num_checks (act: actions) := length (actions_checks act).
 
   Lemma chunk_size_bound:
@@ -847,7 +981,7 @@ Section MembershipProof.
       + discriminate.
       + simpl. intro H. specialize (IHact H). congruence.
   Qed.
-  
+
   Lemma num_checks_skipn_chunk_length:
     forall act inpcheck,
       first_check_input act = Some inpcheck ->
@@ -946,7 +1080,7 @@ Section MembershipProof.
     - set (k := n - n_min_i). replace n with (k + n_min_i) at 2 by lia. apply sum_to_n_bound'.
     - set (k := n_min_i - n). replace n_min_i with (k + n) by lia. rewrite sum_to_n_overshoot. reflexivity.
   Qed.
-  
+
   Lemma sum_to_n_sum_seq:
     forall n_min_i n, n_min_i <= n ->
       sum_to_n n_min_i n = list_sum (seq (n - n_min_i) (S n_min_i)).
@@ -1249,11 +1383,13 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     forall a b: nat, Nat.max a (Nat.max a b) = Nat.max a b.
   Proof. lia. Qed.
 
-  Theorem functional_terminates':
+  (* termination proof about compte_result *)
+
+  Theorem result_terminates':
     forall (r: regex) (inp: input) (act: actions) (dir: Direction),
       act_from_regex r inp act dir ->
       forall fuel, fuel > actions_fuel inp act dir ->
-        forall gm rer, compute_tree rer act inp gm dir fuel <> None.
+        forall gm rer, compute_result rer act inp gm dir fuel <> Out_of_fuel.
   Proof.
     intros r inp act dir AFR fuel.
     revert inp act dir AFR. induction fuel.
@@ -1283,29 +1419,28 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           lia.
         }
         specialize (IHfuel gm rer).
-        destruct compute_tree as [treecont|]. * discriminate. * contradiction.
+        destruct compute_result; try discriminate; auto.
       +
         unfold actions_fuel, actions_fuel_nolk in FUEL.
         destruct first_check_input as [inpchk|] eqn:FSTCHK.
         * simpl in FSTCHK, FUEL.
-          assert (IH1: compute_tree rer (Areg r1 :: cont) inp gm dir fuel <> None). {
+          assert (IH1: compute_result rer (Areg r1 :: cont) inp gm dir fuel <> Out_of_fuel). {
             apply IHfuel.
             - eapply afr_pop_disj_l; eauto.
             - pose proof actions_fuel_nolk_notlast_le inp (Areg r1 :: cont) inpchk dir.
               specialize (H FSTCHK).
               simpl in H. rewrite FSTCHK in FUEL, H. unfold actions_fuel. simpl. lia.
           }
-          assert (IH2: compute_tree rer (Areg r2 :: cont) inp gm dir fuel <> None). {
+          assert (IH2: compute_result rer (Areg r2 :: cont) inp gm dir fuel <> Out_of_fuel). {
             apply IHfuel.
             - eapply afr_pop_disj_r; eauto.
             - pose proof actions_fuel_nolk_notlast_le inp (Areg r2 :: cont) inpchk dir.
               specialize (H FSTCHK).
               simpl in H. rewrite FSTCHK in FUEL, H. unfold actions_fuel. simpl. lia.
           }
-          destruct (compute_tree rer (Areg r1 :: cont) inp gm dir fuel); try contradiction.
-          destruct compute_tree; try contradiction. discriminate.
+          destruct (compute_result rer (Areg r1 :: cont) inp gm dir fuel); try contradiction; auto.
         * simpl in FSTCHK.
-          assert (IH1: compute_tree rer (Areg r1 :: cont) inp gm dir fuel <> None). {
+          assert (IH1: compute_result rer (Areg r1 :: cont) inp gm dir fuel <> Out_of_fuel). {
             apply IHfuel.
             - eapply afr_pop_disj_l; eauto.
             - unfold actions_fuel, actions_fuel_nolk. simpl first_check_input. rewrite FSTCHK.
@@ -1316,7 +1451,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
               }
               simpl actions_lookaround_fuel in *. lia.
           }
-          assert (IH2: compute_tree rer (Areg r2 :: cont) inp gm dir fuel <> None). {
+          assert (IH2: compute_result rer (Areg r2 :: cont) inp gm dir fuel <> Out_of_fuel). {
             apply IHfuel.
             - eapply afr_pop_disj_r; eauto.
             - unfold actions_fuel, actions_fuel_nolk. simpl first_check_input. rewrite FSTCHK.
@@ -1327,8 +1462,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
               }
               simpl actions_lookaround_fuel in *. lia.
           }
-          destruct (compute_tree rer (Areg r1 :: cont) inp gm dir fuel); try contradiction.
-          destruct compute_tree; try contradiction. discriminate.
+          destruct (compute_result rer (Areg r1 :: cont) inp gm dir fuel); try contradiction; auto.
       + (* Sequence *)
         unfold actions_fuel, actions_fuel_nolk in FUEL. destruct first_check_input as [inpchk|] eqn:FSTCHK.
         * simpl in FUEL.
@@ -1377,9 +1511,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             destruct min0; try (simpl in *; lia).
             destruct is_strict_suffix; try (simpl in *; lia).
           }
-          destruct (compute_tree) eqn:COMP.
-          - unfold not. inversion 1.
-          - apply IHfuel in COMP. inversion COMP. }
+          destruct (compute_result) eqn:COMP; try discriminate.
+          apply IHfuel in COMP. inversion COMP. }
         destruct (match delta with NoI.N 0 => true | _ => false end) eqn:ZERO.
         * destruct delta as [[]|]; try discriminate.
           apply IHfuel.
@@ -1393,14 +1526,14 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           -- unfold actions_fuel_nolk. rewrite FSTCHK. lia.
         (* subst greedy0 min delta r0. *)
         * (* simplifying the expression without duplication *)
-          set (x := match compute_tree rer _ inp _ dir fuel with | Some titer => _ | None => _ end).
-          replace (match delta with | NoI.N 0 => _ | _ => x end) with x.
+          set (x := match compute_result rer _ inp _ dir fuel with | Out_of_fuel => Out_of_fuel | NoMatch => _ | Success lf => _  end).
+          set (y := match compute_result rer _ inp _ dir fuel with | Out_of_fuel => Out_of_fuel | NoMatch => _ | Success lf => _  end).
+          replace (match delta with | NoI.N 0 => _ | _ => if greedy then x else y end) with (if greedy then x else y).
           2: {
             destruct delta as [[]|]; try discriminate; reflexivity.
           }
-          subst x.
-          (* simpl noi_pred. *)
-          assert (IHiter: compute_tree rer (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (Groups.GroupMap.reset (def_groups r1) gm) dir fuel <> None). {
+          subst x. subst y.
+          assert (IHiter: compute_result rer (Areg r1 :: Acheck inp :: Areg (Quantified greedy 0 (noi_pred delta) r1) :: cont) inp (Groups.GroupMap.reset (def_groups r1) gm) dir fuel <> Out_of_fuel). {
             apply IHfuel.
             - apply afr_pop_quant_free_iter.
               rewrite succ_noi_pred by auto. auto.
@@ -1441,7 +1574,7 @@ remaining_length nextinp dir) * last_chunk_size cont). {
                   -- simpl in *. lia.
                 * simpl in *. lia.
           }
-          assert (IHskip: compute_tree rer cont inp gm dir fuel <> None). {
+          assert (IHskip: compute_result rer cont inp gm dir fuel <> Out_of_fuel). {
             apply IHfuel.
             - eapply afr_pop_quant_free_skip with (greedy := greedy) (delta := noi_pred delta). rewrite succ_noi_pred by auto. apply AFR.
             - unfold actions_fuel, actions_fuel_nolk in FUEL.
@@ -1454,10 +1587,10 @@ remaining_length nextinp dir) * last_chunk_size cont). {
                 lia.
               + simpl in FUEL. unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl. lia.
           }
-          destruct compute_tree; try contradiction.
-          destruct compute_tree; try contradiction. discriminate.
+          destruct greedy; destruct compute_result; auto;
+            destruct compute_result; auto.
       + (* Lookaround *)
-        assert (LKCONT: compute_tree rer [Areg r0] inp gm (lk_dir lk) fuel <> None). {
+        assert (LKCONT: compute_result rer [Areg r0] inp gm (lk_dir lk) fuel <> Out_of_fuel). {
           apply IHfuel.
           1: eapply afr_pop_lk_lk; eauto.
           unfold actions_fuel in *. simpl actions_lookaround_fuel in *.
@@ -1470,10 +1603,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
           unfold actions_fuel_nolk in FUEL. simpl in FUEL.
           destruct first_check_input; lia.
         }
-        destruct compute_tree as [treelk|]; try contradiction.
-        destruct lk_result as [gmlk|]; try discriminate.
-        assert (compute_tree rer cont inp gmlk dir fuel <> None). {
-          apply IHfuel.
+        assert (forall gmlk, compute_result rer cont inp gmlk dir fuel <> Out_of_fuel). {
+          intros gmlk. apply IHfuel.
           1: eapply afr_pop_lk_cont; eauto.
           unfold actions_fuel in *. simpl actions_lookaround_fuel in FUEL.
           unfold actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
@@ -1483,9 +1614,11 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             lia.
           - unfold actions_fuel_nolk. rewrite FSTCHK. simpl in FUEL. lia.
         }
-        destruct compute_tree; try contradiction. discriminate.
+        destruct compute_result as [| |[reslk gmlk]] eqn:C; try contradiction;
+          destruct compute_result; try contradiction;
+          destruct positivity; auto; intros; discriminate.
       + (* Group *)
-        assert (CONT: compute_tree rer (Areg r0 :: Aclose id :: cont) inp (Groups.GroupMap.open (idx inp) id gm) dir fuel <> None). {
+        assert (CONT: compute_result rer (Areg r0 :: Aclose id :: cont) inp (Groups.GroupMap.open (idx inp) id gm) dir fuel <> Out_of_fuel). {
           apply IHfuel.
           - apply afr_pop_group. auto.
           - unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
@@ -1499,10 +1632,10 @@ remaining_length nextinp dir) * last_chunk_size cont). {
               unfold gt in *.
               simpl chunk_size in *. simpl actions_lookaround_fuel in FUEL. lia.
         }
-        destruct compute_tree; try contradiction. discriminate.
+        destruct compute_result; try contradiction; auto.
       +
         destruct anchor_satisfied; try discriminate.
-        assert (CONT: compute_tree rer cont inp gm dir fuel <> None). {
+        assert (CONT: compute_result rer cont inp gm dir fuel <> Out_of_fuel). {
           apply IHfuel.
           - apply afr_pop_anchor with (a := a). auto.
           - unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
@@ -1512,19 +1645,19 @@ remaining_length nextinp dir) * last_chunk_size cont). {
             + unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl chunk_size in FUEL.
               simpl actions_lookaround_fuel in FUEL. lia.
         }
-        destruct compute_tree; try contradiction. discriminate.
+        destruct compute_result; try contradiction; auto.
       + (* Backreference *)
         destruct read_backref as [[br_str nextinp]| ] eqn:READ; try discriminate.
-        assert (CONT: compute_tree rer cont nextinp gm dir fuel <> None). {
+        assert (CONT: compute_result rer cont nextinp gm dir fuel <> Out_of_fuel). {
           pose proof read_backref_advance_input_n rer gm id inp br_str nextinp dir READ as [n H]. apply IHfuel.
           - eapply afr_pop_backref. + eauto. + symmetry. apply H. (* The backreference read succeeds, hence nextinp = advance_input n inp for some n *)
           - symmetry in H. pose proof read_backref_decreases_fuel inp id n nextinp cont dir H.
             lia.
         }
-        destruct compute_tree; try contradiction. discriminate.
+        destruct compute_result; try contradiction; auto.
       +
         destruct is_strict_suffix eqn:SS; try discriminate.
-        assert (CONT: compute_tree rer cont inp gm dir fuel <> None). {
+        assert (CONT: compute_result rer cont inp gm dir fuel <> Out_of_fuel). {
           apply IHfuel.
           - apply afr_pop_check with (inpcheck := inpcheck). + apply is_strict_suffix_correct. auto. + auto.
           - unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
@@ -1557,11 +1690,11 @@ remaining_length nextinp dir) * last_chunk_size cont). {
                 - eauto using strict_suffix_trans.
               }
               rewrite SS in FUEL. lia.
-            + rewrite SS in FUEL. simpl in *. rewrite SNDCHK in FUEL. simpl in *. lia. 
+            + rewrite SS in FUEL. simpl in *. rewrite SNDCHK in FUEL. simpl in *. lia.
         }
-        destruct compute_tree; try contradiction. discriminate.
+        destruct compute_result; try contradiction; auto.
       +
-        assert (CONT: compute_tree rer cont inp (Groups.GroupMap.close (idx inp) gid gm) dir fuel <> None). {
+        assert (CONT: compute_result rer cont inp (Groups.GroupMap.close (idx inp) gid gm) dir fuel <> Out_of_fuel). {
           apply IHfuel.
           - apply afr_pop_close with (gid := gid). auto.
           - unfold actions_fuel, actions_fuel_nolk in FUEL. simpl first_check_input in FUEL.
@@ -1570,106 +1703,10 @@ remaining_length nextinp dir) * last_chunk_size cont). {
               unfold actions_fuel. lia.
             + unfold actions_fuel, actions_fuel_nolk. rewrite FSTCHK. simpl in *. lia.
         }
-        destruct compute_tree; try contradiction. discriminate.
+        destruct compute_result; try contradiction; auto.
   Qed.
 
-
-  (** * Any fuel depth is a bound on the tree depth *)
-  (* Definition of tree depth *)
-  Fixpoint tree_depth (t: tree) :=
-    match t with
-    | Mismatch | Match => 1
-    | Choice t1 t2 => 1 + max (tree_depth t1) (tree_depth t2)
-    | Read _ t | ReadBackRef _ t | Progress t | AnchorPass _ t 
-    | GroupAction _ t => 1 + tree_depth t
-    | LK _ tlk t => 1 + max (tree_depth tlk) (tree_depth t)
-    | LKFail _ tlk => 1 + tree_depth tlk
-    end.
-
-  Lemma fuel_depth_bound:
-    forall rer act inp gm dir fuel t,
-      compute_tree rer act inp gm dir fuel = Some t ->
-      tree_depth t <= 2 * fuel.
-  Proof.
-    intros rer act inp gm dir fuel. revert rer act inp gm dir. induction fuel.
-    - discriminate.
-    - intros rer act inp gm dir t. simpl.
-      destruct act as [|[r | i | g] act].
-      + intro H. injection H as <-. simpl. lia.
-      + destruct r.
-        * intro H. transitivity (2 * fuel). -- eapply IHfuel; eauto. -- lia.
-        * destruct read_char.
-          -- destruct p as [c nextinp].
-             destruct compute_tree as [treecont|] eqn:CONT; try discriminate.
-             intro H. injection H as <-. simpl.
-             specialize (IHfuel _ _ _ _ _ _ CONT). lia.
-          -- intro H. injection H as <-. simpl. lia.
-        * destruct compute_tree as [t1|] eqn:CONT1; try discriminate.
-          destruct (compute_tree rer (Areg r2 :: act) inp gm dir fuel) as [t2|] eqn:CONT2; try discriminate.
-          intro H. injection H as <-. simpl.
-          pose proof IHfuel _ _ _ _ _ _ CONT1 as IH1.
-          pose proof IHfuel _ _ _ _ _ _ CONT2 as IH2. lia.
-        * intro H. pose proof IHfuel _ _ _ _ _ _ H. lia.
-        * destruct min as [|min].
-          -- destruct (match delta with NoI.N 0 => true | _ => false end) eqn:DELTA_0.
-             ++ destruct delta as [[]|]; try discriminate.
-                intro H. pose proof IHfuel _ _ _ _ _ _ H. lia.
-             ++ set (x := match compute_tree rer (Areg r :: _ :: _ :: act) inp _ dir fuel with Some titer => _ | None => None end).
-                replace (match delta with NoI.N 0 => _ | _ => x end) with x.
-                2: { destruct delta as [[]|]; try discriminate; reflexivity. }
-                subst x.
-                destruct compute_tree as [titer|] eqn:ITER; try discriminate.
-                destruct (compute_tree rer act inp gm dir fuel) as [tskip|] eqn:SKIP; try discriminate.
-                intro H. injection H as <-.
-                pose proof IHfuel _ _ _ _ _ _ ITER as IHiter.
-                pose proof IHfuel _ _ _ _ _ _ SKIP as IHskip.
-                destruct greedy; simpl; try lia.
-                destruct (tree_depth tskip); lia.
-          -- destruct compute_tree as [titer|] eqn:ITER; try discriminate.
-             intro H. injection H as <-.
-             pose proof IHfuel _ _ _ _ _ _ ITER. simpl. lia.
-        * destruct compute_tree as [treelk|] eqn:LK; try discriminate.
-          destruct lk_result.
-          -- destruct (compute_tree rer act inp g dir fuel) as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
-             simpl. pose proof IHfuel _ _ _ _ _ _ LK as IHlk. pose proof IHfuel _ _ _ _ _ _ CONT as IHcont. lia.
-          -- intro H. injection H as <-.
-             pose proof IHfuel _ _ _ _ _ _ LK as IHlk. simpl. lia.
-        * destruct compute_tree as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
-          pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
-        * destruct anchor_satisfied.
-          -- destruct compute_tree as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
-             pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
-          -- intro H. injection H as <-. simpl. lia.
-        * destruct read_backref as [[br_str nextinp]|].
-          -- destruct compute_tree as [treecont|] eqn:CONT; try discriminate. intro H. injection H as <-.
-             pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
-          -- intro H. injection H as <-. simpl. lia.
-      + destruct is_strict_suffix.
-        * destruct compute_tree as [treecont|] eqn:CONT; try discriminate.
-          intro H. injection H as <-.
-          pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
-        * intro H. injection H as <-. simpl. lia.
-      + destruct compute_tree as [treecont|] eqn:CONT; try discriminate.
-        intro H. injection H as <-.
-        pose proof IHfuel _ _ _ _ _ _ CONT. simpl. lia.
-  Qed.
-
-  Corollary tree_depth_bound_act:
-    forall (r: regex) (inp: input) (act: actions) (dir: Direction),
-      act_from_regex r inp act dir ->
-      forall gm rer t, is_tree rer act inp gm dir t ->
-        tree_depth t <= 2*(S (actions_fuel inp act dir)).
-  Proof.
-    intros r inp act dir AFR gm rer t TREE.
-    pose proof functional_terminates' r inp act dir AFR (S (actions_fuel inp act dir)) ltac:(lia) gm rer.
-    destruct compute_tree as [t'|] eqn:COMPUTE; try congruence.
-    pose proof compute_is_tree _ _ _ _ _ _ _ COMPUTE.
-    assert (t = t'). {
-      eapply is_tree_determ; eauto.
-    }
-    subst t'.
-    eapply fuel_depth_bound; eauto.
-  Qed.
+  (* removed the deprecated tree depth proofs *)
 
   Lemma regex_lookaround_fuel_bound:
     forall r str, regex_lookaround_fuel str r <= (1 + length str) * expanded_size r * expanded_size r.
@@ -1690,15 +1727,65 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     apply regex_lookaround_fuel_bound.
   Qed.
 
-  Corollary tree_depth_bound_regex:
-    forall (r: regex) rer inp gm t, is_tree rer [Areg r] inp gm forward t ->
-        tree_depth t <= 2*(S ((1 + remaining_length inp forward) * expanded_size r + (1 + length (input_str inp)) * expanded_size r * expanded_size r)).
+End MembershipProof.
+
+
+Section PSPACE_algo.
+
+  Context {params: LindenParameters}.
+  Context (rer: RegExpRecord).
+
+  Definition pspace_algo (r:regex) (s:LWParameters.string) :=
+    let init_fuel := S (actions_fuel (init_input s) [Areg r] forward) in
+    match compute_result rer [Areg r] (init_input s) GroupMap.empty forward init_fuel with
+    | Success _ => Some true
+    | NoMatch => Some false
+    | OutOfFuel => None
+    end.
+
+  Theorem pspace_algo_true_correct:
+    forall r s tree,
+      is_tree rer [Areg r] (init_input s) GroupMap.empty forward tree ->
+      pspace_algo r s = Some true <-> exists leaf, first_leaf tree (init_input s) = Some leaf.
   Proof.
-    intros r rer inp gm t TREE.
-    pose proof tree_depth_bound_act r inp [Areg r] forward.
-    specialize_prove H. { constructor. }
-    specialize (H gm rer t TREE).
-    pose proof poly_fuel inp r. lia.
+    intros r s tree H. unfold first_leaf. split; intros.
+    - unfold pspace_algo in H0.
+      destruct compute_result eqn:CR; try solve [inversion H0].
+      apply f_equal with (f:=res_to_leaf) in CR.
+      apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
+      assert (t = tree) by (eapply is_tree_determ; eauto). subst.
+      eexists; eauto.
+    - set (f:=S (actions_fuel (init_input s) [Areg r] forward)).
+      assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by lia.
+      unfold pspace_algo. destruct compute_result eqn:CR; auto.
+      + specialize (result_terminates' r (init_input s) [Areg r] forward (afr_refl r _ _) f MORE GroupMap.empty rer) as OOF.
+        subst f. rewrite CR in OOF. exfalso. apply OOF. auto.
+      + apply f_equal with (f:=res_to_leaf) in CR.
+        apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
+        assert (t = tree) by (eapply is_tree_determ; eauto). subst.
+        destruct H0 as [l TR]. rewrite TR in LF. inversion LF.
   Qed.
 
-End MembershipProof.
+  Theorem pspace_algo_false_correct:
+    forall r s tree,
+      is_tree rer [Areg r] (init_input s) GroupMap.empty forward tree ->
+      pspace_algo r s = Some false <-> first_leaf tree (init_input s) = None.
+  Proof.
+    intros r s tree H. unfold first_leaf. split; intros.
+    - unfold pspace_algo in H0.
+      destruct compute_result eqn:CR; try solve [inversion H0].
+      apply f_equal with (f:=res_to_leaf) in CR.
+      apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
+      assert (t = tree) by (eapply is_tree_determ; eauto). subst. auto.
+    - set (f:=S (actions_fuel (init_input s) [Areg r] forward)).
+      assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by lia.
+      unfold pspace_algo. destruct compute_result eqn:CR; auto.
+      + specialize (result_terminates' r (init_input s) [Areg r] forward (afr_refl r _ _) f MORE GroupMap.empty rer) as OOF.
+        subst f. rewrite CR in OOF. exfalso. apply OOF. auto.
+      + apply f_equal with (f:=res_to_leaf) in CR.
+        apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
+        assert (t = tree) by (eapply is_tree_determ; eauto). subst.
+        rewrite H0 in LF. inversion LF.
+  Qed.
+
+End PSPACE_algo.
