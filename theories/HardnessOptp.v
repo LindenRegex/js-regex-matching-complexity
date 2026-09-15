@@ -306,7 +306,7 @@ End LexSatReduction.
 
 Section LexSatSize.
   Context {params: LindenParameters}.
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
 
   Local Notation regex_size := Basics.regex_size.
 
@@ -316,18 +316,18 @@ Section LexSatSize.
          check_clause_regex check_conjunct_regex theRegex_aux] in *.
 
   Lemma check_clause_regex_aux_ast_size c:
-    regex_size (check_clause_regex_aux x_char c) <= 1 + 4 * length c.
+    regex_size (check_clause_regex_aux a_char c) <= 1 + 4 * length c.
   Proof. induction c as [|[] c IH]; ast_cbn; lia. Qed.
 
   Lemma check_conjunct_regex_ast_size cl:
-    regex_size (check_conjunct_regex x_char semicolon_char cl) <=
+    regex_size (check_conjunct_regex a_char semicolon_char cl) <=
       1 + 4 * length cl + 4 * num_literals_pos_formula cl.
   Proof.
     induction cl as [|c cl IH]; [|pose proof check_clause_regex_aux_ast_size c]; ast_cbn; lia.
   Qed.
 
   Lemma check_conjunct_regex_rev_ast_size pf:
-    regex_size (check_conjunct_regex x_char semicolon_char (rev pf)) <=
+    regex_size (check_conjunct_regex a_char semicolon_char (rev pf)) <=
       1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof.
     pose proof check_conjunct_regex_ast_size (rev pf) as H;
@@ -337,19 +337,19 @@ Section LexSatSize.
   Lemma theRegex_aux_exists_size (q: qbf) pf:
       snd q = PosForm pf ->
     forall nv v,
-      expanded_size (theRegex_aux q x_char semicolon_char v (List.repeat Qbf.Exists nv)) <=
+      expanded_size (theRegex_aux q a_char semicolon_char v (List.repeat Qbf.Exists nv)) <=
         8 * nv + 1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof.
     intro EQ; induction nv as [|nv IH]; intro v; cbn [List.repeat theRegex_aux].
     - rewrite EQ; cbn [check_formula_regex];
-        pose proof check_conjunct_regex_rev_size x_char semicolon_char pf; lia.
+        pose proof check_conjunct_regex_rev_size a_char semicolon_char pf; lia.
     - pose proof IH (S v); cbn [expanded_size def_var_regex]; lia.
   Qed.
 
   Lemma theRegex_aux_exists_ast_size (q: qbf) pf:
       snd q = PosForm pf ->
     forall nv v,
-      regex_size (theRegex_aux q x_char semicolon_char v (List.repeat Qbf.Exists nv)) <=
+      regex_size (theRegex_aux q a_char semicolon_char v (List.repeat Qbf.Exists nv)) <=
         7 * nv + 1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof.
     intro EQ; induction nv as [|nv IH]; intro v; cbn [List.repeat theRegex_aux].
@@ -361,33 +361,33 @@ Section LexSatSize.
   Lemma theRegex_w_aux_exists_size (q: qbf) pf:
       snd q = PosForm pf ->
     forall nv,
-      pattern_size (theRegex_w_aux q x_char semicolon_char (List.repeat Qbf.Exists nv)) <=
+      pattern_size (theRegex_w_aux q a_char semicolon_char (List.repeat Qbf.Exists nv)) <=
         7 * nv + 1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof.
     intro EQ; induction nv as [|nv IH]; cbn [List.repeat theRegex_w_aux].
     - rewrite EQ; cbn [check_formula_regex_w];
-        pose proof check_conjunct_size x_char semicolon_char (rev pf) as H;
+        pose proof check_conjunct_size a_char semicolon_char (rev pf) as H;
         rewrite length_rev, num_literals_pos_formula_rev in H; lia.
     - cbn [pattern_size def_var_regex_w]; lia.
   Qed.
 
   Lemma lexsat_regex_size nv pf:
-    expanded_size (lexsat_regex x_char semicolon_char nv pf) <=
+    expanded_size (lexsat_regex a_char semicolon_char nv pf) <=
       8 * nv + 1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof. apply (theRegex_aux_exists_size (lexsat_qbf nv pf) pf eq_refl). Qed.
 
   Lemma lexsat_regex_ast_size nv pf:
-    regex_size (lexsat_regex x_char semicolon_char nv pf) <=
+    regex_size (lexsat_regex a_char semicolon_char nv pf) <=
       7 * nv + 1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof. apply (theRegex_aux_exists_ast_size (lexsat_qbf nv pf) pf eq_refl). Qed.
 
   Lemma lexsat_w_size nv pf:
-    pattern_size (theRegex_w (lexsat_qbf nv pf) x_char semicolon_char) <=
+    pattern_size (theRegex_w (lexsat_qbf nv pf) a_char semicolon_char) <=
       7 * nv + 1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof. apply (theRegex_w_aux_exists_size (lexsat_qbf nv pf) pf eq_refl). Qed.
 
   Lemma lexsat_string_length nv pf:
-    length (lexsat_string x_char semicolon_char n_char nv pf) = 2 * (nv + length pf) + 1.
+    length (lexsat_string a_char semicolon_char z_char nv pf) = 2 * (nv + length pf) + 1.
   Proof.
     unfold lexsat_string; rewrite str_len; cbn [fst snd lexsat_qbf];
       now rewrite repeat_length.
@@ -395,7 +395,7 @@ Section LexSatSize.
 
   Theorem lexsat_regex_size_bound nv pf:
       uses_all_vars nv pf ->
-      expanded_size (lexsat_regex x_char semicolon_char nv pf) <= 12 * pos_formula_size pf.
+      expanded_size (lexsat_regex a_char semicolon_char nv pf) <= 12 * pos_formula_size pf.
   Proof.
     intro USES; pose proof uses_all_vars_num_literals nv pf USES;
       pose proof lexsat_regex_size nv pf; unfold pos_formula_size; lia.
@@ -403,7 +403,7 @@ Section LexSatSize.
 
   Theorem lexsat_regex_ast_size_bound nv pf:
       uses_all_vars nv pf ->
-      regex_size (lexsat_regex x_char semicolon_char nv pf) <= 11 * pos_formula_size pf.
+      regex_size (lexsat_regex a_char semicolon_char nv pf) <= 11 * pos_formula_size pf.
   Proof.
     intro USES; pose proof uses_all_vars_num_literals nv pf USES;
       pose proof lexsat_regex_ast_size nv pf; unfold pos_formula_size; lia.
@@ -411,7 +411,7 @@ Section LexSatSize.
 
   Theorem lexsat_w_size_bound nv pf:
       uses_all_vars nv pf ->
-      pattern_size (theRegex_w (lexsat_qbf nv pf) x_char semicolon_char) <=
+      pattern_size (theRegex_w (lexsat_qbf nv pf) a_char semicolon_char) <=
         11 * pos_formula_size pf.
   Proof.
     intro USES; pose proof uses_all_vars_num_literals nv pf USES;
@@ -420,7 +420,7 @@ Section LexSatSize.
 
   Theorem lexsat_string_size_bound nv pf:
       uses_all_vars nv pf ->
-      length (lexsat_string x_char semicolon_char n_char nv pf) <= 2 * pos_formula_size pf.
+      length (lexsat_string a_char semicolon_char z_char nv pf) <= 2 * pos_formula_size pf.
   Proof.
     intro USES; pose proof uses_all_vars_num_literals nv pf USES;
       pose proof lexsat_string_length nv pf; unfold pos_formula_size; lia.
@@ -428,18 +428,18 @@ Section LexSatSize.
 
   Theorem lexsat_guess_budget_bound nv pf:
       uses_all_vars nv pf ->
-      guess_budget (lexsat_regex x_char semicolon_char nv pf)
-                   (init_input (lexsat_string x_char semicolon_char n_char nv pf)) <=
+      guess_budget (lexsat_regex a_char semicolon_char nv pf)
+                   (init_input (lexsat_string a_char semicolon_char z_char nv pf)) <=
         S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)).
   Proof.
     intro USES; unfold guess_budget.
     pose proof lexsat_regex_ast_size_bound nv pf USES.
     pose proof lexsat_string_size_bound nv pf USES.
-    replace (remaining_length (init_input (lexsat_string x_char semicolon_char n_char nv pf))
+    replace (remaining_length (init_input (lexsat_string a_char semicolon_char z_char nv pf))
                forward)
-      with (length (lexsat_string x_char semicolon_char n_char nv pf)) by reflexivity.
-    assert ((1 + length (lexsat_string x_char semicolon_char n_char nv pf))
-            * regex_size (lexsat_regex x_char semicolon_char nv pf)
+      with (length (lexsat_string a_char semicolon_char z_char nv pf)) by reflexivity.
+    assert ((1 + length (lexsat_string a_char semicolon_char z_char nv pf))
+            * regex_size (lexsat_regex a_char semicolon_char nv pf)
             <= (1 + 2 * pos_formula_size pf) * (11 * pos_formula_size pf))
       by (apply Nat.mul_le_mono; lia).
     nia.
