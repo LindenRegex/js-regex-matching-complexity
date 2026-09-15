@@ -6,18 +6,6 @@ Import ListNotations.
 Section WarblreEarlyErrors.
   Context {params: Parameters}.
 
-  Fixpoint pattern_size (r: Patterns.Regex): nat :=
-    match r with
-    | Patterns.Disjunction r1 r2 | Patterns.Seq r1 r2 => 1 + pattern_size r1 + pattern_size r2
-    | Patterns.Quantified r1 _ | Patterns.Group _ r1 | Patterns.Lookahead r1
-    | Patterns.NegativeLookahead r1 | Patterns.Lookbehind r1
-    | Patterns.NegativeLookbehind r1 => 1 + pattern_size r1
-    | _ => 1
-    end.
-
-  Lemma pattern_size_pos r: 1 <= pattern_size r.
-  Proof. destruct r; cbn; lia. Qed.
-
   Definition quantprefix_min (p: Patterns.QuantifierPrefix): nat :=
     match p with
     | Patterns.Star | Patterns.Question => 0
