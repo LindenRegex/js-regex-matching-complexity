@@ -348,13 +348,13 @@ Section MembershipTransport.
     unfold fuel_budget; nia.
   Qed.
 
-  Lemma pspace_algo_poly inp:
-      res_to_leaf (pspace_algo rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
+  Lemma compute_result_poly inp:
+      res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
       = Some (linden_result rer lr inp).
   Proof.
     now pose proof functional_terminates' lr inp [Areg lr] forward
       (afr_refl lr inp) _ (fuel_budget_spec lr inp) GroupMap.empty rer
-      as ALGO%compute_tree_None_compute_tr%pspace_algo_correctness.
+      as ALGO%compute_tree_None_compute_tr%compute_result_correctness.
   Qed.
 End MembershipTransport.
 

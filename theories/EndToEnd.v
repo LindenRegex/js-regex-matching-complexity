@@ -78,17 +78,17 @@ Section EndToEnd.
     nia.
   Qed.
 
-  Corollary pspace_algo_terminates:
+  Corollary compute_result_terminates:
     forall (rer: RegExpRecord) (r: regex) (inp: input) (act: actions) (dir: Direction),
       MembershipProof.act_from_regex r inp act dir ->
       forall fuel, fuel > MembershipProof.actions_fuel inp act dir ->
-        forall gm, pspace_algo rer act inp gm dir fuel <> Out_of_fuel.
+        forall gm, compute_result rer act inp gm dir fuel <> Out_of_fuel.
   Proof.
     intros rer r inp act dir AFR fuel FUEL gm.
     pose proof MembershipProof.functional_terminates' r inp act dir AFR fuel FUEL gm rer as NN.
     destruct (FunctionalSemantics.compute_tree rer act inp gm dir fuel) as [t|] eqn:CT; [|congruence].
-    pose proof MembershipProof.pspace_algo_correctness _ _ _ _ _ _ _ CT as CORR.
-    destruct (pspace_algo rer act inp gm dir fuel); cbn in CORR; congruence.
+    pose proof MembershipProof.compute_result_correctness _ _ _ _ _ _ _ CT as CORR.
+    destruct (compute_result rer act inp gm dir fuel); cbn in CORR; congruence.
   Qed.
 
   Context (a_char semicolon_char z_char: Parameters.Character).
@@ -273,13 +273,13 @@ Section EndToEnd.
           m (input_str inp) (idx inp)
             = Success (to_MatchState lf (RegExpRecord.capturingGroupsCount rer)) /\
           (* ... that corresponds to the result of the PSPACE algorithm run with the fuel budget. *)
-          res_to_leaf (pspace_algo rer [Areg lr] inp GroupMap.empty forward
+          res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward
                          (fuel_budget lr inp)) = Some lf.
     Proof.
       intro inp.
       split; [apply fuel_budget_source|].
       destruct (matcher_at_input wr rer no_early_errors eq_refl) as [m (COMP & MATCH)].
-      exists m, (linden_result rer lr inp); eauto using pspace_algo_poly.
+      exists m, (linden_result rer lr inp); eauto using compute_result_poly.
     Qed.
 
     (* End-to-end PSPACE-membership theorem: *)
@@ -295,7 +295,7 @@ Section EndToEnd.
           (* - compiling the regex in the Warblre sense succeeds (this is most of what regExpInitialize does), *)
           regExpInitialize wr flags = Success inst /\
           (* - running the PSPACE algorithm with the fuel budget, the regex `lr` and the string `s` succeeds, yielding a result `lf`... *)
-          res_to_leaf (pspace_algo rer [Areg lr] inp GroupMap.empty forward
+          res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward
                          (fuel_budget lr inp)) = Some lf /\
           (* ... that matches the Warblre result of matching `wr` on `s`. *)
           exec_agrees inst s (to_MatchState lf (RegExpRecord.capturingGroupsCount rer)).
@@ -305,7 +305,7 @@ Section EndToEnd.
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
                   eq_refl eq_refl) as [inst [INIT RES]].
       exists inst, (linden_result rer lr inp).
-      split; [exact INIT|]; split; [apply pspace_algo_poly; reflexivity | exact RES].
+      split; [exact INIT|]; split; [apply compute_result_poly; reflexivity | exact RES].
     Qed.
   End PspaceMembership.
 
@@ -588,7 +588,7 @@ Definition end_to_end_results :=
   (@fuel_budget_value, @guess_budget_value, @regex_test_unfold, @optp_output_width,
    @pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
    @pspace_hardness_noneglk_e2e, @pspace_membership_matcher, @pspace_membership_e2e,
-   @membership_state_size_bound, @pspace_algo_terminates,
+   @membership_state_size_bound, @compute_result_terminates,
    @optp_hardness_matcher, @optp_hardness_e2e,
    @optp_hardness_machine, @optp_hardness_machine_w, @optp_membership_matcher,
    @optp_membership_e2e).
