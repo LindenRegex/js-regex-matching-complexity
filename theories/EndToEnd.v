@@ -11,6 +11,17 @@ Import ListNotations.
 Section EndToEnd.
   Context {params: LindenParameters}.
 
+  (* The expanded regex size and the AST size are within a constant factor of each other,
+     as long as the regex has no lower-bounded quantifiers. *)
+  Remark expanded_size_bounds:
+    forall (r: regex),
+      (* - the AST size never exceeds the expanded size, for any regex, *)
+      regex_size r <= expanded_size r /\
+      (* - and if no quantifier has a nonzero lower bound, then expanding a quantifier at
+           most triples its size, so the expanded size stays within a factor 3 of the AST size. *)
+      (no_lower_bound r -> expanded_size r <= 3 * regex_size r).
+  Proof. auto using size_le_expanded, expanded_size_nolb. Qed.
+
   (* The fuel budget definition; it is a polynomial in the string size and the expanded regex size. *)
   Remark fuel_budget_value:
     forall (r: regex) (inp: input),
@@ -19,10 +30,10 @@ Section EndToEnd.
            * (expanded_size r + expanded_size r * expanded_size r)).
   Proof. reflexivity. Qed.
 
-  (* The guess budget definition; it is a polynomial in the string size and the regex size. *)
+  (* The guess budget definition; it is a polynomial in the string size and the expanded regex size. *)
   Remark guess_budget_value:
     forall (r: regex) (inp: input),
-      guess_budget r inp = S (3 * ((1 + remaining_length inp forward) * regex_size r)).
+      guess_budget r inp = S ((1 + remaining_length inp forward) * expanded_size r).
   Proof. reflexivity. Qed.
 
   (* The definition of regex_test: `regex_test wr flags s b` holds if both of the following are true:
@@ -52,26 +63,29 @@ Section EndToEnd.
   Local Notation actions_size := MembershipProof.actions_size.
 
   (* TODO explain *)
+  Section MembershipStateSizeBound.
+  Local Hint Extern 3 (_ <= _) => nia : core.
+
   Theorem membership_state_size_bound:
     forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (act: actions),
       let lr := linden_of wr in
       MembershipProof.act_from_regex lr inp act dir ->
       let n := expanded_size lr in
       let frame := (1 + length (input_str inp)) * actions_size act in
+      let poly := (1 + length (input_str inp))
+                  * (pattern_expanded_size wr
+                     + pattern_expanded_size wr * pattern_expanded_size wr) in
       actions_size act <= n + Nat.div2 (n * S n) /\
-      (no_lower_bound lr ->
-       fuel_budget lr inp * frame
-       <= S (3 * (1 + length (input_str inp)) * pattern_size wr * S (3 * pattern_size wr))
-          * ((1 + length (input_str inp))
-             * (3 * pattern_size wr * S (3 * pattern_size wr)))).
+      fuel_budget lr inp * frame <= S poly * poly.
   Proof.
     cbv zeta; intros * AFR; pose proof MembershipProof.actions_size_bound' AFR as ACT.
-    split; [exact ACT|intro NLB]; apply PeanoNat.Nat.mul_le_mono;
-      [now apply fuel_budget_source | apply PeanoNat.Nat.mul_le_mono_l].
-    pose proof expanded_size_pos (linden_of wr); pose proof expanded_size_nolb _ NLB.
-    pose proof (linden_of_size wr: regex_size (linden_of wr) <= pattern_size wr).
-    pose proof triangle_even (expanded_size (linden_of wr)); nia.
+    pose proof expanded_size_pos (linden_of wr); pose proof linden_of_expanded_size wr;
+      pose proof triangle_even (expanded_size (linden_of wr)).
+    split; [exact ACT|];
+      eauto using PeanoNat.Nat.mul_le_mono, PeanoNat.Nat.mul_le_mono_l, fuel_budget_source.
   Qed.
+
+  End MembershipStateSizeBound.
 
   Corollary compute_result_terminates:
     forall (rer: RegExpRecord) (r: regex) (inp: input) (act: actions) (dir: Direction),
@@ -107,8 +121,8 @@ Section EndToEnd.
 
     (* PSPACE-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_matcher:
-      (* the size of the regex `wr` is linear in the size of the PQBF, *)
-      pattern_size wr <= 8 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF, *)
+      pattern_expanded_size wr <= 9 * pqbf_size pq /\
       (* so is the length of the string, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
@@ -130,8 +144,8 @@ Section EndToEnd.
 
     (* End-to-end PSPACE-hardness theorem: *)
     Theorem pspace_hardness_e2e:
-      (* the size of the regex `wr` is linear in the size of the PQBF, *)
-      pattern_size wr <= 8 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF, *)
+      pattern_expanded_size wr <= 9 * pqbf_size pq /\
       (* so is the length of the string, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
@@ -173,8 +187,8 @@ Section EndToEnd.
 
     (* PSPACE-hardness theorem without negative lookarounds, in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_noneglk_matcher:
-      (* the size of the regex `wr` is linear in the size of the PQBF `pq`, *)
-      pattern_size wr <= 25 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF `pq`, *)
+      pattern_expanded_size wr <= 31 * pqbf_size pq /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
@@ -198,8 +212,8 @@ Section EndToEnd.
 
     (* End-to-end PSPACE-hardness theorem without negative lookarounds: *)
     Theorem pspace_hardness_noneglk_e2e:
-      (* the size of the regex `wr` is linear in the size of the PQBF `pq`, *)
-      pattern_size wr <= 25 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF `pq`, *)
+      pattern_expanded_size wr <= 31 * pqbf_size pq /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex `wr` passes the early errors check, *)
@@ -240,11 +254,12 @@ Section EndToEnd.
     Qed.
 
     Lemma pspace_algo_fuel_poly (s: LWParameters.string):
-        no_lower_bound lr ->
         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-        <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr)).
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)).
     Proof.
-      intro NLB; pose proof fuel_budget_source wr (init_input s) NLB as SRC; cbn in SRC.
+      pose proof fuel_budget_source wr (init_input s) as SRC; cbn in SRC.
       pose proof fuel_budget_spec wr rer eq_refl lr (init_input s).
       unfold lr in *; lia.
     Qed.
@@ -253,11 +268,11 @@ Section EndToEnd.
     Theorem pspace_membership_matcher:
       (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        (* - if the regex has no lower-bounded quantifiers, then the fuel that the PSPACE
-             algorithm runs with is polynomial in the string and regex sizes, *)
-        (no_lower_bound lr ->
-         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-         <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
+        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
         exists b m res,
           (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
                yielding a boolean `b`, *)
@@ -281,11 +296,11 @@ Section EndToEnd.
     Theorem pspace_membership_e2e:
       (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        (* - if the regex does not have lower-bounded quantifiers, then the fuel that the
-             PSPACE algorithm runs with is polynomial in the string and regex sizes, *)
-        (no_lower_bound lr ->
-         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-         <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
+        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
         exists b,
           (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
                yielding a boolean `b`, *)
@@ -325,8 +340,8 @@ Section EndToEnd.
 
     (* OptP-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_hardness_matcher:
-      (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 11 * pos_formula_size pf /\
+      (* the expanded size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
@@ -358,8 +373,8 @@ Section EndToEnd.
 
     (* End-to-end OptP-hardness theorem: *)
     Theorem optp_hardness_e2e:
-      (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 11 * pos_formula_size pf /\
+      (* the expanded size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
@@ -409,11 +424,11 @@ Section EndToEnd.
       (* Let `n` be the guess budget corresponding to matching `r` on `s`. *)
       let n := guess_budget r inp in
       (* Then:
-         - the sizes of `r` and `s` are linear in the size of `pf`, *)
+         - the expanded size of `r` and the length of `s` are linear in the size of `pf`, *)
       expanded_size r <= 12 * pos_formula_size pf /\
       length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
-      n <= S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
+      n <= S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
       (* - `r` has neither lookarounds nor lower-bounded quantifiers, *)
       (no_lookaround r /\ no_lower_bound r) /\
       (* - there exists a result `best` of the OptP algorithm on `r` and `s`, *)
@@ -456,11 +471,11 @@ Section EndToEnd.
       (* Let `n` be the guess budget corresponding to matching `wr` on `s`. *)
       let n := guess_budget (linden_of wr) inp in
       (* Then:
-         - the sizes of `wr` and `s` are linear in the size of `pf`, *)
-      pattern_size wr <= 11 * pos_formula_size pf /\
+         - the expanded size of `wr` and the length of `s` are linear in the size of `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
-      n <= S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
+      n <= S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
       (* - the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* - `wr` has neither lookarounds nor lower-bounded quantifiers, *)
@@ -497,9 +512,8 @@ Section EndToEnd.
     (* The Linden equivalent of `wr`. *)
     Let lr := linden_of wr.
 
-    (* We assume that the regex has neither lookarounds nor lower-bounded quantifiers. *)
+    (* We assume that the regex has no lookarounds. *)
     Hypothesis lr_nolk: no_lookaround lr.
-    Hypothesis lr_nolb: no_lower_bound lr.
 
     (* OptP-membership theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_membership_matcher:
@@ -508,8 +522,8 @@ Section EndToEnd.
         (* Let `n` be the guess budget corresponding to matching `lr` on `inp`. *)
         let n := guess_budget lr inp in
         (* Then:
-           - `n` is polynomial in the remaining length of `inp` and the size of `wr`, *)
-        n <= S (3 * (1 + remaining_length inp forward) * pattern_size wr) /\
+           - `n` is polynomial in the remaining length of `inp` and the expanded size of `wr`, *)
+        n <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr) /\
         exists m best,
           (* - compiling `wr` succeeds, *)
           Semantics.compilePattern wr rer = Success m /\
@@ -523,7 +537,7 @@ Section EndToEnd.
                                      (RegExpRecord.capturingGroupsCount rer)).
     Proof.
       intros inp ?; split; [apply guess_budget_source|].
-      destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
+      destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best (PARSE & LEN & EXECP)].
       destruct (matcher_at_input wr rer no_early_errors eq_refl) as [m (COMP & MATCH)].
       exists m, best; rewrite MATCH, EXECP; auto.
@@ -537,8 +551,8 @@ Section EndToEnd.
         (* Let `n` be the guess budget corresponding to matching `lr` on `s`. *)
         let n := guess_budget lr inp in
         (* Then:
-           - `n` is polynomial in the length of `s` and the size of `wr`, *)
-        n <= S (3 * (1 + length s) * pattern_size wr) /\
+           - `n` is polynomial in the length of `s` and the expanded size of `wr`, *)
+        n <= S ((1 + length s) * pattern_expanded_size wr) /\
         exists inst best,
           (* - compiling `wr` succeeds (this is essentially what `regExpInitialize` does), *)
           regExpInitialize wr flags = Success inst /\
@@ -551,7 +565,7 @@ Section EndToEnd.
                                             (RegExpRecord.capturingGroupsCount rer)).
     Proof.
       intros s inp ?; split; [apply (guess_budget_source wr inp)|].
-      destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
+      destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best (PARSE & LEN & EXECP)].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
                   eq_refl eq_refl) as [inst [INIT RES]].
@@ -562,7 +576,8 @@ Section EndToEnd.
 End EndToEnd.
 
 Definition end_to_end_results :=
-  (@fuel_budget_value, @guess_budget_value, @regex_test_unfold, @optp_output_width,
+  (@expanded_size_bounds, @fuel_budget_value, @guess_budget_value, @regex_test_unfold,
+   @optp_output_width,
    @pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
    @pspace_hardness_noneglk_e2e, @pspace_membership_matcher, @pspace_membership_e2e,
    @membership_state_size_bound, @compute_result_terminates,

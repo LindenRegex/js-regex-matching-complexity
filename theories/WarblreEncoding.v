@@ -69,16 +69,16 @@ Section WarblreRegexEncoding.
   Definition theRegex_w := theRegex_w_aux (fst q).
 
   Lemma check_clause_aux_size: forall c,
-      pattern_size (check_clause_regex_aux_w c) <= 1 + 4 * length c.
+      pattern_expanded_size (check_clause_regex_aux_w c) <= 1 + 4 * length c.
   Proof. induction c as [|l c IH]; cbn; [|destruct l; cbn]; lia. Qed.
 
   Lemma check_conjunct_size: forall cl,
-      pattern_size (check_conjunct_regex_w cl)
+      pattern_expanded_size (check_conjunct_regex_w cl)
       <= 1 + 4 * length cl + 4 * num_literals_pos_formula cl.
   Proof. induction cl as [|c cl IH]; cbn; [|pose proof check_clause_aux_size c; cbn]; lia. Qed.
 
   Lemma check_formula_size: forall f,
-      pattern_size (check_formula_regex_w f)
+      pattern_expanded_size (check_formula_regex_w f)
       <= 2 + 4 * num_clauses_formula f + 4 * num_literals_formula f.
   Proof.
     intros [pf|pf]; unfold num_clauses_formula, num_literals_formula; cbn;
@@ -86,11 +86,11 @@ Section WarblreRegexEncoding.
   Qed.
 
   Lemma theRegex_w_aux_size: forall ql,
-      pattern_size (theRegex_w_aux ql)
-      <= 8 * length ql + pattern_size (check_formula_regex_w (snd q)).
+      pattern_expanded_size (theRegex_w_aux ql)
+      <= 9 * length ql + pattern_expanded_size (check_formula_regex_w (snd q)).
   Proof. induction ql as [|[|] ql IH]; cbn; lia. Qed.
 
-  Theorem theRegex_w_size: pattern_size theRegex_w <= 8 * qbf_size q.
+  Theorem theRegex_w_size: pattern_expanded_size theRegex_w <= 9 * qbf_size q.
   Proof.
     unfold theRegex_w, qbf_size, num_clauses_qbf, num_literals_qbf.
     pose proof theRegex_w_aux_size (fst q); pose proof check_formula_size (snd q); lia.
@@ -287,15 +287,15 @@ Section WarblreRegexEncoding.
   Definition theRegex_poslk_w := theRegex_poslk_w_aux (fst q).
 
   Lemma negation_regex_w_size rsub z:
-      pattern_size (negation_regex_w rsub z) = 18 + pattern_size rsub.
+      pattern_expanded_size (negation_regex_w rsub z) = 23 + pattern_expanded_size rsub.
   Proof.
     unfold negation_regex_w, check_z_regex_w, capture_z_regex_w,
-      a_semicolon_star_w, WBackref; cbn [pattern_size]; lia.
+      a_semicolon_star_w, WBackref; cbn [pattern_expanded_size quantifier_min quantprefix_min]; lia.
   Qed.
 
   Lemma check_formula_poslk_size:
-    pattern_size check_formula_regex_poslk_w
-    <= 19 + 4 * num_clauses_qbf q + 4 * num_literals_qbf q.
+    pattern_expanded_size check_formula_regex_poslk_w
+    <= 24 + 4 * num_clauses_qbf q + 4 * num_literals_qbf q.
   Proof.
     unfold check_formula_regex_poslk_w; measure_unfold; cbv zeta.
     destruct (snd q) as [pf|pf]; pose proof check_conjunct_size (rev pf);
@@ -304,14 +304,14 @@ Section WarblreRegexEncoding.
   Qed.
 
   Lemma theRegex_poslk_w_aux_size: forall ql,
-      pattern_size (theRegex_poslk_w_aux ql)
-      <= 25 * length ql + pattern_size check_formula_regex_poslk_w.
+      pattern_expanded_size (theRegex_poslk_w_aux ql)
+      <= 31 * length ql + pattern_expanded_size check_formula_regex_poslk_w.
   Proof.
     induction ql as [|[|] ql IH]; cbn [theRegex_poslk_w_aux length];
-      rewrite ?negation_regex_w_size; unfold def_var_regex_w; cbn [pattern_size]; lia.
+      rewrite ?negation_regex_w_size; unfold def_var_regex_w; cbn [pattern_expanded_size]; lia.
   Qed.
 
-  Theorem theRegex_poslk_w_size: pattern_size theRegex_poslk_w <= 25 * qbf_size q.
+  Theorem theRegex_poslk_w_size: pattern_expanded_size theRegex_poslk_w <= 31 * qbf_size q.
   Proof.
     unfold theRegex_poslk_w, qbf_size.
     pose proof theRegex_poslk_w_aux_size (fst q); pose proof check_formula_poslk_size; lia.

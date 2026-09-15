@@ -28,7 +28,7 @@ Section Basics.
        * (expanded_size r + expanded_size r * expanded_size r)).
 
   Definition guess_budget (r: regex) (inp: input): nat :=
-    S (3 * ((1 + remaining_length inp forward) * regex_size r)).
+    S ((1 + remaining_length inp forward) * expanded_size r).
 
   Fixpoint no_lookaround (r: regex): Prop :=
     match r with

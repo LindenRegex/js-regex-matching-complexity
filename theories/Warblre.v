@@ -15,62 +15,55 @@ Definition linden_of {params: LindenParameters} (wr: Patterns.Regex): regex :=
 Section TranslationSize.
   Context {params: LindenParameters}.
 
-  Lemma atomesc_size:
-    forall ae nm lr, atomesc_to_linden ae nm = Success lr -> regex_size lr = 1.
+  Lemma atomesc_expanded_size:
+    forall ae nm lr, atomesc_to_linden ae nm = Success lr -> expanded_size lr = 1.
   Proof.
-    intros [] nm lr TR; cbn in TR; try (injection TR as <-; reflexivity).
-    destruct (nameidx nm _); [injection TR as <- | discriminate]; reflexivity.
+    intros [] nm lr TR; cbn in TR; try destruct (nameidx nm _); inversion TR; reflexivity.
   Qed.
 
-  Lemma quantpref_size:
+  Lemma quantpref_expanded_size:
     forall qp quant, wquantpref_to_linden qp = Success quant ->
-      forall greedy lr, regex_size (quant greedy lr) = 1 + regex_size lr.
+      forall greedy lr,
+        expanded_size (quant greedy lr) = (1 + quantprefix_min qp) * (3 + expanded_size lr).
   Proof.
-    intros [] quant TR; cbn in TR; try (injection TR as <-; reflexivity).
-    destruct (_ <=? _); [injection TR as <- | discriminate]; reflexivity.
+    intros [] quant TR; cbn in TR; try destruct (_ <=? _); inversion TR; reflexivity.
   Qed.
 
-  Lemma warblre_to_linden_size (wr: Patterns.Regex):
+  Lemma warblre_to_linden_expanded_size (wr: Patterns.Regex):
     forall n nm lr,
-      warblre_to_linden wr n nm = Success lr -> regex_size lr <= pattern_size wr.
+      warblre_to_linden wr n nm = Success lr ->
+      expanded_size lr <= pattern_expanded_size wr.
   Proof.
-    induction wr; intros n nm lr TR; cbn in TR |- *; unfold Result.bind in TR;
-      repeat (match type of TR with
-              | context [ match ?e with _ => _ end ] => destruct e eqn:?
-              end; cbn in TR; unfold Result.bind in TR); try discriminate.
+    induction wr; intros n nm lr TR; cbn in TR |- *;
+      repeat match type of TR with
+             | context [ Result.bind ?e _ ] => destruct e eqn:?; cbn in TR
+             | context [ match ?e with _ => _ end ] => destruct e eqn:?; cbn in TR
+             end; try discriminate; try injection TR as <-; cbn.
     all: repeat match goal with
-         | H: atomesc_to_linden _ _ = Success _ |- _ => apply atomesc_size in H
+         | H: atomesc_to_linden _ _ = Success _ |- _ => apply atomesc_expanded_size in H
          | H: warblre_to_linden _ _ _ = Success _ |- _ =>
              first [apply IHwr in H | apply IHwr1 in H | apply IHwr2 in H]
-         | H: wquantpref_to_linden _ = Success _ |- _ =>
-             pose proof (quantpref_size _ _ H); clear H
-         end.
-    all: try injection TR as <-; cbn in *;
-         repeat match goal with
-         | H: forall _ _, regex_size (?quant _ _) = _ |- context [?quant] => rewrite H
-         end; lia.
+         | H: wquantpref_to_linden _ = Success _ |- _ => rewrite (quantpref_expanded_size _ _ H)
+         end; nia.
   Qed.
 
-  Corollary linden_of_size wr: regex_size (linden_of wr) <= pattern_size wr.
+  Corollary linden_of_expanded_size wr:
+      expanded_size (linden_of wr) <= pattern_expanded_size wr.
   Proof.
-    unfold linden_of, warblre_to_linden'.
-    destruct (warblre_to_linden wr 0 (buildnm wr)) eqn:TR;
-      [eapply warblre_to_linden_size, TR | cbn; apply pattern_size_pos].
+    unfold linden_of, warblre_to_linden'; destruct (warblre_to_linden _ _ _) eqn:TR;
+      eauto using warblre_to_linden_expanded_size, pattern_expanded_size_pos.
   Qed.
 
   Corollary guess_budget_source wr inp:
       guess_budget (linden_of wr) inp
-      <= S (3 * (1 + remaining_length inp forward) * pattern_size wr).
-  Proof. unfold guess_budget; pose proof linden_of_size wr; nia. Qed.
+      <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr).
+  Proof. unfold guess_budget; pose proof linden_of_expanded_size wr; nia. Qed.
 
   Corollary fuel_budget_source wr inp:
-      no_lower_bound (linden_of wr) ->
       fuel_budget (linden_of wr) inp
-      <= S (3 * (1 + length (input_str inp)) * pattern_size wr * S (3 * pattern_size wr)).
-  Proof.
-    intro NLB; unfold fuel_budget.
-    pose proof expanded_size_nolb _ NLB; pose proof linden_of_size wr; nia.
-  Qed.
+      <= S ((1 + length (input_str inp))
+            * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
+  Proof. unfold fuel_budget; pose proof linden_of_expanded_size wr; nia. Qed.
 End TranslationSize.
 
 Section TranslationFragment.
