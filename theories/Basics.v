@@ -30,6 +30,9 @@ Section Basics.
   Definition guess_budget (r: regex) (inp: input): nat :=
     S (3 * ((1 + remaining_length inp forward) * regex_size r)).
 
+  Definition expanded_budget (r: regex) (inp: input): nat :=
+    S ((1 + remaining_length inp forward) * expanded_size r).
+
   Fixpoint no_lookaround (r: regex): Prop :=
     match r with
     | Epsilon | Regex.Character _ | Anchor _ | Backreference _ => True
@@ -62,4 +65,11 @@ Section Basics.
 
   Lemma expanded_size_nolb r: no_lower_bound r -> expanded_size r <= 3 * regex_size r.
   Proof. induction r; cbn; intuition (subst; lia). Qed.
+
+  Lemma expanded_budget_le_guess_budget r inp:
+      no_lower_bound r -> expanded_budget r inp <= guess_budget r inp.
+  Proof.
+    intro NLB; unfold expanded_budget, guess_budget.
+    pose proof expanded_size_nolb r NLB; nia.
+  Qed.
 End Basics.

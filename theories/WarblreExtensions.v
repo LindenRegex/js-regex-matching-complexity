@@ -18,6 +18,30 @@ Section WarblreEarlyErrors.
   Lemma pattern_size_pos r: 1 <= pattern_size r.
   Proof. destruct r; cbn; lia. Qed.
 
+  Definition quantprefix_min (p: Patterns.QuantifierPrefix): nat :=
+    match p with
+    | Patterns.Star | Patterns.Question => 0
+    | Patterns.Plus => 1
+    | Patterns.RepExact n | Patterns.RepPartialRange n | Patterns.RepRange n _ => n
+    end.
+
+  Definition quantifier_min (q: Patterns.Quantifier): nat :=
+    match q with Patterns.Greedy p | Patterns.Lazy p => quantprefix_min p end.
+
+  Fixpoint pattern_expanded_size (r: Patterns.Regex): nat :=
+    match r with
+    | Patterns.Disjunction r1 r2 | Patterns.Seq r1 r2 =>
+        1 + pattern_expanded_size r1 + pattern_expanded_size r2
+    | Patterns.Quantified r1 q => (1 + quantifier_min q) * (3 + pattern_expanded_size r1)
+    | Patterns.Group _ r1 => 2 + pattern_expanded_size r1
+    | Patterns.Lookahead r1 | Patterns.NegativeLookahead r1
+    | Patterns.Lookbehind r1 | Patterns.NegativeLookbehind r1 => 1 + pattern_expanded_size r1
+    | _ => 1
+    end.
+
+  Lemma pattern_expanded_size_pos r: 1 <= pattern_expanded_size r.
+  Proof. destruct r; cbn; nia. Qed.
+
   Fixpoint pattern_no_lookaround (r: Patterns.Regex): Prop :=
     match r with
     | Patterns.Disjunction r1 r2 | Patterns.Seq r1 r2 =>

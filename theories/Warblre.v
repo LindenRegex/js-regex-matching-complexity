@@ -64,14 +64,62 @@ Section TranslationSize.
       <= S (3 * (1 + remaining_length inp forward) * pattern_size wr).
   Proof. unfold guess_budget; pose proof linden_of_size wr; nia. Qed.
 
-  Corollary fuel_budget_source wr inp:
-      no_lower_bound (linden_of wr) ->
-      fuel_budget (linden_of wr) inp
-      <= S (3 * (1 + length (input_str inp)) * pattern_size wr * S (3 * pattern_size wr)).
+  Lemma atomesc_expanded_size:
+    forall ae nm lr, atomesc_to_linden ae nm = Success lr -> expanded_size lr = 1.
   Proof.
-    intro NLB; unfold fuel_budget.
-    pose proof expanded_size_nolb _ NLB; pose proof linden_of_size wr; nia.
+    intros [] nm lr TR; cbn in TR; try (injection TR as <-; reflexivity).
+    destruct (nameidx nm _); [injection TR as <- | discriminate]; reflexivity.
   Qed.
+
+  Lemma quantpref_expanded_size:
+    forall qp quant, wquantpref_to_linden qp = Success quant ->
+      forall greedy lr,
+        expanded_size (quant greedy lr) = (1 + quantprefix_min qp) * (3 + expanded_size lr).
+  Proof.
+    intros [] quant TR; cbn in TR; try (injection TR as <-; reflexivity).
+    destruct (_ <=? _); [injection TR as <- | discriminate]; reflexivity.
+  Qed.
+
+  Lemma warblre_to_linden_expanded_size (wr: Patterns.Regex):
+    forall n nm lr,
+      warblre_to_linden wr n nm = Success lr ->
+      expanded_size lr <= pattern_expanded_size wr.
+  Proof.
+    induction wr; intros n nm lr TR; cbn in TR |- *; unfold Result.bind in TR;
+      repeat (match type of TR with
+              | context [ match ?e with _ => _ end ] => destruct e eqn:?
+              end; cbn in TR; unfold Result.bind in TR); try discriminate.
+    all: repeat match goal with
+         | H: atomesc_to_linden _ _ = Success _ |- _ => apply atomesc_expanded_size in H
+         | H: warblre_to_linden _ _ _ = Success _ |- _ =>
+             first [apply IHwr in H | apply IHwr1 in H | apply IHwr2 in H]
+         | H: wquantpref_to_linden _ = Success _ |- _ =>
+             pose proof (quantpref_expanded_size _ _ H); clear H
+         end.
+    all: try injection TR as <-; cbn in *;
+         repeat match goal with
+         | H: forall _ _, expanded_size (?quant _ _) = _ |- context [?quant] => rewrite H
+         end; nia.
+  Qed.
+
+  Corollary linden_of_expanded_size wr:
+      expanded_size (linden_of wr) <= pattern_expanded_size wr.
+  Proof.
+    unfold linden_of, warblre_to_linden'.
+    destruct (warblre_to_linden wr 0 (buildnm wr)) eqn:TR;
+      [eapply warblre_to_linden_expanded_size, TR | cbn; apply pattern_expanded_size_pos].
+  Qed.
+
+  Corollary expanded_budget_source wr inp:
+      expanded_budget (linden_of wr) inp
+      <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr).
+  Proof. unfold expanded_budget; pose proof linden_of_expanded_size wr; nia. Qed.
+
+  Corollary fuel_budget_source wr inp:
+      fuel_budget (linden_of wr) inp
+      <= S ((1 + length (input_str inp))
+            * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
+  Proof. unfold fuel_budget; pose proof linden_of_expanded_size wr; nia. Qed.
 End TranslationSize.
 
 Section TranslationFragment.

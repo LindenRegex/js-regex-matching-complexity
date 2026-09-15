@@ -70,21 +70,19 @@ Section EndToEnd.
       MembershipProof.act_from_regex lr inp act dir ->
       let n := expanded_size lr in
       let frame := (1 + length (input_str inp)) * actions_size act in
+      let poly := (1 + length (input_str inp))
+                  * (pattern_expanded_size wr
+                     + pattern_expanded_size wr * pattern_expanded_size wr) in
       actions_size act <= n + Nat.div2 (n * S n) /\
-      (no_lower_bound lr ->
-       fuel_budget lr inp * frame
-       <= S (3 * (1 + length (input_str inp)) * pattern_size wr * S (3 * pattern_size wr))
-          * ((1 + length (input_str inp))
-             * (3 * pattern_size wr * S (3 * pattern_size wr)))).
+      fuel_budget lr inp * frame <= S poly * poly.
   Proof.
     intros * AFR; cbv zeta.
     pose proof MembershipProof.actions_size_bound' AFR as ACT.
-    split; [exact ACT|intro NLB].
+    split; [exact ACT|].
     apply PeanoNat.Nat.mul_le_mono;
       [now apply fuel_budget_source|apply PeanoNat.Nat.mul_le_mono_l].
     pose proof expanded_size_pos lr.
-    pose proof expanded_size_nolb lr NLB.
-    pose proof (linden_of_size wr: regex_size lr <= pattern_size wr).
+    pose proof (linden_of_expanded_size wr: expanded_size lr <= pattern_expanded_size wr).
     pose proof triangle_even (expanded_size lr).
     nia.
   Qed.
@@ -287,14 +285,16 @@ Section EndToEnd.
     Qed.
 
     Lemma pspace_algo_fuel_poly (s: LWParameters.string):
-        no_lower_bound lr ->
         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-        <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr)).
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)).
     Proof.
-      intro NLB.
       assert (SRC: fuel_budget lr (init_input s)
-                   <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr)))
-        by (apply (fuel_budget_source wr (init_input s)), NLB).
+                   <= S ((1 + length s)
+                         * (pattern_expanded_size wr
+                            + pattern_expanded_size wr * pattern_expanded_size wr)))
+        by apply (fuel_budget_source wr (init_input s)).
       pose proof fuel_budget_spec wr rer eq_refl lr (init_input s). lia.
     Qed.
 
@@ -302,11 +302,11 @@ Section EndToEnd.
     Theorem pspace_membership_matcher:
       (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        (* - if the regex has no lower-bounded quantifiers, then the fuel that the PSPACE
-             algorithm runs with is polynomial in the string and regex sizes, *)
-        (no_lower_bound lr ->
-         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-         <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
+        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
         exists b m res,
           (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
                yielding a boolean `b`, *)
@@ -330,11 +330,11 @@ Section EndToEnd.
     Theorem pspace_membership_e2e:
       (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        (* - if the regex does not have lower-bounded quantifiers, then the fuel that the
-             PSPACE algorithm runs with is polynomial in the string and regex sizes, *)
-        (no_lower_bound lr ->
-         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-         <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
+        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
         exists b,
           (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
                yielding a boolean `b`, *)
