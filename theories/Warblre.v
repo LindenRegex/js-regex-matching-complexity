@@ -62,10 +62,10 @@ Section TranslationSize.
       [eapply warblre_to_linden_expanded_size, TR | cbn; apply pattern_expanded_size_pos].
   Qed.
 
-  Corollary expanded_budget_source wr inp:
-      expanded_budget (linden_of wr) inp
+  Corollary guess_budget_source wr inp:
+      guess_budget (linden_of wr) inp
       <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr).
-  Proof. unfold expanded_budget; pose proof linden_of_expanded_size wr; nia. Qed.
+  Proof. unfold guess_budget; pose proof linden_of_expanded_size wr; nia. Qed.
 
   Corollary fuel_budget_source wr inp:
       fuel_budget (linden_of wr) inp

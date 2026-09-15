@@ -375,13 +375,13 @@ Section LexSatSize.
       pose proof lexsat_string_length nv pf; unfold pos_formula_size; lia.
   Qed.
 
-  Theorem lexsat_expanded_budget_bound nv pf:
+  Theorem lexsat_guess_budget_bound nv pf:
       uses_all_vars nv pf ->
-      expanded_budget (lexsat_regex a_char semicolon_char nv pf)
-                      (init_input (lexsat_string a_char semicolon_char z_char nv pf)) <=
+      guess_budget (lexsat_regex a_char semicolon_char nv pf)
+                   (init_input (lexsat_string a_char semicolon_char z_char nv pf)) <=
         S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)).
   Proof.
-    intro USES; unfold expanded_budget.
+    intro USES; unfold guess_budget.
     pose proof lexsat_regex_size_bound nv pf USES.
     pose proof lexsat_string_size_bound nv pf USES.
     replace (remaining_length (init_input (lexsat_string a_char semicolon_char z_char nv pf))
@@ -456,7 +456,7 @@ Section Fragment.
               GroupMap.empty forward t ->
       let r := theRegex q a_char semicolon_char in
       let inp := init_input (theString q a_char semicolon_char z_char) in
-      let nb := expanded_budget r inp in
+      let nb := guess_budget r inp in
       exists best,
         parse_spec rer r inp nb best /\
         length best = S nb /\
