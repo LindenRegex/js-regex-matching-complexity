@@ -257,56 +257,91 @@ Section EndToEnd.
     (* The translation of `wr` into a Linden regex. *)
     Let lr := linden_of wr.
 
+    Lemma pspace_algo_sound (s: LWParameters.string):
+      exists b, pspace_algo rer lr s = Some b /\
+                (matches_at rer lr (init_input s) <-> b = true).
+    Proof.
+      destruct (is_tree_productivity rer [Areg lr] (init_input s) GroupMap.empty forward)
+        as [t TREE].
+      destruct (pspace_algo rer lr s) as [b|] eqn:ALGO.
+      2: {
+        exfalso; unfold pspace_algo in ALGO.
+        destruct compute_result eqn:CR; try discriminate.
+        revert CR; apply MembershipProof.result_terminates' with (r := lr) (dir := forward);
+          [apply MembershipProof.afr_refl | lia].
+      }
+      exists b; split; [reflexivity|]; rewrite (matches_at_tree TREE); destruct b.
+      - split; [reflexivity | intros _].
+        destruct (proj1 (pspace_algo_true_correct rer lr s t TREE) ALGO) as [lf LF].
+        congruence.
+      - rewrite (proj1 (pspace_algo_false_correct rer lr s t TREE) ALGO).
+        split; [congruence | discriminate].
+    Qed.
+
+    Lemma pspace_algo_fuel_poly (s: LWParameters.string):
+        no_lower_bound lr ->
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr)).
+    Proof.
+      intro NLB.
+      assert (SRC: fuel_budget lr (init_input s)
+                   <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr)))
+        by (apply (fuel_budget_source wr (init_input s)), NLB).
+      pose proof fuel_budget_spec wr rer eq_refl lr (init_input s). lia.
+    Qed.
+
     (* PSPACE-membership theorem in terms of the Warblre `Matcher`: *)
     Theorem pspace_membership_matcher:
-      (* for any input `inp` (an input string and an index into that string), *)
-      forall (inp: input),
-        (* - if the regex has no lower-bounded quantifiers, then the fuel budget corresponding to matching the regex on the string is polynomial in the input and regex sizes, *)
+      (* for any input string `s`, *)
+      forall (s: LWParameters.string),
+        (* - if the regex has no lower-bounded quantifiers, then the fuel that the PSPACE
+             algorithm runs with is polynomial in the string and regex sizes, *)
         (no_lower_bound lr ->
-         fuel_budget lr inp
-         <= S (3 * (1 + length (input_str inp)) * pattern_size wr
-               * S (3 * pattern_size wr))) /\
-        exists m lf,
+         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+         <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
+        exists b m res,
+          (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
+               yielding a boolean `b`, *)
+          pspace_algo rer lr s = Some b /\
           (* - compiling the regex `wr` into a Warblre `Matcher` succeeds, *)
           Semantics.compilePattern wr rer = Success m /\
-          (* - matching `wr` on `inp` according to the Warblre specification terminates without errors, yielding a result `lf`... *)
-          m (input_str inp) (idx inp)
-            = Success (to_MatchState lf (RegExpRecord.capturingGroupsCount rer)) /\
-          (* ... that corresponds to the result of the PSPACE algorithm run from `inp` with the fuel budget. *)
-          res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward
-                         (fuel_budget lr inp)) = Some lf.
+          (* - matching `wr` on `s` according to the Warblre specification terminates
+               without errors, *)
+          m s 0 = Success res /\
+          (* - and `wr` matches `s` if and only if `b` is true. *)
+          (res <> None <-> b = true).
     Proof.
-      intro inp.
-      split; [apply fuel_budget_source|].
-      destruct (matcher_at_input wr rer no_early_errors eq_refl) as [m (COMP & MATCH)].
-      exists m, (linden_result rer lr inp); eauto using compute_result_poly.
+      intro s; split; [apply pspace_algo_fuel_poly|].
+      destruct (pspace_algo_sound s) as [b [ALGO MATCHES]].
+      destruct (matches_matcher wr lr s no_early_errors eq_refl rer eq_refl b MATCHES)
+        as [m [res (COMP & EXEC & IFF)]].
+      exists b, m, res; auto.
     Qed.
 
     (* End-to-end PSPACE-membership theorem: *)
     Theorem pspace_membership_e2e:
-      (* for any input string, *)
+      (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        let inp := init_input s in
-        (* - if the regex does not have lower-bounded quantifiers, then the fuel budget corresponding to matching the regex on the string is polynomial in the regex and string sizes, *)
+        (* - if the regex does not have lower-bounded quantifiers, then the fuel that the
+             PSPACE algorithm runs with is polynomial in the string and regex sizes, *)
         (no_lower_bound lr ->
-         fuel_budget lr inp
+         S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
          <= S (3 * (1 + length s) * pattern_size wr * S (3 * pattern_size wr))) /\
-        exists inst lf,
-          (* - compiling the regex in the Warblre sense succeeds (this is most of what regExpInitialize does), *)
-          regExpInitialize wr flags = Success inst /\
-          (* - running the PSPACE algorithm with the fuel budget, the regex `lr` and the string `s` succeeds, yielding a result `lf`... *)
-          res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward
-                         (fuel_budget lr inp)) = Some lf /\
-          (* ... that matches the Warblre result of matching `wr` on `s`. *)
-          exec_agrees inst s (to_MatchState lf (RegExpRecord.capturingGroupsCount rer)).
+        exists b,
+          (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
+               yielding a boolean `b`, *)
+          pspace_algo rer lr s = Some b /\
+          (* - and `b` is the result of testing `wr` against `s` with the flags `flags`. *)
+          regex_test wr flags s b.
     Proof.
-      intros s inp.
-      split; [apply (fuel_budget_source wr inp)|].
-      destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
-                  eq_refl eq_refl) as [inst [INIT RES]].
-      exists inst, (linden_result rer lr inp).
-      split; [exact INIT|]; split; [apply compute_result_poly; reflexivity | exact RES].
+      intro s; split; [apply pspace_algo_fuel_poly|].
+      destruct (pspace_algo_sound s) as [b [ALGO MATCHES]].
+      exists b; split; [exact ALGO|]; apply frontend_all;
+        [ apply matches_regExpInitialize with (lr := lr) (rer := rer)
+        | apply matches_regExpExec with (lr := lr) (rer := rer)
+        | apply matches_regExpExec_exotic with (lr := lr) (rer := rer) ]; auto.
     Qed.
+
   End PspaceMembership.
 
   (** * OptP-hardness results *)
