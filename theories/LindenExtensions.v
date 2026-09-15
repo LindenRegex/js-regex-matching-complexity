@@ -85,7 +85,6 @@ Section LindenExtensions.
     now rewrite Nat.div2_double.
   Qed.
 
-  (* The start positions ECMAScript's [exec] tries in turn. *)
   Lemma advance_input_samestr inp nextinp dir:
       advance_input inp dir = Some nextinp ->
       input_str nextinp = input_str inp.

@@ -99,7 +99,7 @@ Section EndToEnd.
     (* The RegExpRecord corresponding to the flags and the Warblre regex. *)
     Let rer := rer_of wr flags.
 
-    (* We need the canonicalized x character to be different from the canonicalized semicolon character. *)
+    (* We require the canonicalized `a` character to be different from the canonicalized `;` character. *)
     Hypothesis x_semicolon_neq:
       Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
 
@@ -474,7 +474,7 @@ Section EndToEnd.
       (* - `wr` has neither lookarounds nor lower-bounded quantifiers, *)
       (pattern_no_lookaround wr /\ pattern_no_lower_bound wr) /\
       (no_lookaround (linden_of wr) /\ no_lower_bound (linden_of wr)) /\
-      (* - there exists a result `best` of the OptP algorithm on `r` and `s`, *)
+      (* - there exists a result `best` of the OptP algorithm on `wr` and `s`, *)
       exists best,
         parse_spec rer (linden_of wr) inp n best /\
         (* of size `n+1`, *)
