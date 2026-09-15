@@ -53,9 +53,22 @@ Definition num_literals_formula (f: formula): nat :=
 Definition num_literals_qbf (q: qbf): nat :=
   num_literals_formula (snd q).
 
+Definition var_of_literal (l: literal): variable :=
+  match l with PosVar v | NegVar v => v end.
+
+Definition vars_of_pos_formula (pf: pos_formula): list variable :=
+  flat_map (map var_of_literal) pf.
+
+Lemma length_vars_of_pos_formula pf:
+  length (vars_of_pos_formula pf) = num_literals_pos_formula pf.
+Proof. induction pf as [|c pf IH]; cbn; rewrite ?length_app, ?length_map; auto. Qed.
+
 Definition qbf_size (q: qbf): nat :=
   (* [1 +] allows a formula like [c * qbf_size q] to absorb the encoding's constant part. *)
   1 + length (fst q) + num_clauses_qbf q + num_literals_qbf q.
+
+Definition pos_formula_size (pf: pos_formula): nat :=
+  1 + length pf + num_literals_pos_formula pf.
 
 (* A QBF is well-formed if all the variables that appear in it are quantified. *)
 Definition wf_var (num_vars: nat) (v: variable): Prop := v <> 0 /\ v <= num_vars.
@@ -69,6 +82,33 @@ Definition wf_clause (num_vars: nat) (c: clause): Prop :=
 
 Definition wf_pos_formula (num_vars: nat) (pf: pos_formula) :=
   Forall (wf_clause num_vars) pf.
+
+Lemma wf_vars_of_pos_formula num_vars pf:
+  wf_pos_formula num_vars pf ->
+  forall v, In v (vars_of_pos_formula pf) -> wf_var num_vars v.
+Proof.
+  unfold wf_pos_formula, wf_clause; do 2 setoid_rewrite Forall_forall.
+  intros WF v (c & INc & (l & <- & INl)%in_map_iff)%in_flat_map; now destruct (WF c INc l INl).
+Qed.
+
+Definition uses_all_vars (num_vars: nat) (pf: pos_formula): Prop :=
+  forall v, wf_var num_vars v -> In v (vars_of_pos_formula pf).
+
+Lemma uses_all_vars_num_literals num_vars pf:
+  uses_all_vars num_vars pf -> num_vars <= num_literals_pos_formula pf.
+Proof.
+  intro USES; rewrite <- length_vars_of_pos_formula, <- (length_seq num_vars 1).
+  apply NoDup_incl_length; [apply seq_NoDup|].
+  intros v (LO & HI)%in_seq; apply USES.
+  split; [apply Nat.neq_0_lt_0, LO | apply Nat.lt_succ_r, HI].
+Qed.
+
+Lemma uses_all_vars_num_vars_le num_vars num_vars' pf:
+  wf_pos_formula num_vars pf -> uses_all_vars num_vars' pf -> num_vars' <= num_vars.
+Proof.
+  intros WF USES; destruct num_vars' as [|nv]; [apply Nat.le_0_l|].
+  apply (wf_vars_of_pos_formula _ _ WF), USES; now split.
+Qed.
 
 Inductive wf_formula (num_vars: nat): formula -> Prop :=
 | WfPosForm: forall pf, wf_pos_formula num_vars pf -> wf_formula num_vars (PosForm pf)
