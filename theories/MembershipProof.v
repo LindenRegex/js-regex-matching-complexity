@@ -3,7 +3,7 @@ From Linden Require Import Regex Parameters Semantics Chars StrictSuffix
   Semantics.Tree Semantics.Groups.
 From JsRegexOptp Require Export Basics.
 From Warblre Require Import Base spec.RegExpRecord.
-Require Import List Lia Sorted.
+From Stdlib Require Import List Sorted Lia.
 Import ListNotations.
 
 Section ComputeResult.
@@ -1176,9 +1176,9 @@ Section MembershipProof.
     unfold advance_input_n in ADV. destruct inp as [next pref].
     destruct dir; subst nextinp; simpl; destruct n as [|n]; try contradiction.
     - destruct next as [|x next]; try contradiction.
-      simpl. rewrite skipn_length. lia.
+      simpl. rewrite length_skipn. lia.
     - destruct pref as [|x pref]; try contradiction.
-      simpl. rewrite skipn_length. lia.
+      simpl. rewrite length_skipn. lia.
   Qed.
 
   Lemma read_decreases_fuel_nolk:
@@ -1366,8 +1366,8 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     forall inp dir, remaining_length inp dir <= length (input_str inp).
   Proof.
     intros [next pref] []; simpl.
-    - rewrite app_length. lia.
-    - rewrite app_length, rev_length. lia.
+    - rewrite length_app. lia.
+    - rewrite length_app, length_rev. lia.
   Qed.
 
   Lemma succ_noi_pred:
@@ -1740,7 +1740,7 @@ Section PSPACE_algo.
     match compute_result rer [Areg r] (init_input s) GroupMap.empty forward init_fuel with
     | Success _ => Some true
     | NoMatch => Some false
-    | OutOfFuel => None
+    | Out_of_fuel => None
     end.
 
   Theorem pspace_algo_true_correct:
