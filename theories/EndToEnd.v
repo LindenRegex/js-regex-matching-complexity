@@ -292,6 +292,8 @@ Section EndToEnd.
     Context (nv: nat) (pf: pos_formula).
     (* We assume that the propositional formula `pf` is well-formed (that all its literals use variables between 1 and `nv`). *)
     Hypothesis wf_pf: wf_pos_formula nv pf.
+    (* We assume that each of the `nv` variables occurs in `pf`. *)
+    Hypothesis uses_all_pf: uses_all_vars nv pf.
 
     (* The Warblre regex corresponding to translating the formula `pf` into an instance of regex matching.
        We reuse the QBF translation by prepending existential quantifiers to the formula (this is what lexsat_qbf does). *)
@@ -308,9 +310,9 @@ Section EndToEnd.
     (* OptP-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_hardness_matcher:
       (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 8 * lexsat_size nv pf /\
+      pattern_size wr <= 11 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
-      length s <= 2 * lexsat_size nv pf /\
+      length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* does not have lookarounds nor lower-bounded quantifiers in the Warblre sense, *)
@@ -331,11 +333,9 @@ Section EndToEnd.
         | None => forall b, length b = nv -> assign_cnf b pf = false
         end.
     Proof.
-      pose proof lexsat_w_frag a_char semicolon_char nv pf wf_pf as [];
-        unfold wr, s, lexsat_string in *.
-      rewrite <- !lexsat_qbf_size; repeat apply conj;
-        auto using theRegex_w_size, theString_size, lexsat_w_earlyErrors,
-          lexsat_w_nolk, lexsat_w_nolb.
+      pose proof lexsat_w_frag a_char semicolon_char nv pf wf_pf as []; unfold wr, s in *.
+      repeat split; auto using lexsat_w_size_bound, lexsat_string_size_bound,
+        lexsat_w_earlyErrors, lexsat_w_nolk, lexsat_w_nolb.
       destruct (lexsat_w_matcher _ _ nv pf wf_pf z_char rer eq_refl) as [m (COMP & EXEC)].
       exists m; eexists; repeat split; eauto; now apply lexsat_answer.
     Qed.
@@ -343,9 +343,9 @@ Section EndToEnd.
     (* End-to-end OptP-hardness theorem: *)
     Theorem optp_hardness_e2e:
       (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 8 * lexsat_size nv pf /\
+      pattern_size wr <= 11 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
-      length s <= 2 * lexsat_size nv pf /\
+      length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* does not have lookarounds nor lower-bounded quantifiers in the Warblre sense, *)
@@ -367,11 +367,9 @@ Section EndToEnd.
         | _ => False
         end.
     Proof.
-      pose proof lexsat_w_frag a_char semicolon_char nv pf wf_pf as [];
-        unfold wr, s, lexsat_string in *.
-      rewrite <- !lexsat_qbf_size; repeat apply conj;
-        auto using theRegex_w_size, theString_size, lexsat_w_earlyErrors,
-          lexsat_w_nolk, lexsat_w_nolb.
+      pose proof lexsat_w_frag a_char semicolon_char nv pf wf_pf as []; unfold wr, s in *.
+      repeat split; auto using lexsat_w_size_bound, lexsat_string_size_bound,
+        lexsat_w_earlyErrors, lexsat_w_nolk, lexsat_w_nolb.
       destruct (lexsat_w_exec_result a_char semicolon_char nv pf wf_pf z_char flags rer
                   eq_refl eq_refl) as [inst [INIT RES]].
       exists inst; split; [exact INIT|]; eapply exec_array_transfer; [exact RES|].
@@ -384,6 +382,8 @@ Section EndToEnd.
     forall (rer: RegExpRecord) nv pf,
       (* Let `pf` be a well-formed propositional formula with `nv` variables. *)
       wf_pos_formula nv pf ->
+      (* Assume that each of the `nv` variables occurs in `pf`. *)
+      uses_all_vars nv pf ->
       (* Assume that the canonicalized `a` and `;` characters are different. *)
       Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
       (* Let (r, s) be the instance of regex matching corresponding to `pf`, where `r` is a Linden regex. *)
@@ -394,10 +394,10 @@ Section EndToEnd.
       let n := guess_budget r inp in
       (* Then:
          - the sizes of `r` and `s` are linear in the size of `pf`, *)
-      expanded_size r <= 9 * lexsat_size nv pf /\
-      length s <= 2 * lexsat_size nv pf /\
+      expanded_size r <= 12 * pos_formula_size pf /\
+      length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
-      n <= S (27 * lexsat_size nv pf * (1 + 2 * lexsat_size nv pf)) /\
+      n <= S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
       (* - `r` has neither lookarounds nor lower-bounded quantifiers, *)
       (no_lookaround r /\ no_lower_bound r) /\
       (* - there exists a result `best` of the OptP algorithm on `r` and `s`, *)
@@ -415,26 +415,11 @@ Section EndToEnd.
         | None => forall b, length b = nv -> assign_cnf b pf = false
         end.
   Proof.
-    intros * WF NEQ; cbv zeta.
-    pose proof theRegex_size a_char semicolon_char (lexsat_qbf nv pf) as RS.
-    pose proof theString_size a_char semicolon_char z_char (lexsat_qbf nv pf) as SS.
-    pose proof size_le_expanded
-      (RegexEncoding.theRegex (lexsat_qbf nv pf) a_char semicolon_char) as AST.
-    rewrite lexsat_qbf_size in RS, SS.
-    split; [exact RS|]; split; [exact SS|].
-    split; [|split; [exact (lexsat_regex_frag a_char semicolon_char nv pf)|]].
-    { unfold guess_budget, lexsat_regex, lexsat_string.
-      replace (remaining_length
-                 (init_input (theString (lexsat_qbf nv pf) a_char semicolon_char z_char)) forward)
-        with (length (theString (lexsat_qbf nv pf) a_char semicolon_char z_char)) by reflexivity.
-      assert ((1 + length (theString (lexsat_qbf nv pf) a_char semicolon_char z_char))
-              * regex_size (RegexEncoding.theRegex (lexsat_qbf nv pf) a_char semicolon_char)
-              <= (1 + 2 * lexsat_size nv pf) * (9 * lexsat_size nv pf))
-        by (apply PeanoNat.Nat.mul_le_mono; lia).
-      nia. }
-    destruct (lexsat_by_optp _ _ _ (lexsat_qbf_wf nv pf WF) pf eq_refl
-                (lexsat_qbf_all_exists nv pf) z_char rer NEQ _
-                (compute_tr_is_tree _)) as [best JOIN].
+    intros * WF USES NEQ; cbv zeta; pose proof lexsat_regex_frag a_char semicolon_char nv pf as [].
+    repeat split;
+      auto using lexsat_regex_size_bound, lexsat_string_size_bound, lexsat_guess_budget_bound.
+    destruct (lexsat_by_optp _ _ _ (lexsat_qbf_wf nv pf WF) pf eq_refl (lexsat_qbf_all_exists nv pf)
+                z_char rer NEQ _ (compute_tr_is_tree _)) as [best JOIN].
     rewrite lexsat_qbf_num_vars in JOIN; eauto.
   Qed.
 
@@ -443,6 +428,8 @@ Section EndToEnd.
     forall (rer: RegExpRecord) nv pf,
       (* Let `pf` be a well-formed propositional formula with `nv` variables. *)
       wf_pos_formula nv pf ->
+      (* Assume that each of the `nv` variables occurs in `pf`. *)
+      uses_all_vars nv pf ->
       (* Assume that the canonicalized `a` and `;` characters are different. *)
       Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
       (* Let (wr, s) be the instance of regex matching corresponding to `pf`,
@@ -454,10 +441,10 @@ Section EndToEnd.
       let n := guess_budget (linden_of wr) inp in
       (* Then:
          - the sizes of `wr` and `s` are linear in the size of `pf`, *)
-      pattern_size wr <= 8 * lexsat_size nv pf /\
-      length s <= 2 * lexsat_size nv pf /\
+      pattern_size wr <= 11 * pos_formula_size pf /\
+      length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
-      n <= S (27 * lexsat_size nv pf * (1 + 2 * lexsat_size nv pf)) /\
+      n <= S (33 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
       (* - the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* - `wr` has neither lookarounds nor lower-bounded quantifiers, *)
@@ -478,10 +465,9 @@ Section EndToEnd.
         | None => forall b, length b = nv -> assign_cnf b pf = false
         end.
   Proof.
-    intros * WF NEQ; cbv zeta; rewrite <- lexsat_w_to_linden by exact WF.
-    destruct (optp_hardness_machine rer nv pf WF NEQ) as (RS & SS & BUD & [] & MACHINE).
-    repeat apply conj; auto using lexsat_w_earlyErrors, lexsat_w_nolk, lexsat_w_nolb.
-    rewrite <- lexsat_qbf_size; apply theRegex_w_size.
+    intros * WF USES NEQ; cbv zeta; rewrite <- lexsat_w_to_linden by exact WF.
+    destruct (optp_hardness_machine rer nv pf WF USES NEQ) as (RS & SS & BUD & [] & MACHINE).
+    auto 10 using lexsat_w_size_bound, lexsat_w_earlyErrors, lexsat_w_nolk, lexsat_w_nolb.
   Qed.
 
   (** * OptP-membership results *)
