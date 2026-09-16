@@ -7,20 +7,20 @@ Section RegexEncoding.
   Context {params: LindenParameters}.
   Context (q: qbf).
 
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
 
-  (* Regex used to define a variable: <(_i x)|x>; *)
+  (* Regex used to define a variable: <(_i a)|a>; *)
   Definition def_var_regex (v: variable): regex :=
     Sequence
       (Disjunction
-        (Group v (Character (CdSingle x_char)))
-        (Character (CdSingle x_char)))
+        (Group v (Character (CdSingle a_char)))
+        (Character (CdSingle a_char)))
       (Character (CdSingle semicolon_char)).
 
   Definition check_literal_regex (l: literal): regex :=
     match l with
     | PosVar v => Backreference v
-    | NegVar v => Sequence (Backreference v) (Character (CdSingle x_char))
+    | NegVar v => Sequence (Backreference v) (Character (CdSingle a_char))
     end.
   
   Fixpoint check_clause_regex_aux (c: clause): regex :=
@@ -56,13 +56,13 @@ Section RegexEncoding.
 
   (* The string *)
   Definition theString: LWParameters.string :=
-    List.concat (List.repeat [x_char; semicolon_char] (List.length (fst q) + num_clauses_qbf q)) ++ [n_char].
+    List.concat (List.repeat [a_char; semicolon_char] (List.length (fst q) + num_clauses_qbf q)) ++ [z_char].
 
 End RegexEncoding.
 
 Section Fragment.
   Context {params: LindenParameters}.
-  Context (x_char semicolon_char: Parameters.Character).
+  Context (a_char semicolon_char: Parameters.Character).
 
   Definition frag_regex (r: regex): Prop := no_lower_bound r /\ no_neg_lookaround r.
 
@@ -73,24 +73,24 @@ Section Fragment.
          check_formula_regex theRegex_aux] in *.
 
   Lemma check_clause_regex_frag:
-    forall c, frag_regex (check_clause_regex x_char semicolon_char c).
+    forall c, frag_regex (check_clause_regex a_char semicolon_char c).
   Proof.
-    intro c; enough (frag_regex (check_clause_regex_aux x_char c)) by (frag_cbn; tauto);
+    intro c; enough (frag_regex (check_clause_regex_aux a_char c)) by (frag_cbn; tauto);
       induction c as [|[] c IH]; frag_cbn; tauto.
   Qed.
 
   Lemma check_conjunct_regex_frag:
-    forall cl, frag_regex (check_conjunct_regex x_char semicolon_char cl).
+    forall cl, frag_regex (check_conjunct_regex a_char semicolon_char cl).
   Proof.
     induction cl as [|c cl IH]; [|pose proof check_clause_regex_frag c]; frag_cbn; tauto.
   Qed.
 
   Lemma check_formula_regex_nolb:
-    forall f, no_lower_bound (check_formula_regex x_char semicolon_char f).
+    forall f, no_lower_bound (check_formula_regex a_char semicolon_char f).
   Proof. intros [pf|pf]; pose proof check_conjunct_regex_frag (rev pf); frag_cbn; tauto. Qed.
 
   Lemma theRegex_aux_nolb:
-    forall q ql v, no_lower_bound (theRegex_aux q x_char semicolon_char v ql).
+    forall q ql v, no_lower_bound (theRegex_aux q a_char semicolon_char v ql).
   Proof.
     intros q ql; induction ql as [|[] ql IH]; intro v;
       [pose proof check_formula_regex_nolb (snd q) | (pose proof (IH (S v))) ..];
@@ -98,7 +98,7 @@ Section Fragment.
   Qed.
 
   Theorem theRegex_nolb:
-    forall q, no_lower_bound (theRegex q x_char semicolon_char).
+    forall q, no_lower_bound (theRegex q a_char semicolon_char).
   Proof. intro q; apply theRegex_aux_nolb. Qed.
 End Fragment.
 
@@ -123,27 +123,27 @@ Ltac measure_unfold :=
 
 Section Size.
   Context {params: LindenParameters}.
-  Context (x_char semicolon_char: Parameters.Character).
+  Context (a_char semicolon_char: Parameters.Character).
 
   Lemma check_literal_regex_size:
-    forall l, expanded_size (check_literal_regex x_char l) <= 3.
+    forall l, expanded_size (check_literal_regex a_char l) <= 3.
   Proof. destruct l; size_cbn; lia. Qed.
 
   Lemma check_clause_regex_aux_size:
-    forall c, expanded_size (check_clause_regex_aux x_char c) <= 1 + 4 * length c.
+    forall c, expanded_size (check_clause_regex_aux a_char c) <= 1 + 4 * length c.
   Proof. induction c as [|l c IH]; [|pose proof check_literal_regex_size l]; size_cbn; lia. Qed.
 
   Lemma check_clause_regex_size:
-    forall c, expanded_size (check_clause_regex x_char semicolon_char c) <= 3 + 4 * length c.
+    forall c, expanded_size (check_clause_regex a_char semicolon_char c) <= 3 + 4 * length c.
   Proof. intro c; pose proof check_clause_regex_aux_size c; size_cbn; lia. Qed.
 
   Lemma check_conjunct_regex_size:
-    forall cl, expanded_size (check_conjunct_regex x_char semicolon_char cl) <=
+    forall cl, expanded_size (check_conjunct_regex a_char semicolon_char cl) <=
       1 + 4 * length cl + 4 * num_literals_pos_formula cl.
   Proof. induction cl as [|c cl IH]; [|pose proof check_clause_regex_size c]; size_cbn; lia. Qed.
 
   Lemma check_conjunct_regex_rev_size:
-    forall pf, expanded_size (check_conjunct_regex x_char semicolon_char (rev pf)) <=
+    forall pf, expanded_size (check_conjunct_regex a_char semicolon_char (rev pf)) <=
       1 + 4 * length pf + 4 * num_literals_pos_formula pf.
   Proof.
     intro pf; pose proof check_conjunct_regex_size (rev pf) as H;
@@ -155,7 +155,7 @@ Section Size.
 
     (* Negation costs one extra node (for the negative lookahead). *)
     Lemma check_formula_regex_size:
-      expanded_size (RegexEncoding.check_formula_regex x_char semicolon_char (snd q)) <=
+      expanded_size (RegexEncoding.check_formula_regex a_char semicolon_char (snd q)) <=
         2 + 4 * num_clauses_qbf q + 4 * num_literals_qbf q.
     Proof.
       measure_unfold; destruct (snd q) as [pf|pf]; pose proof check_conjunct_regex_rev_size pf;
@@ -163,7 +163,7 @@ Section Size.
     Qed.
 
     Lemma theRegex_aux_size:
-      forall ql v, expanded_size (RegexEncoding.theRegex_aux q x_char semicolon_char v ql) <=
+      forall ql v, expanded_size (RegexEncoding.theRegex_aux q a_char semicolon_char v ql) <=
         9 * length ql + 2 + 4 * num_clauses_qbf q + 4 * num_literals_qbf q.
     Proof.
       intro ql; induction ql as [|[] ql IH]; intro v;
@@ -171,12 +171,12 @@ Section Size.
     Qed.
 
     Theorem theRegex_size_parts:
-      expanded_size (RegexEncoding.theRegex q x_char semicolon_char) <=
+      expanded_size (RegexEncoding.theRegex q a_char semicolon_char) <=
         9 * length (fst q) + 4 * num_clauses_qbf q + 4 * num_literals_qbf q + 2.
     Proof. unfold RegexEncoding.theRegex; pose proof theRegex_aux_size (fst q) 1; lia. Qed.
 
     Theorem theRegex_size:
-      expanded_size (RegexEncoding.theRegex q x_char semicolon_char) <= 9 * qbf_size q.
+      expanded_size (RegexEncoding.theRegex q a_char semicolon_char) <= 9 * qbf_size q.
     Proof. unfold qbf_size; pose proof theRegex_size_parts; lia. Qed.
   End NegLookaheadEncoding.
 

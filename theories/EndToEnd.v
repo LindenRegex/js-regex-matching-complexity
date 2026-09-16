@@ -12,16 +12,29 @@ Import ListNotations.
 Section EndToEnd.
   Context {params: LindenParameters}.
 
+  (* The expanded regex size and the AST size are within a constant factor of each other,
+     as long as the regex has no lower-bounded quantifiers. *)
+  Remark expanded_size_bounds:
+    forall (r: regex),
+      (* - the AST size never exceeds the expanded size, for any regex, *)
+      regex_size r <= expanded_size r /\
+      (* - and if no quantifier has a nonzero lower bound, then expanding a quantifier at
+           most triples its size, so the expanded size stays within a factor 3 of the AST size. *)
+      (no_lower_bound r -> expanded_size r <= 3 * regex_size r).
+  Proof. split; [apply size_le_expanded | apply expanded_size_nolb]. Qed.
+
   (* The fuel budget definition; it is a polynomial in the string size and the expanded regex size. *)
   Remark fuel_budget_value:
     forall (r: regex) (inp: input),
-      fuel_budget r inp = S ((1 + length (input_str inp)) * expanded_size r).
+      fuel_budget r inp
+      = S ((1 + length (input_str inp))
+           * (expanded_size r + expanded_size r * expanded_size r)).
   Proof. reflexivity. Qed.
 
-  (* The guess budget definition; it is a polynomial in the string size and the regex size. *)
+  (* The guess budget definition; it is a polynomial in the string size and the expanded regex size. *)
   Remark guess_budget_value:
     forall (r: regex) (inp: input),
-      guess_budget r inp = S (3 * ((1 + remaining_length inp forward) * regex_size r)).
+      guess_budget r inp = S ((1 + remaining_length inp forward) * expanded_size r).
   Proof. reflexivity. Qed.
 
   (* The definition of regex_test: `regex_test wr flags s b` holds if both of the following are true:
@@ -48,53 +61,54 @@ Section EndToEnd.
 
   (* We measure the size of a list of actions by expanding its lower-bounded quantifiers
      and giving weight 1 to Acheck and Aclose actions. *)
-  Local Notation actions_size := (MembershipProof.act_wt expanded_size 1).
+  Local Notation actions_size := MembershipProof.actions_size.
 
-  (* TODO explain *)
+  (* Polynomial bound on the memory usage of the PSPACE algorithm: *)
   Theorem membership_state_size_bound:
-    forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (r: regex) (act: actions),
+    (* Let `wr` be a Warblre regex and `lr` the corresponding Linden regex. *)
+    forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (act: actions),
       let lr := linden_of wr in
-      expanded_size r <= expanded_size lr ->
-      MembershipProof.act_from_regex r dir act ->
+      (* Let (`act`, `inp`, `dir`) be a semantic state that can result from matching `lr`. *)
+      MembershipProof.act_from_regex lr inp act dir ->
+      (* Let `n` be the expanded size of `lr`. *)
       let n := expanded_size lr in
-      let acts := n + Nat.div2 (n * S n) in
+      (* Let `frame` be this upper bound on the memory usage of a stack frame. *)
       let frame := (1 + length (input_str inp)) * actions_size act in
-      actions_size act <= acts /\
-      (forall lk rlk, In (Areg (Lookaround lk rlk)) act ->
-                      expanded_size rlk <= expanded_size lr) /\
-      (no_lower_bound lr ->
-       fuel_budget lr inp * frame
-       <= S (3 * (1 + length (input_str inp)) * pattern_size wr)
-          * ((1 + length (input_str inp))
-             * (3 * pattern_size wr * S (3 * pattern_size wr)))).
+      (* Let `poly` be this polynomial in the input size and expanded size of `wr`. *)
+      let poly := (1 + length (input_str inp))
+                  * (pattern_expanded_size wr
+                     + pattern_expanded_size wr * pattern_expanded_size wr) in
+      (* Then the size of the list of actions (giving weight 1 to Acheck actions) is at most n+n(n+1)/2... *)
+      actions_size act <= n + Nat.div2 (n * S n) /\
+      (* ... and the total memory usage (computation depth * frame size bound) is a polynomial in the input size and expanded size of `wr`. *)
+      fuel_budget lr inp * frame <= S poly * poly.
   Proof.
-    intros * LE AFR; cbv zeta.
-    pose proof MembershipProof.actions_size_bound' AFR as ACT; cbv zeta in ACT.
-    pose proof MembershipProof.chunk_bound AFR as OK.
-    pose proof triangle_even (expanded_size r).
+    intros * AFR; cbv zeta.
+    pose proof MembershipProof.actions_size_bound' AFR as ACT.
+    split; [exact ACT|].
+    apply PeanoNat.Nat.mul_le_mono;
+      [now apply fuel_budget_source|apply PeanoNat.Nat.mul_le_mono_l].
+    pose proof expanded_size_pos lr.
+    pose proof (linden_of_expanded_size wr: expanded_size lr <= pattern_expanded_size wr).
     pose proof triangle_even (expanded_size lr).
-    assert (ACTS: actions_size act <= expanded_size lr
-                                      + Nat.div2 (expanded_size lr * S (expanded_size lr)))
-      by nia.
-    split; [exact ACTS|split].
-    - clear -LE OK; intros lk rlk IN; revert IN.
-      induction OK as [_|a l CH _ IH]; intro IN; [contradiction|].
-      simpl in IN; destruct IN as [->|IN]; [|now auto].
-      unfold MembershipProof.chunk_ok in CH; simpl in CH; lia.
-    - intro NLB.
-      apply PeanoNat.Nat.mul_le_mono;
-        [now apply fuel_budget_source|apply PeanoNat.Nat.mul_le_mono_l].
-      pose proof MembershipProof.expanded_size_pos lr.
-      pose proof expanded_size_nolb lr NLB.
-      pose proof (linden_of_size wr: regex_size lr <= pattern_size wr).
-      nia.
+    nia.
   Qed.
 
-  Context (x_char semicolon_char n_char: Parameters.Character).
-  Context (global ignoreCase multiline dotAll: bool).
+  Corollary compute_result_terminates:
+    forall (rer: RegExpRecord) (r: regex) (inp: input) (act: actions) (dir: Direction),
+      MembershipProof.act_from_regex r inp act dir ->
+      forall fuel, fuel > MembershipProof.actions_fuel inp act dir ->
+        forall gm, compute_result rer act inp gm dir fuel <> Out_of_fuel.
+  Proof.
+    intros rer r inp act dir AFR fuel FUEL gm.
+    exact (MembershipProof.result_terminates' r inp act dir AFR fuel FUEL gm rer).
+  Qed.
 
-  (* We set the `hasIndices` flag to false, and the `sticky` flag to true (anchored search). *)
-  Let flags := reg_exp_flags false global ignoreCase multiline dotAll tt true.
+  Context (a_char semicolon_char z_char: Parameters.Character).
+  Context (hasIndices global ignoreCase multiline dotAll: bool).
+
+  (* We set the `sticky` flag to true (anchored search). *)
+  Let flags := reg_exp_flags hasIndices global ignoreCase multiline dotAll tt true.
 
   (** * PSPACE-hardness results *)
   Section PspaceHardness.
@@ -102,29 +116,29 @@ Section EndToEnd.
     (* The PQBF `pq` must be well-formed. *)
     Hypothesis wf_pq: wf_pqbf pq.
 
-    (* The QBFbar corresponding to the prenex QBF `pq`. *)
+    (* The QBF' corresponding to the prenex QBF `pq`. *)
     Let q := qbf_of_pqbf pq.
     (* The regex corresponding to the translation of `q`. *)
-    Let wr := theRegex_w q x_char semicolon_char.
+    Let wr := theRegex_w q a_char semicolon_char.
     (* The string corresponding to the translation of `q`. *)
-    Let s := theString q x_char semicolon_char n_char.
+    Let s := theString q a_char semicolon_char z_char.
     (* The RegExpRecord corresponding to the flags and the Warblre regex. *)
     Let rer := rer_of wr flags.
 
-    (* We need the canonicalized x character to be different from the canonicalized semicolon character. *)
-    Hypothesis x_semicolon_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
+    (* We require the canonicalized `a` character to be different from the canonicalized `;` character. *)
+    Hypothesis a_semicolon_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char.
 
     (* PSPACE-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_matcher:
-      (* the size of the regex `wr` is linear in the size of the PQBF, *)
-      pattern_size wr <= 8 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF, *)
+      pattern_expanded_size wr <= 9 * pqbf_size pq /\
       (* so is the length of the string, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
-      (* the regex does not have lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (* does not have lower-bounded quantifiers, *)
+      (pattern_no_lower_bound wr) /\ (no_lower_bound (linden_of wr)) /\
       (* compiling the regex `wr` with the flags `flags` (contained in `rer`) succeeds, *)
       exists m res,
         Semantics.compilePattern wr rer = Success m /\
@@ -136,6 +150,7 @@ Section EndToEnd.
       split; [rewrite <- qbf_size_of_pqbf; apply theRegex_w_size|].
       split; [rewrite <- qbf_size_of_pqbf; apply theString_size|].
       split; [apply wr_earlyErrors, wf_qbf_of_pqbf, wf_pq|].
+      split; [apply theRegex_w_nolb, wf_qbf_of_pqbf, wf_pq|].
       split; [apply wr_nolb, wf_qbf_of_pqbf, wf_pq|].
       rewrite <- (qbf_of_pqbf_true pq).
       apply qbf_regex_warblre_matcher; auto using wf_qbf_of_pqbf.
@@ -143,20 +158,21 @@ Section EndToEnd.
 
     (* End-to-end PSPACE-hardness theorem: *)
     Theorem pspace_hardness_e2e:
-      (* the size of the regex `wr` is linear in the size of the PQBF, *)
-      pattern_size wr <= 8 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF, *)
+      pattern_expanded_size wr <= 9 * pqbf_size pq /\
       (* so is the length of the string, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* it has no lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (pattern_no_lower_bound wr) /\ (no_lower_bound (linden_of wr)) /\
       (* and `wr` has a match on `s` with the flags `flags` if and only if the PQBF `pq` is true. *)
       regex_test wr flags s (pqbf_true pq).
     Proof.
       split; [rewrite <- qbf_size_of_pqbf; apply theRegex_w_size|].
       split; [rewrite <- qbf_size_of_pqbf; apply theString_size|].
       split; [apply wr_earlyErrors, wf_qbf_of_pqbf, wf_pq|].
+      split; [apply theRegex_w_nolb, wf_qbf_of_pqbf, wf_pq|].
       split; [apply wr_nolb, wf_qbf_of_pqbf, wf_pq|].
       rewrite <- (qbf_of_pqbf_true pq).
       apply qbf_regex_warblre_frontend_all; auto using wf_qbf_of_pqbf.
@@ -169,36 +185,35 @@ Section EndToEnd.
     (* The PQBF pq must be well-formed. *)
     Hypothesis wf_pq: wf_pqbf pq.
     (* Neither of the characters a and z must be line terminators. *)
-    Hypothesis n_no_line_terminator: ~In n_char Character.line_terminators.
-    Hypothesis x_no_line_terminator: ~In x_char Character.line_terminators.
+    Hypothesis z_no_line_terminator: ~In z_char Character.line_terminators.
+    Hypothesis a_no_line_terminator: ~In a_char Character.line_terminators.
 
-    (* The QBFbar corresponding to the prenex QBF `pq`. *)
+    (* The QBF' corresponding to the prenex QBF `pq`. *)
     Let q := qbf_of_pqbf pq.
     (* The Warblre regex corresponding to the translation of `q` without negative lookarounds. *)
-    Let wr := theRegex_poslk_w q x_char semicolon_char n_char.
+    Let wr := theRegex_poslk_w q a_char semicolon_char z_char.
     (* The string corresponding to the translation of `q`. *)
-    Let s := theString q x_char semicolon_char n_char.
+    Let s := theString q a_char semicolon_char z_char.
     (* The RegExpRecord corresponding to the regex `wr` and the flags `flags`. *)
     Let rer := rer_of wr flags.
 
     (* We require the canonicalized `a` character to be different from the canonicalized `;` and `z` characters. *)
-    Hypothesis x_semicolon_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
-    Hypothesis x_n_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer n_char.
+    Hypothesis a_semicolon_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char.
+    Hypothesis a_z_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer z_char.
 
     (* PSPACE-hardness theorem without negative lookarounds, in terms of the Warblre `Matcher`: *)
     Theorem pspace_hardness_noneglk_matcher:
-      (* the size of the regex `wr` is linear in the size of the PQBF `pq`, *)
-      pattern_size wr <= 25 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF `pq`, *)
+      pattern_expanded_size wr <= 31 * pqbf_size pq /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
-      (* has no negative lookarounds, *)
-      pattern_no_neg_lookaround wr /\
-      (* nor lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (* has no negative lookarounds nor lower-bounded quantifiers, *)
+      (pattern_no_neg_lookaround wr /\ pattern_no_lower_bound wr) /\
+      (no_neg_lookaround (linden_of wr) /\ no_lower_bound (linden_of wr)) /\
       (* compiling the regex `wr` with the flags `flags` (contained in `rer`) succeeds, *)
       exists m res,
         Semantics.compilePattern wr rer = Success m /\
@@ -210,32 +225,35 @@ Section EndToEnd.
       split; [rewrite <- qbf_size_of_pqbf; apply theRegex_poslk_w_size|].
       split; [rewrite <- qbf_size_of_pqbf; apply theString_size|].
       split; [apply wr_poslk_earlyErrors, wf_qbf_of_pqbf, wf_pq|].
-      split; [apply theRegex_poslk_w_noneglk, wf_qbf_of_pqbf, wf_pq|].
-      split; [apply wr_poslk_nolb, wf_qbf_of_pqbf, wf_pq|].
+      split; [split; [apply theRegex_poslk_w_noneglk | apply theRegex_poslk_w_nolb];
+              apply wf_qbf_of_pqbf, wf_pq|].
+      split; [split; [apply wr_poslk_noneglk | apply wr_poslk_nolb];
+              apply wf_qbf_of_pqbf, wf_pq|].
       rewrite <- (qbf_of_pqbf_true pq).
       apply qbf_poslk_warblre_matcher; auto using wf_qbf_of_pqbf.
     Qed.
 
     (* End-to-end PSPACE-hardness theorem without negative lookarounds: *)
     Theorem pspace_hardness_noneglk_e2e:
-      (* the size of the regex `wr` is linear in the size of the PQBF `pq`, *)
-      pattern_size wr <= 25 * pqbf_size pq /\
+      (* the expanded size of the regex `wr` is linear in the size of the PQBF `pq`, *)
+      pattern_expanded_size wr <= 31 * pqbf_size pq /\
       (* so is the length of the string `s`, *)
       length s <= 2 * pqbf_size pq /\
       (* the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
-      (* does not have negative lookarounds, *)
-      pattern_no_neg_lookaround wr /\
-      (* nor lower-bounded quantifiers, *)
-      no_lower_bound (linden_of wr) /\
+      (* does not have negative lookarounds nor lower-bounded quantifiers, *)
+      (pattern_no_neg_lookaround wr /\ pattern_no_lower_bound wr) /\
+      (no_neg_lookaround (linden_of wr) /\ no_lower_bound (linden_of wr)) /\
       (* and `wr` has a match on `s` with the flags `flags` if and only if the PQBF `pq` is true. *)
       regex_test wr flags s (pqbf_true pq).
     Proof.
       split; [rewrite <- qbf_size_of_pqbf; apply theRegex_poslk_w_size|].
       split; [rewrite <- qbf_size_of_pqbf; apply theString_size|].
       split; [apply wr_poslk_earlyErrors, wf_qbf_of_pqbf, wf_pq|].
-      split; [apply theRegex_poslk_w_noneglk, wf_qbf_of_pqbf, wf_pq|].
-      split; [apply wr_poslk_nolb, wf_qbf_of_pqbf, wf_pq|].
+      split; [split; [apply theRegex_poslk_w_noneglk | apply theRegex_poslk_w_nolb];
+              apply wf_qbf_of_pqbf, wf_pq|].
+      split; [split; [apply wr_poslk_noneglk | apply wr_poslk_nolb];
+              apply wf_qbf_of_pqbf, wf_pq|].
       rewrite <- (qbf_of_pqbf_true pq).
       apply qbf_poslk_warblre_frontend_all; auto using wf_qbf_of_pqbf.
     Qed.
@@ -252,52 +270,93 @@ Section EndToEnd.
     (* The translation of `wr` into a Linden regex. *)
     Let lr := linden_of wr.
 
+    Lemma pspace_algo_sound (s: LWParameters.string):
+      exists b, pspace_algo rer lr s = Some b /\
+                (matches_at rer lr (init_input s) <-> b = true).
+    Proof.
+      destruct (is_tree_productivity rer [Areg lr] (init_input s) GroupMap.empty forward)
+        as [t TREE].
+      destruct (pspace_algo rer lr s) as [b|] eqn:ALGO.
+      2: {
+        exfalso; unfold pspace_algo in ALGO.
+        destruct compute_result eqn:CR; try discriminate.
+        revert CR; apply MembershipProof.result_terminates' with (r := lr) (dir := forward);
+          [apply MembershipProof.afr_refl | lia].
+      }
+      exists b; split; [reflexivity|]; rewrite (matches_at_tree TREE); destruct b.
+      - split; [reflexivity | intros _].
+        destruct (proj1 (pspace_algo_true_correct rer lr s t TREE) ALGO) as [lf LF].
+        congruence.
+      - rewrite (proj1 (pspace_algo_false_correct rer lr s t TREE) ALGO).
+        split; [congruence | discriminate].
+    Qed.
+
+    Lemma pspace_algo_fuel_poly (s: LWParameters.string):
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)).
+    Proof.
+      assert (SRC: fuel_budget lr (init_input s)
+                   <= S ((1 + length s)
+                         * (pattern_expanded_size wr
+                            + pattern_expanded_size wr * pattern_expanded_size wr)))
+        by apply (fuel_budget_source wr (init_input s)).
+      pose proof fuel_budget_spec wr rer eq_refl lr (init_input s). lia.
+    Qed.
+
     (* PSPACE-membership theorem in terms of the Warblre `Matcher`: *)
     Theorem pspace_membership_matcher:
-      (* for any input `inp` (an input string and an index into that string), *)
-      forall (inp: input),
-        (* - if the regex has no lower-bounded quantifiers, then the fuel budget corresponding to matching the regex on the string is polynomial in the input and regex sizes, *)
-        (no_lower_bound lr ->
-         fuel_budget lr inp <= S (3 * (1 + length (input_str inp)) * pattern_size wr)) /\
-        exists m lf,
+      (* for any input string `s`, *)
+      forall (s: LWParameters.string),
+        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
+        exists b m res,
+          (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
+               yielding a boolean `b`, *)
+          pspace_algo rer lr s = Some b /\
           (* - compiling the regex `wr` into a Warblre `Matcher` succeeds, *)
           Semantics.compilePattern wr rer = Success m /\
-          (* - matching `wr` on `inp` according to the Warblre specification terminates without errors, yielding a result `lf`... *)
-          m (input_str inp) (idx inp)
-            = Success (to_MatchState lf (RegExpRecord.capturingGroupsCount rer)) /\
-          (* ... that corresponds to the result of the PSPACE algorithm run with the fuel budget. *)
-          res_to_leaf (pspace_algo rer [Areg lr] inp GroupMap.empty forward
-                         (fuel_budget lr inp)) = Some lf.
+          (* - matching `wr` on `s` according to the Warblre specification terminates
+               without errors, *)
+          m s 0 = Success res /\
+          (* - and `wr` matches `s` if and only if `b` is true. *)
+          (res <> None <-> b = true).
     Proof.
-      intro inp.
-      split; [apply fuel_budget_source|].
-      destruct (matcher_at_input wr rer no_early_errors eq_refl) as [m (COMP & MATCH)].
-      exists m, (linden_result rer lr inp); eauto using pspace_algo_poly.
+      intro s; split; [apply pspace_algo_fuel_poly|].
+      destruct (pspace_algo_sound s) as [b [ALGO MATCHES]].
+      destruct (matches_matcher wr lr s no_early_errors eq_refl rer eq_refl b MATCHES)
+        as [m [res (COMP & EXEC & IFF)]].
+      exists b, m, res; auto.
     Qed.
 
     (* End-to-end PSPACE-membership theorem: *)
     Theorem pspace_membership_e2e:
-      (* for any input string, *)
+      (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        let inp := init_input s in
-        (* - if the regex does not have lower-bounded quantifiers, then the fuel budget corresponding to matching the regex on the string is polynomial in the regex and string sizes, *)
-        (no_lower_bound lr -> fuel_budget lr inp <= S (3 * (1 + length s) * pattern_size wr)) /\
-        exists inst lf,
-          (* - compiling the regex in the Warblre sense succeeds (this is most of what regExpInitialize does), *)
-          regExpInitialize wr flags = Success inst /\
-          (* - running the PSPACE algorithm with the fuel budget, the regex `lr` and the string `s` succeeds, yielding a result `lf`... *)
-          res_to_leaf (pspace_algo rer [Areg lr] inp GroupMap.empty forward
-                         (fuel_budget lr inp)) = Some lf /\
-          (* ... that matches the Warblre result of matching `wr` on `s`. *)
-          exec_agrees inst s (to_MatchState lf (RegExpRecord.capturingGroupsCount rer)).
+        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
+        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
+        <= S ((1 + length s)
+              * (pattern_expanded_size wr
+                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
+        exists b,
+          (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
+               yielding a boolean `b`, *)
+          pspace_algo rer lr s = Some b /\
+          (* - and `b` is the result of testing `wr` against `s` with the flags `flags`. *)
+          regex_test wr flags s b.
     Proof.
-      intros s inp.
-      split; [apply (fuel_budget_source wr inp)|].
-      destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]].
-      exists inst, (linden_result rer lr inp).
-      split; [exact INIT|]; split; [apply pspace_algo_poly; reflexivity | exact RES].
+      intro s; split; [apply pspace_algo_fuel_poly|].
+      destruct (pspace_algo_sound s) as [b [ALGO MATCHES]].
+      exists b; split; [exact ALGO|]; apply frontend_all;
+        [ apply matches_regExpInitialize with (lr := lr) (rer := rer)
+        | apply matches_regExpExec with (lr := lr) (rer := rer)
+        | apply matches_regExpExec_exotic with (lr := lr) (rer := rer) ]; auto.
     Qed.
+
   End PspaceMembership.
 
   (** * OptP-hardness results *)
@@ -306,25 +365,27 @@ Section EndToEnd.
     Context (nv: nat) (pf: pos_formula).
     (* We assume that the propositional formula `pf` is well-formed (that all its literals use variables between 1 and `nv`). *)
     Hypothesis wf_pf: wf_pos_formula nv pf.
+    (* We assume that each of the `nv` variables occurs in `pf`. *)
+    Hypothesis uses_all_pf: uses_all_vars nv pf.
 
     (* The Warblre regex corresponding to translating the formula `pf` into an instance of regex matching.
        We reuse the QBF translation by prepending existential quantifiers to the formula (this is what lexsat_qbf does). *)
-    Let wr := theRegex_w (lexsat_qbf nv pf) x_char semicolon_char.
+    Let wr := theRegex_w (lexsat_qbf nv pf) a_char semicolon_char.
     (* The string corresponding to translating the formula `pf` into an instance of regex matching. *)
-    Let s := lexsat_string x_char semicolon_char n_char nv pf.
+    Let s := lexsat_string a_char semicolon_char z_char nv pf.
     (* The RegExpRecord corresponding to matching the regex `wr` with the flags `flags`. *)
     Let rer := rer_of wr flags.
 
     (* We require the canonicalized `a` character to differ from the canonicalized `;` character. *)
-    Hypothesis x_semicolon_neq:
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char.
+    Hypothesis a_semicolon_neq:
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char.
 
     (* OptP-hardness theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_hardness_matcher:
-      (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 8 * lexsat_size nv pf /\
+      (* the expanded size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
-      length s <= 2 * lexsat_size nv pf /\
+      length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* does not have lookarounds nor lower-bounded quantifiers in the Warblre sense, *)
@@ -345,21 +406,21 @@ Section EndToEnd.
         | None => forall b, length b = nv -> assign_cnf b pf = false
         end.
     Proof.
-      split; [rewrite <- lexsat_qbf_size; apply theRegex_w_size|].
-      split; [rewrite <- lexsat_qbf_size; apply theString_size|].
-      split; [exact (lexsat_w_earlyErrors x_char semicolon_char nv pf wf_pf)|].
+      split; [now apply lexsat_w_size_bound|].
+      split; [now apply lexsat_string_size_bound|].
+      split; [exact (lexsat_w_earlyErrors a_char semicolon_char nv pf wf_pf)|].
       split; [split; [apply lexsat_w_nolk | apply lexsat_w_nolb]; exact wf_pf|].
-      split; [exact (lexsat_w_frag x_char semicolon_char nv pf wf_pf)|].
-      destruct (lexsat_w_matcher _ _ nv pf wf_pf n_char rer eq_refl) as [m (COMP & EXEC)].
+      split; [exact (lexsat_w_frag a_char semicolon_char nv pf wf_pf)|].
+      destruct (lexsat_w_matcher _ _ nv pf wf_pf z_char rer eq_refl) as [m (COMP & EXEC)].
       do 2 eexists; split; [exact COMP|]; split; [exact EXEC | now apply lexsat_answer].
     Qed.
 
     (* End-to-end OptP-hardness theorem: *)
     Theorem optp_hardness_e2e:
-      (* the size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
-      pattern_size wr <= 8 * lexsat_size nv pf /\
+      (* the expanded size of the regex `wr` is linear in the size of the LEXICOGRAPHIC SAT formula `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
       (* so is the length of the string `s`, *)
-      length s <= 2 * lexsat_size nv pf /\
+      length s <= 2 * pos_formula_size pf /\
       (* the regex `wr` passes the early errors check, *)
       StaticSemantics.earlyErrors wr [] = Success false /\
       (* does not have lookarounds nor lower-bounded quantifiers in the Warblre sense, *)
@@ -381,16 +442,16 @@ Section EndToEnd.
         | _ => False
         end.
     Proof.
-      split; [rewrite <- lexsat_qbf_size; apply theRegex_w_size|].
-      split; [rewrite <- lexsat_qbf_size; apply theString_size|].
-      split; [exact (lexsat_w_earlyErrors x_char semicolon_char nv pf wf_pf)|].
+      split; [now apply lexsat_w_size_bound|].
+      split; [now apply lexsat_string_size_bound|].
+      split; [exact (lexsat_w_earlyErrors a_char semicolon_char nv pf wf_pf)|].
       split; [split; [apply lexsat_w_nolk | apply lexsat_w_nolb]; exact wf_pf|].
-      split; [exact (lexsat_w_frag x_char semicolon_char nv pf wf_pf)|].
-      destruct (lexsat_w_exec_result x_char semicolon_char nv pf wf_pf n_char flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]].
+      split; [exact (lexsat_w_frag a_char semicolon_char nv pf wf_pf)|].
+      destruct (lexsat_w_exec_result a_char semicolon_char nv pf wf_pf z_char flags rer
+                  eq_refl eq_refl) as [inst [INIT RES]].
       exists inst; split; [exact INIT | eapply exec_array_transfer; [exact RES|]].
-      now apply (lexsat_answer_flags x_char semicolon_char n_char flags rer nv pf
-                   wf_pf x_semicolon_neq eq_refl).
+      now apply (lexsat_answer_flags a_char semicolon_char z_char flags rer nv pf
+                   wf_pf a_semicolon_neq eq_refl).
     Qed.
   End OptpHardness.
 
@@ -399,23 +460,25 @@ Section EndToEnd.
     forall (rer: RegExpRecord) nv pf,
       (* Let `pf` be a well-formed propositional formula with `nv` variables. *)
       wf_pos_formula nv pf ->
+      (* Assume that each of the `nv` variables occurs in `pf`. *)
+      uses_all_vars nv pf ->
       (* Assume that the canonicalized `a` and `;` characters are different. *)
-      Character.canonicalize rer x_char <> Character.canonicalize rer semicolon_char ->
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
       (* Let (r, s) be the instance of regex matching corresponding to `pf`, where `r` is a Linden regex. *)
-      let r := lexsat_regex x_char semicolon_char nv pf in
-      let s := lexsat_string x_char semicolon_char n_char nv pf in
+      let r := lexsat_regex a_char semicolon_char nv pf in
+      let s := lexsat_string a_char semicolon_char z_char nv pf in
       let inp := init_input s in
       (* Let `n` be the guess budget corresponding to matching `r` on `s`. *)
       let n := guess_budget r inp in
       (* Then:
-         - the sizes of `r` and `s` are linear in the size of `pf`, *)
-      expanded_size r <= 9 * lexsat_size nv pf /\
-      length s <= 2 * lexsat_size nv pf /\
+         - the expanded size of `r` and the length of `s` are linear in the size of `pf`, *)
+      expanded_size r <= 12 * pos_formula_size pf /\
+      length s <= 2 * pos_formula_size pf /\
       (* - the budget is polynomial in the size of `pf`, *)
-      n <= S (27 * lexsat_size nv pf * (1 + 2 * lexsat_size nv pf)) /\
+      n <= S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
       (* - `r` has neither lookarounds nor lower-bounded quantifiers, *)
       (no_lookaround r /\ no_lower_bound r) /\
-      (* - there exists a result `best` of regex parsing of `r` on `s`, *)
+      (* - there exists a result `best` of the OptP algorithm on `r` and `s`, *)
       exists best,
         parse_spec rer r inp n best /\
         (* of size `n+1`, *)
@@ -430,27 +493,68 @@ Section EndToEnd.
         | None => forall b, length b = nv -> assign_cnf b pf = false
         end.
   Proof.
-    intros * WF NEQ; cbv zeta.
-    pose proof theRegex_size x_char semicolon_char (lexsat_qbf nv pf) as RS.
-    pose proof theString_size x_char semicolon_char n_char (lexsat_qbf nv pf) as SS.
-    pose proof size_le_expanded
-      (RegexEncoding.theRegex (lexsat_qbf nv pf) x_char semicolon_char) as AST.
-    rewrite lexsat_qbf_size in RS, SS.
-    split; [exact RS|]; split; [exact SS|].
-    split; [|split; [exact (lexsat_regex_frag x_char semicolon_char nv pf)|]].
-    { unfold guess_budget, lexsat_regex, lexsat_string.
-      replace (remaining_length
-                 (init_input (theString (lexsat_qbf nv pf) x_char semicolon_char n_char)) forward)
-        with (length (theString (lexsat_qbf nv pf) x_char semicolon_char n_char)) by reflexivity.
-      assert ((1 + length (theString (lexsat_qbf nv pf) x_char semicolon_char n_char))
-              * regex_size (RegexEncoding.theRegex (lexsat_qbf nv pf) x_char semicolon_char)
-              <= (1 + 2 * lexsat_size nv pf) * (9 * lexsat_size nv pf))
-        by (apply PeanoNat.Nat.mul_le_mono; lia).
-      nia. }
-    destruct (lexsat_by_optp x_char semicolon_char _ (lexsat_qbf_wf nv pf WF) pf eq_refl
-                ltac:(intros qt IN; eapply repeat_spec, IN) n_char rer NEQ _
+    intros * WF USES NEQ; cbv zeta.
+    split; [now apply lexsat_regex_size_bound|].
+    split; [now apply lexsat_string_size_bound|].
+    split; [now apply lexsat_guess_budget_bound|].
+    split; [exact (lexsat_regex_frag a_char semicolon_char nv pf)|].
+    destruct (lexsat_by_optp a_char semicolon_char _ (lexsat_qbf_wf nv pf WF) pf eq_refl
+                ltac:(intros qt IN; eapply repeat_spec, IN) z_char rer NEQ _
                 (compute_tr_is_tree _)) as [best JOIN].
     rewrite lexsat_qbf_num_vars in JOIN; eauto.
+  Qed.
+
+  (* OptP-hardness theorem in terms of the OptP machine and the ECMAScript pattern: *)
+  Theorem optp_hardness_machine_w:
+    forall (rer: RegExpRecord) nv pf,
+      (* Let `pf` be a well-formed propositional formula with `nv` variables. *)
+      wf_pos_formula nv pf ->
+      (* Assume that each of the `nv` variables occurs in `pf`. *)
+      uses_all_vars nv pf ->
+      (* Assume that the canonicalized `a` and `;` characters are different. *)
+      Character.canonicalize rer a_char <> Character.canonicalize rer semicolon_char ->
+      (* Let (wr, s) be the instance of regex matching corresponding to `pf`,
+         where `wr` is a Warblre (ECMAScript) regex. *)
+      let wr := theRegex_w (lexsat_qbf nv pf) a_char semicolon_char in
+      let s := lexsat_string a_char semicolon_char z_char nv pf in
+      let inp := init_input s in
+      (* Let `n` be the guess budget corresponding to matching `wr` on `s`. *)
+      let n := guess_budget (linden_of wr) inp in
+      (* Then:
+         - the expanded size of `wr` and the length of `s` are linear in the size of `pf`, *)
+      pattern_expanded_size wr <= 12 * pos_formula_size pf /\
+      length s <= 2 * pos_formula_size pf /\
+      (* - the budget is polynomial in the size of `pf`, *)
+      n <= S (12 * pos_formula_size pf * (1 + 2 * pos_formula_size pf)) /\
+      (* - the regex `wr` passes the early errors check, *)
+      StaticSemantics.earlyErrors wr [] = Success false /\
+      (* - `wr` has neither lookarounds nor lower-bounded quantifiers, *)
+      (pattern_no_lookaround wr /\ pattern_no_lower_bound wr) /\
+      (no_lookaround (linden_of wr) /\ no_lower_bound (linden_of wr)) /\
+      (* - there exists a result `best` of the OptP algorithm on `wr` and `s`, *)
+      exists best,
+        parse_spec rer (linden_of wr) inp n best /\
+        (* of size `n+1`, *)
+        length best = S n /\
+        (* and we can recover the result of the original instance of LEXICOGRAPHIC SAT from `best`,
+           by first recovering the capture groups from `best`: *)
+        match option_map snd (exec_of_parse rer (linden_of wr) inp best) with
+        (* - if `best` encodes a successful match, then we can recover the solution of the original
+        instance of LEXICOGRAPHIC SAT from the corresponding capture groups, *)
+        | Some gm => is_lex_max_sat nv pf (bits_of_gm nv gm)
+        (* - otherwise, the original instance of LEXICOGRAPHIC SAT has no solution. *)
+        | None => forall b, length b = nv -> assign_cnf b pf = false
+        end.
+  Proof.
+    intros * WF USES NEQ; cbv zeta.
+    rewrite <- (lexsat_w_to_linden a_char semicolon_char nv pf WF).
+    destruct (optp_hardness_machine rer nv pf WF USES NEQ)
+      as (RS & SS & BUD & FRAG & MACHINE).
+    split; [now apply lexsat_w_size_bound|].
+    split; [exact SS|]; split; [exact BUD|].
+    split; [exact (lexsat_w_earlyErrors a_char semicolon_char nv pf WF)|].
+    split; [split; [apply lexsat_w_nolk | apply lexsat_w_nolb]; exact WF|].
+    split; [exact FRAG | exact MACHINE].
   Qed.
 
   (** * OptP-membership results *)
@@ -464,9 +568,8 @@ Section EndToEnd.
     (* The Linden equivalent of `wr`. *)
     Let lr := linden_of wr.
 
-    (* We assume that the regex has neither lookarounds nor lower-bounded quantifiers. *)
+    (* We assume that the regex has no lookarounds. *)
     Hypothesis lr_nolk: no_lookaround lr.
-    Hypothesis lr_nolb: no_lower_bound lr.
 
     (* OptP-membership theorem in terms of the Warblre `Matcher`: *)
     Theorem optp_membership_matcher:
@@ -475,8 +578,8 @@ Section EndToEnd.
         (* Let `n` be the guess budget corresponding to matching `lr` on `inp`. *)
         let n := guess_budget lr inp in
         (* Then:
-           - `n` is polynomial in the remaining length of `inp` and the size of `wr`, *)
-        n <= S (3 * (1 + remaining_length inp forward) * pattern_size wr) /\
+           - `n` is polynomial in the remaining length of `inp` and the expanded size of `wr`, *)
+        n <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr) /\
         exists m best,
           (* - compiling `wr` succeeds, *)
           Semantics.compilePattern wr rer = Success m /\
@@ -491,7 +594,7 @@ Section EndToEnd.
     Proof.
       intros inp ?.
       split; [apply guess_budget_source|].
-      destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
+      destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best (PARSE & LEN & EXECP)].
       destruct (matcher_at_input wr rer no_early_errors eq_refl) as [m (COMP & MATCH)].
       exists m, best; rewrite MATCH, EXECP; auto 10.
@@ -505,8 +608,8 @@ Section EndToEnd.
         (* Let `n` be the guess budget corresponding to matching `lr` on `s`. *)
         let n := guess_budget lr inp in
         (* Then:
-           - `n` is polynomial in the length of `s` and the size of `wr`, *)
-        n <= S (3 * (1 + length s) * pattern_size wr) /\
+           - `n` is polynomial in the length of `s` and the expanded size of `wr`, *)
+        n <= S ((1 + length s) * pattern_expanded_size wr) /\
         exists inst best,
           (* - compiling `wr` succeeds (this is essentially what `regExpInitialize` does), *)
           regExpInitialize wr flags = Success inst /\
@@ -520,10 +623,10 @@ Section EndToEnd.
     Proof.
       intros s inp ?.
       split; [apply (guess_budget_source wr inp)|].
-      destruct (optp_membership_poly rer lr inp _ lr_nolk lr_nolb (compute_tr_is_tree _))
+      destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best OPTP].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer
-                  eq_refl eq_refl eq_refl) as [inst [INIT RES]]; destruct OPTP as (? & ? & EXECP).
+                  eq_refl eq_refl) as [inst [INIT RES]]; destruct OPTP as (? & ? & EXECP).
       exists inst, best; unfold linden_result, first_leaf in RES; rewrite EXECP; auto 10.
     Qed.
   End OptpMembership.
@@ -531,8 +634,14 @@ Section EndToEnd.
 End EndToEnd.
 
 Definition end_to_end_results :=
-  (@pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
-   @pspace_hardness_noneglk_e2e, @pspace_membership_matcher, @pspace_membership_e2e,
-   @membership_state_size_bound, @optp_hardness_matcher, @optp_hardness_e2e,
-   @optp_hardness_machine, @optp_membership_matcher, @optp_membership_e2e).
+  (@expanded_size_bounds, @fuel_budget_value, @guess_budget_value, @regex_test_unfold,
+   @optp_output_width,
+   @pspace_hardness_matcher, @pspace_hardness_e2e, @pspace_hardness_noneglk_matcher,
+   @pspace_hardness_noneglk_e2e,
+   @pspace_algo_sound, @pspace_algo_fuel_poly,
+   @pspace_membership_matcher, @pspace_membership_e2e,
+   @membership_state_size_bound, @compute_result_terminates,
+   @optp_hardness_matcher, @optp_hardness_e2e,
+   @optp_hardness_machine, @optp_hardness_machine_w, @optp_membership_matcher,
+   @optp_membership_e2e).
 Print Assumptions end_to_end_results.

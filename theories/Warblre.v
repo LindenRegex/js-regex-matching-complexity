@@ -16,62 +16,62 @@ Definition linden_of {params: LindenParameters} (wr: Patterns.Regex): regex :=
 Section TranslationSize.
   Context {params: LindenParameters}.
 
-  Lemma atomesc_size:
-    forall ae nm lr, atomesc_to_linden ae nm = Success lr -> regex_size lr = 1.
+  Lemma atomesc_expanded_size:
+    forall ae nm lr, atomesc_to_linden ae nm = Success lr -> expanded_size lr = 1.
   Proof.
     intros [] nm lr TR; cbn in TR; try (injection TR as <-; reflexivity).
     destruct (nameidx nm _); [injection TR as <- | discriminate]; reflexivity.
   Qed.
 
-  Lemma quantpref_size:
+  Lemma quantpref_expanded_size:
     forall qp quant, wquantpref_to_linden qp = Success quant ->
-      forall greedy lr, regex_size (quant greedy lr) = 1 + regex_size lr.
+      forall greedy lr,
+        expanded_size (quant greedy lr) = (1 + quantprefix_min qp) * (3 + expanded_size lr).
   Proof.
     intros [] quant TR; cbn in TR; try (injection TR as <-; reflexivity).
     destruct (_ <=? _); [injection TR as <- | discriminate]; reflexivity.
   Qed.
 
-  Lemma warblre_to_linden_size (wr: Patterns.Regex):
+  Lemma warblre_to_linden_expanded_size (wr: Patterns.Regex):
     forall n nm lr,
-      warblre_to_linden wr n nm = Success lr -> regex_size lr <= pattern_size wr.
+      warblre_to_linden wr n nm = Success lr ->
+      expanded_size lr <= pattern_expanded_size wr.
   Proof.
     induction wr; intros n nm lr TR; cbn in TR |- *; unfold Result.bind in TR;
       repeat (match type of TR with
               | context [ match ?e with _ => _ end ] => destruct e eqn:?
               end; cbn in TR; unfold Result.bind in TR); try discriminate.
     all: repeat match goal with
-         | H: atomesc_to_linden _ _ = Success _ |- _ => apply atomesc_size in H
+         | H: atomesc_to_linden _ _ = Success _ |- _ => apply atomesc_expanded_size in H
          | H: warblre_to_linden _ _ _ = Success _ |- _ =>
              first [apply IHwr in H | apply IHwr1 in H | apply IHwr2 in H]
          | H: wquantpref_to_linden _ = Success _ |- _ =>
-             pose proof (quantpref_size _ _ H); clear H
+             pose proof (quantpref_expanded_size _ _ H); clear H
          end.
     all: try injection TR as <-; cbn in *;
          repeat match goal with
-         | H: forall _ _, regex_size (?quant _ _) = _ |- context [?quant] => rewrite H
-         end; lia.
+         | H: forall _ _, expanded_size (?quant _ _) = _ |- context [?quant] => rewrite H
+         end; nia.
   Qed.
 
-  Corollary linden_of_size wr: regex_size (linden_of wr) <= pattern_size wr.
+  Corollary linden_of_expanded_size wr:
+      expanded_size (linden_of wr) <= pattern_expanded_size wr.
   Proof.
     unfold linden_of, warblre_to_linden'.
     destruct (warblre_to_linden wr 0 (buildnm wr)) eqn:TR;
-      [eapply warblre_to_linden_size, TR | cbn; apply pattern_size_pos].
+      [eapply warblre_to_linden_expanded_size, TR | cbn; apply pattern_expanded_size_pos].
   Qed.
 
   Corollary guess_budget_source wr inp:
       guess_budget (linden_of wr) inp
-      <= S (3 * (1 + remaining_length inp forward) * pattern_size wr).
-  Proof. unfold guess_budget; pose proof linden_of_size wr; nia. Qed.
+      <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr).
+  Proof. unfold guess_budget; pose proof linden_of_expanded_size wr; nia. Qed.
 
   Corollary fuel_budget_source wr inp:
-      no_lower_bound (linden_of wr) ->
       fuel_budget (linden_of wr) inp
-      <= S (3 * (1 + length (input_str inp)) * pattern_size wr).
-  Proof.
-    intro NLB; unfold fuel_budget.
-    pose proof expanded_size_nolb _ NLB; pose proof linden_of_size wr; nia.
-  Qed.
+      <= S ((1 + length (input_str inp))
+            * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
+  Proof. unfold fuel_budget; pose proof linden_of_expanded_size wr; nia. Qed.
 End TranslationSize.
 
 Section TranslationFragment.
@@ -213,17 +213,16 @@ Section MatchesTransport.
 
     Corollary matches_regExpExec_result flags:
         RegExpFlags.y flags = true ->
-        RegExpFlags.d flags = false ->
         rer = rer_of wr flags ->
         exists inst,
           regExpInitialize wr flags = Success inst /\
           exec_agrees inst str (EquivMain.compilePattern wr rer str 0).
     Proof.
-      intros STICKY NOIND Heqrer.
+      intros STICKY Heqrer.
       pose proof compiled_shape flags Heqrer as [m [res (COMP & INIT & EXEC & RES)]].
       eexists; split; [exact INIT|]; rewrite RES.
       exact (@exec_sticky (@LWParameters params) str _ wr flags rer m
-               (EarlyErrors.earlyErrors _ EE) COMP Heqrer STICKY NOIND res EXEC).
+               (EarlyErrors.earlyErrors _ EE) COMP Heqrer STICKY res EXEC).
     Qed.
 
     Context (b: bool).
@@ -285,14 +284,13 @@ Section MatchesTransport.
 
     Corollary matches_regExpExec_exotic flags:
         RegExpFlags.y flags = true ->
-        RegExpFlags.d flags = false ->
         rer = rer_of wr flags ->
         exists inst,
           regExpInitialize wr flags = Success inst /\
           ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <-> b = true).
     Proof.
-      intros STICKY NOIND Heqrer.
-      destruct (matches_regExpExec_result flags STICKY NOIND Heqrer) as [inst [INIT RES]].
+      intros STICKY Heqrer.
+      destruct (matches_regExpExec_result flags STICKY Heqrer) as [inst [INIT RES]].
       exists inst; split; [exact INIT|]; rewrite <- matches_warblre.
       exact (proj2 (exec_null_exotic str inst _ RES)).
     Qed.
@@ -301,18 +299,17 @@ Section MatchesTransport.
 
   Corollary matches_regExpExec_result_flags flags rer:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       rer = rer_of wr flags ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         exec_agrees inst str (to_MatchState (linden_result rer lr (init_input str))
                                             (RegExpRecord.capturingGroupsCount rer)).
   Proof.
-    intros STICKY NOIND Heqrer.
+    intros STICKY Heqrer.
     assert (CAPS: RegExpRecord.capturingGroupsCount rer
                   = StaticSemantics.countLeftCapturingParensWithin wr nil)
       by (now rewrite Heqrer).
-    destruct (matches_regExpExec_result rer CAPS flags STICKY NOIND Heqrer) as [inst [INIT RES]].
+    destruct (matches_regExpExec_result rer CAPS flags STICKY Heqrer) as [inst [INIT RES]].
     exists inst; split; [exact INIT | now rewrite <- warblre_result].
   Qed.
 End MatchesTransport.
@@ -344,15 +341,20 @@ Section MembershipTransport.
   Qed.
 
   Lemma fuel_budget_spec (r: regex) inp:
-      fuel_budget r inp > MembershipProof.actions_fuel r inp [Areg r] forward.
-  Proof. pose proof poly_fuel_linear r inp; unfold fuel_budget; lia. Qed.
+      fuel_budget r inp > MembershipProof.actions_fuel inp [Areg r] forward.
+  Proof.
+    pose proof MembershipProof.poly_fuel inp r.
+    pose proof remaining_le_full_length inp forward.
+    unfold fuel_budget; nia.
+  Qed.
 
-  Lemma pspace_algo_poly inp:
-      res_to_leaf (pspace_algo rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
+  Lemma compute_result_poly inp:
+      res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
       = Some (linden_result rer lr inp).
   Proof.
-    now pose proof functional_terminates' _ inp (afr_refl lr forward) (fuel_budget_spec lr inp)
-      GroupMap.empty rer as ALGO%compute_tree_None_compute_tr%pspace_algo_correctness.
+    unfold linden_result.
+    exact (compute_result_spec lr inp [Areg lr] forward (afr_refl lr inp forward)
+             _ (fuel_budget_spec lr inp) GroupMap.empty rer _ (compute_tr_is_tree rer)).
   Qed.
 End MembershipTransport.
 
@@ -392,11 +394,11 @@ Section WarblreHardness.
   Context {params: LindenParameters}.
   Context (q: qbf).
   Hypothesis WF_q: wf_qbf q.
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
 
-  Let wr := theRegex_w q x_char semicolon_char.
-  Let lr := theRegex q x_char semicolon_char.
-  Let str := theString q x_char semicolon_char n_char.
+  Let wr := theRegex_w q a_char semicolon_char.
+  Let lr := theRegex q a_char semicolon_char.
+  Let str := theString q a_char semicolon_char z_char.
 
   Lemma wr_earlyErrors: StaticSemantics.earlyErrors wr [] = Success false.
   Proof. apply regex_encoding_w_earlyErrors, WF_q. Qed.
@@ -416,7 +418,7 @@ Section WarblreHardness.
 
   Section AnyRecord.
     Context (rer: RegExpRecord).
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
     Hypothesis CAPS: RegExpRecord.capturingGroupsCount rer =
       StaticSemantics.countLeftCapturingParensWithin wr nil.
@@ -440,7 +442,7 @@ Section WarblreHardness.
 
     Let rer := rer_of wr flags.
 
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
 
     Local Ltac flags_transport L :=
@@ -462,7 +464,6 @@ Section WarblreHardness.
 
     Theorem qbf_regex_warblre_frontend_exotic:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <->
@@ -471,7 +472,6 @@ Section WarblreHardness.
 
     Theorem qbf_regex_warblre_frontend_all:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       regex_test wr flags str (qbf_true q).
     Proof.
       intros; apply frontend_all;
@@ -486,11 +486,11 @@ Section WarblreHardnessPoslk.
   Context {params: LindenParameters}.
   Context (q: qbf).
   Hypothesis WF_q: wf_qbf q.
-  Context (x_char semicolon_char n_char: Parameters.Character).
+  Context (a_char semicolon_char z_char: Parameters.Character).
 
-  Let wr := theRegex_poslk_w q x_char semicolon_char n_char.
-  Let lr := RegexEncodingPoslk.theRegex x_char semicolon_char n_char q.
-  Let str := theString q x_char semicolon_char n_char.
+  Let wr := theRegex_poslk_w q a_char semicolon_char z_char.
+  Let lr := RegexEncodingPoslk.theRegex a_char semicolon_char z_char q.
+  Let str := theString q a_char semicolon_char z_char.
 
   Lemma wr_poslk_earlyErrors: StaticSemantics.earlyErrors wr [] = Success false.
   Proof. apply regex_encoding_poslk_w_earlyErrors, WF_q. Qed.
@@ -504,22 +504,31 @@ Section WarblreHardnessPoslk.
   Lemma wr_poslk_nolb: no_lower_bound (linden_of wr).
   Proof. rewrite <- wr_poslk_to_linden; apply RegexEncodingPoslk.theRegex_poslk_nolb. Qed.
 
+  Lemma wr_poslk_noneglk: no_neg_lookaround (linden_of wr).
+  Proof. rewrite <- wr_poslk_to_linden; apply RegexEncodingPoslk.theRegex_poslk_noneglk. Qed.
+
   Theorem theRegex_poslk_w_noneglk: pattern_no_neg_lookaround wr.
   Proof.
     eauto using warblre_to_linden_no_neg_lookaround, regex_encoding_poslk_wl,
                 RegexEncodingPoslk.theRegex_poslk_noneglk.
   Qed.
 
+  Theorem theRegex_poslk_w_nolb: pattern_no_lower_bound wr.
+  Proof.
+    eauto using warblre_to_linden_no_lower_bound, regex_encoding_poslk_wl,
+                RegexEncodingPoslk.theRegex_poslk_nolb.
+  Qed.
+
   Local Hint Resolve wr_poslk_earlyErrors wr_poslk_to_linden : core.
 
   Section AnyRecord.
     Context (rer: RegExpRecord).
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
-    Hypothesis x_n_neq: Character.canonicalize rer x_char <>
-      Character.canonicalize rer n_char.
-    Hypothesis n_not_lineterminator: ~In n_char Character.line_terminators.
-    Hypothesis x_not_lineterminator: ~In x_char Character.line_terminators.
+    Hypothesis a_z_neq: Character.canonicalize rer a_char <>
+      Character.canonicalize rer z_char.
+    Hypothesis z_not_lineterminator: ~In z_char Character.line_terminators.
+    Hypothesis a_not_lineterminator: ~In a_char Character.line_terminators.
     Hypothesis CAPS: RegExpRecord.capturingGroupsCount rer =
       StaticSemantics.countLeftCapturingParensWithin wr nil.
 
@@ -538,15 +547,15 @@ Section WarblreHardnessPoslk.
 
   Section FromFlags.
     Context (flags: RegExpFlags).
-    Hypothesis n_not_lineterminator: ~In n_char Character.line_terminators.
-    Hypothesis x_not_lineterminator: ~In x_char Character.line_terminators.
+    Hypothesis z_not_lineterminator: ~In z_char Character.line_terminators.
+    Hypothesis a_not_lineterminator: ~In a_char Character.line_terminators.
 
     Let rer := rer_of wr flags.
 
-    Hypothesis x_semicolon_neq: Character.canonicalize rer x_char <>
+    Hypothesis a_semicolon_neq: Character.canonicalize rer a_char <>
       Character.canonicalize rer semicolon_char.
-    Hypothesis x_n_neq: Character.canonicalize rer x_char <>
-      Character.canonicalize rer n_char.
+    Hypothesis a_z_neq: Character.canonicalize rer a_char <>
+      Character.canonicalize rer z_char.
 
     Local Ltac poslk_transport L :=
       apply L with (lr := lr) (rer := rer); auto; apply qbf_poslk_matches; auto.
@@ -567,7 +576,6 @@ Section WarblreHardnessPoslk.
 
     Theorem qbf_poslk_warblre_frontend_exotic:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       exists inst,
         regExpInitialize wr flags = Success inst /\
         ((exists A inst', regExpExec inst str = Success (Exotic A inst')) <->
@@ -576,7 +584,6 @@ Section WarblreHardnessPoslk.
 
     Theorem qbf_poslk_warblre_frontend_all:
       RegExpFlags.y flags = true ->
-      RegExpFlags.d flags = false ->
       regex_test wr flags str (qbf_true q).
     Proof.
       intros; apply frontend_all;
