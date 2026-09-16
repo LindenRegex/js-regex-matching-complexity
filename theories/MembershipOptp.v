@@ -470,8 +470,7 @@ Section OptpAlgo.
 
   Local Ltac optp_node :=
     repeat match goal with
-      | _ => progress cbn [compute_tree tree_res] in *
-      | H: Some _ = Some _ |- _ => injection H as <-
+      | _ => progress cbn [tree_res] in *
       | |- context[greedy_choice ?g _ _] => is_var g; destruct g; cbn [greedy_choice] in *
       | E: read_char _ _ ?i ?d = Some (_, ?ni) |- _ => is_var ni;
           replace ni with (advance_input' i d) in *
@@ -479,37 +478,76 @@ Section OptpAlgo.
       | E: read_backref _ _ _ ?i ?d = Some (?s, ?ni) |- _ => is_var ni;
           replace ni with (advance_input_n i (length s) d) in *
             by (symmetry; eauto using read_backref_success_advance)
-      | H: context[match ?x with _ => _ end] |- _ => is_var x; destruct x
-      | H: context[match ?x with _ => _ end] |- _ => destruct x eqn:?; try discriminate
       end.
   Local Ltac optp_unfold :=
     intros; cbn [optp_algo optp_step res_of tree_res];
     repeat match goal with E: ?x = _ |- context[?x] => rewrite E end; reflexivity.
-  Local Ltac optp_nolk := try (cbn [actions_no_lookaround no_lookaround]);
-    first [tauto | apply actions_no_lookaround_seq_list; tauto].
-  Local Ltac optp_rec R := apply R; [optp_nolk | assumption | lia].
-  Local Ltac optp_case R :=
-    optp_node;
-    first [ apply optp_spec_done; optp_unfold
-          | eapply optp_spec_step; [optp_unfold | optp_rec R]
-          | eapply optp_spec_choice; [optp_unfold | optp_unfold | optp_rec R | optp_rec R] ].
+  Local Ltac optp_rec IH st :=
+    match goal with
+    | AFR: MembershipProof.act_from_regex ?r ?i ?a ?d,
+      NOLK: actions_no_lookaround ?a,
+      FUEL: S ?n > MembershipProof.actions_fuel ?i ?a ?d |- _ =>
+        let A := fresh "AFR" in let N := fresh "NOLK" in let F := fresh "FUEL" in
+        destruct (act_step_ok r i a d _ _ _ n AFR NOLK FUEL st) as (A & N & F);
+        apply IH with (r := r); assumption
+    end.
+  Local Ltac optp_go IH st := eapply optp_spec_step; [optp_unfold | optp_rec IH st].
 
-  Theorem optp_max_spec fuel:
+  Theorem optp_max_spec:
     forall act inp gm dir t,
-      actions_no_lookaround act ->
-      compute_tree rer act inp gm dir fuel = Some t ->
-      forall n, fuel <= n ->
+      is_tree rer act inp gm dir t ->
+      forall r n,
+        MembershipProof.act_from_regex r inp act dir ->
+        actions_no_lookaround act ->
+        n > MembershipProof.actions_fuel inp act dir ->
         optp_spec n (optp_algo dir (Cfg act inp gm)) (tree_res t gm inp dir).
   Proof.
-    induction fuel as [|fuel IH]; intros act inp gm dir t NOLK COMP [|n] LE;
-      try discriminate; try lia.
-    destruct act as [|[rg|ic|gidc] cont]; cbn [actions_no_lookaround] in NOLK;
-      try match goal with H: _ /\ _ |- _ => destruct H as [NR NC] end;
-      try destruct rg as [|cd|r1 r2|r1 r2|greedy [|mn] delta rq|lk rq|gidg rq|anc|gidb];
-      try destruct delta as [[|d]|];
-      try (cbn [no_lookaround] in NR);
-      try contradiction;
-      optp_case IH.
+    induction 1; intros r n AFR NOLK FUEL; destruct n as [|n]; try lia; optp_node.
+    - apply optp_spec_done; optp_unfold.
+    - assert (SS: is_strict_suffix inp strcheck dir = true)
+        by (apply is_strict_suffix_correct; auto).
+      optp_go IHis_tree (st_check inp strcheck cont dir SS).
+    - assert (SS: is_strict_suffix inp strcheck dir = false)
+        by (apply is_strict_suffix_inv_false; auto).
+      apply optp_spec_done; optp_unfold.
+    - optp_go IHis_tree (st_close inp gid cont dir).
+    - optp_go IHis_tree (st_epsilon inp cont dir).
+    - assert (ADV: advance_input inp dir = Some (advance_input' inp dir))
+        by eauto using read_char_success_advance.
+      optp_go IHis_tree (st_char inp cd (advance_input' inp dir) cont dir ADV).
+    - apply optp_spec_done; optp_unfold.
+    - eapply optp_spec_choice;
+        [optp_unfold | optp_unfold
+        | optp_rec IHis_tree1 (st_disj_left inp r1 r2 cont dir)
+        | optp_rec IHis_tree2 (st_disj_right inp r1 r2 cont dir)].
+    - optp_go IHis_tree (st_sequence inp r1 r2 cont dir).
+    - subst gidl.
+      optp_go IHis_tree (st_quant_forced inp greedy min plus r1 cont dir).
+    - optp_go IHis_tree (st_quant_skip inp greedy (NoI.N 0) r1 cont dir).
+    - subst gidl tquant.
+      assert (ITER: optp_spec n (optp_algo dir (Cfg (Areg r1 :: Acheck inp ::
+                      Areg (Quantified greedy 0 (noi_pred (NoI.N 1 + plus)%NoI) r1) :: cont)
+                      inp (GroupMap.reset (def_groups r1) gm)))
+                      (tree_res titer (GroupMap.reset (def_groups r1) gm) inp dir)). {
+        rewrite MembershipProof.simpl_pred.
+        optp_rec IHis_tree1 (st_quant_free_iter inp greedy
+                               (NoI.N 1 + plus)%NoI plus r1 cont dir eq_refl). }
+      assert (SKIP': optp_spec n (optp_algo dir (Cfg cont inp gm))
+                       (tree_res tskip gm inp dir))
+        by optp_rec IHis_tree2 (st_quant_skip inp greedy
+                                  (NoI.N 1 + plus)%NoI r1 cont dir).
+      destruct plus as [p|]; optp_node;
+        (eapply optp_spec_choice;
+          [optp_unfold | optp_unfold | assumption | assumption]).
+    - optp_go IHis_tree (st_group inp gid r1 cont dir).
+    - destruct NOLK as [[] _].
+    - destruct NOLK as [[] _].
+    - optp_go IHis_tree (st_anchor inp a cont dir).
+    - apply optp_spec_done; optp_unfold.
+    - optp_go IHis_tree
+        (st_backref inp gid (length br_str)
+           (advance_input_n inp (length br_str) dir) cont dir eq_refl).
+    - apply optp_spec_done; optp_unfold.
   Qed.
 
   Definition optp_run (r: regex) (inp: input): list bool -> match_result :=
@@ -554,16 +592,17 @@ Section OptpAlgo.
       + rewrite (SPEC cs LEN); cbn; now apply bits_le_ones.
   Qed.
 
-  Theorem parse_determines_exec r inp fuel t n best:
+  Theorem parse_determines_exec r inp t n best:
       no_lookaround r ->
-      compute_tree rer [Areg r] inp GroupMap.empty forward fuel = Some t ->
-      fuel <= n ->
+      is_tree rer [Areg r] inp GroupMap.empty forward t ->
+      n > MembershipProof.actions_fuel inp [Areg r] forward ->
       parse_spec r inp n best ->
       exec_of_parse r inp best = tree_res t GroupMap.empty inp forward.
   Proof.
     intros ? ? ? PARSE.
     destruct (optp_spec_parse r inp n (tree_res t GroupMap.empty inp forward))
-      as [b [P E]]; [apply optp_max_spec with (fuel := fuel) (t := t); cbn; auto|].
+      as [b [P E]];
+      [eapply optp_max_spec with (r := r); cbn; auto using MembershipProof.afr_refl|].
     now rewrite (parse_spec_unique r inp n best b PARSE P).
   Qed.
 
@@ -606,27 +645,14 @@ Section OptpAlgo.
   Theorem parse_parse_spec r inp n: parse_spec r inp n (parse r inp n).
   Proof. apply max_out_spec. Qed.
 
-  Lemma is_tree_compute: forall r inp t n,
-      is_tree rer [Areg r] inp GroupMap.empty forward t ->
-      n > MembershipProof.actions_fuel inp [Areg r] forward ->
-      compute_tree rer [Areg r] inp GroupMap.empty forward n = Some t.
-  Proof.
-    intros r inp t n TREE FUEL.
-    pose proof MembershipProof.functional_terminates' rer r inp [Areg r] forward
-      (MembershipProof.afr_refl r inp forward) n FUEL
-      GroupMap.empty.
-    destruct compute_tree as [t'|] eqn:COMPUTE; [|congruence].
-    f_equal; eauto using compute_is_tree, is_tree_determ.
-  Qed.
-
   Theorem optp_membership_exec r inp t n:
       no_lookaround r ->
       is_tree rer [Areg r] inp GroupMap.empty forward t ->
       n > MembershipProof.actions_fuel inp [Areg r] forward ->
       exec_of_parse r inp (parse r inp n) = tree_res t GroupMap.empty inp forward.
   Proof.
-    intros; apply parse_determines_exec with (fuel := n) (t := t) (n := n);
-      auto using is_tree_compute, parse_parse_spec.
+    intros; apply parse_determines_exec with (t := t) (n := n);
+      auto using parse_parse_spec.
   Qed.
 
   Lemma regex_lookaround_fuel_nolk r:
