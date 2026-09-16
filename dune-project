@@ -6,7 +6,7 @@
 
 (using rocq 0.11)
 
-(authors "Victor Deng" "Aurèle Barrière" "Clément Pit-Claudel")
+(authors "Anonymous")
 
 (package
  (name jsregexoptp)
