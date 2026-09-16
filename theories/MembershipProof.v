@@ -1097,7 +1097,6 @@ Section MembershipProof.
     - eapply strict_suffix_trans; eauto.
   Qed.
 
-  (* TODO Move to Linden *)
   Lemma remaining_length_current_str:
     forall inp dir, remaining_length inp dir = length (current_str inp dir).
   Proof.
@@ -1158,7 +1157,6 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       simpl. lia.
   Qed.
 
-  (* TODO Move to Linden *)
   Lemma advance_input_samestr:
     forall inp nextinp dir,
       advance_input inp dir = Some nextinp ->
@@ -1183,7 +1181,6 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     pose proof read_decreases_fuel_nolk inp cd nextinp cont dir ADV. lia.
   Qed.
 
-  (* TODO Move to Linden *)
   Lemma advance_input_n_samestr:
     forall inp nextinp n dir,
       advance_input_n inp n dir = nextinp ->
