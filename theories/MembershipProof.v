@@ -240,7 +240,19 @@ Section ComputeResult.
         * apply read_backref_success_advance in BACK. subst. auto.
       + eexists. split.
         * apply tree_backref_fail. auto. * inversion H. auto.
-Qed.
+  Qed.
+
+  Corollary compute_result_is_tree_same_leaf:
+    forall fuel act inp gm dir leaf t,
+      res_to_leaf (compute_result act inp gm dir fuel) = Some leaf ->
+      is_tree rer act inp gm dir t ->
+      tree_res t gm inp dir = leaf.
+  Proof.
+    intros fuel act inp gm dir leaf t H H0.
+    apply compute_result_is_tree in H as [tree [IT LF]].
+    eapply is_tree_determ with (t2:=tree) in H0; auto. subst. auto.
+  Qed.
+
 
 End ComputeResult.
 
@@ -1693,18 +1705,15 @@ Section PSPACE_algo.
     - unfold pspace_algo in H0.
       destruct compute_result eqn:CR; try solve [inversion H0].
       apply f_equal with (f:=res_to_leaf) in CR.
-      apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
-      assert (t = tree) by (eapply is_tree_determ; eauto). subst.
-      eexists; eauto.
+      eapply compute_result_is_tree_same_leaf in CR; eauto.
     - set (f:=S (actions_fuel (init_input s) [Areg r] forward)).
       assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by lia.
       unfold pspace_algo. destruct compute_result eqn:CR; auto.
       + specialize (result_terminates' r (init_input s) [Areg r] forward (afr_refl r _ _) f MORE GroupMap.empty rer) as OOF.
         subst f. rewrite CR in OOF. exfalso. apply OOF. auto.
       + apply f_equal with (f:=res_to_leaf) in CR.
-        apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
-        assert (t = tree) by (eapply is_tree_determ; eauto). subst.
-        destruct H0 as [l TR]. rewrite TR in LF. inversion LF.
+        eapply compute_result_is_tree_same_leaf in CR; eauto.
+        destruct H0 as [l TR]. rewrite TR in CR. inversion CR.
   Qed.
 
   Theorem pspace_algo_false_correct:
@@ -1716,17 +1725,15 @@ Section PSPACE_algo.
     - unfold pspace_algo in H0.
       destruct compute_result eqn:CR; try solve [inversion H0].
       apply f_equal with (f:=res_to_leaf) in CR.
-      apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
-      assert (t = tree) by (eapply is_tree_determ; eauto). subst. auto.
+      eapply compute_result_is_tree_same_leaf in CR; eauto.
     - set (f:=S (actions_fuel (init_input s) [Areg r] forward)).
       assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by lia.
       unfold pspace_algo. destruct compute_result eqn:CR; auto.
       + specialize (result_terminates' r (init_input s) [Areg r] forward (afr_refl r _ _) f MORE GroupMap.empty rer) as OOF.
         subst f. rewrite CR in OOF. exfalso. apply OOF. auto.
       + apply f_equal with (f:=res_to_leaf) in CR.
-        apply compute_result_is_tree in CR. destruct CR as [t [IT LF]].
-        assert (t = tree) by (eapply is_tree_determ; eauto). subst.
-        rewrite H0 in LF. inversion LF.
+        eapply compute_result_is_tree_same_leaf in CR; eauto.
+        rewrite H0 in CR. inversion CR.
   Qed.
 
 End PSPACE_algo.
