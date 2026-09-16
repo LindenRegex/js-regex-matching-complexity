@@ -1,0 +1,12 @@
+(env
+ (ltac2
+  (rocq
+   (flags
+    ; turn on Ltac2 proof mode for tests
+    (:standard -l Ltac2Loader.v)))))
+
+(rocq.theory
+ (name StrictOrderSolver)
+ (package strict-order-solver)
+ (generate_project_file)
+ (theories Ltac2 Stdlib))

@@ -1,0 +1,32 @@
+(melange.emit
+ (alias node-playground-js)
+ (target app)
+ (module_systems (es6 mjs))
+ (libraries melange.dom warblre-engines.js)
+ (preprocess (pps melange.ppx)))
+
+; Webpack it into a single, node-compatible, js file
+(rule
+ (target warblre-node-playground.js)
+ (deps
+  (alias_rec node-playground-js)
+  (:entrypoint (file app/examples/cmd_playground/Main.mjs))
+  (:config (file webpack.config.js)))
+ (action (no-infer (progn
+  (run npx webpack ./%{entrypoint} --config %{config} --no-stats)
+  (copy dist/%{target} %{target})
+  (run chmod u+x %{target}))))
+ (enabled_if %{bin-available:webpack}))
+
+; This way of handling missing JS dependencies is dirty, but it's the best I managed
+(rule
+ (target warblre-node-playground.js)
+ (action (progn
+  (echo "Webpack-cli not installed: skipping cmd_playground\n")
+  (write-file %{target} "#!/usr/bin/env sh\necho \"Webpack-cli was not installed at build-time: cannot execute 'playground', which was not built.\"\nexit 1")
+  (run chmod u+x %{target})))
+ (enabled_if (not %{bin-available:webpack})))
+
+(install
+ (section bin)
+ (files (warblre-node-playground.js as playground)))

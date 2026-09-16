@@ -1,0 +1,13 @@
+.lia.cache
+*.vo
+*.glob
+*.aux
+*.vok
+*.vos
+.lia.cache
+.depend
+_build
+_opam
+\#*.*\#
+*.v~
+_RocqProject

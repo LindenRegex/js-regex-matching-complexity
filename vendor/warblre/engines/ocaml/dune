@@ -1,0 +1,24 @@
+; Replicate the goodies developed for the OCaml engine
+(copy_files#
+ (only_sources true)
+ (files ../common/*.ml))
+(copy_files
+ (only_sources true)
+ (files ../common/Extraction.v))
+
+; Extract with different directives
+(rocq.extraction
+ (prelude Extraction)
+ (extracted_files Extracted.ml Extracted.mli)
+ (theories Warblre Ltac2 Stdlib))
+
+; Make a library out of it
+(library
+ (name warblre)
+ (public_name warblre-engines.ocaml)
+ (libraries uucp integers zarith))
+
+(env
+ (dev
+  (flags
+   (:standard -w -20 -w -27 -w -39 -w -67))))

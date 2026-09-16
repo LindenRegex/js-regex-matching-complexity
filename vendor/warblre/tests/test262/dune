@@ -1,0 +1,26 @@
+(melange.emit
+ (alias test262-js)
+ (target app)
+ (module_systems (es6 mjs))
+ (libraries warblre-engines.js)
+ (preprocess (pps melange.ppx)))
+
+; Webpack it into a single, browser-compatible, js file
+(rule
+ (targets warblre-node-redirect.js warblre-browser-redirect.js)
+ (deps
+  (alias_rec test262-js)
+  (:entrypoint (file app/tests/test262/Redirect.mjs))
+  (:config (file webpack.config.js)))
+ (action (no-infer (progn
+  (run npx webpack ./%{entrypoint} --config %{config} --no-stats)
+  (copy dist/warblre-node-redirect.js warblre-node-redirect.js)
+  (copy dist/warblre-browser-redirect.js warblre-browser-redirect.js))))
+ (enabled_if %{bin-available:webpack}))
+
+(rule
+ (target dummy)
+ (action (progn
+  (echo "Webpack-cli not installed: skipping test262\n")
+  (write-file dummy "")))
+ (enabled_if (not %{bin-available:webpack})))

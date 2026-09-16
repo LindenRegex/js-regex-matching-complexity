@@ -1,0 +1,25 @@
+(melange.emit
+ (alias browser-playground-js)
+ (target app)
+ (module_systems (es6 mjs))
+ (libraries melange.dom warblre-engines.js)
+ (preprocess (pps melange.ppx)))
+
+; Webpack it into a single, browser-compatible, js file
+(rule
+ (target warblre-browser-playground.js)
+ (deps
+  (alias_rec browser-playground-js)
+  (:entrypoint (file app/examples/browser_playground/Main.mjs))
+  (:config (file webpack.config.js)))
+ (action (no-infer (progn
+  (run npx webpack ./%{entrypoint} --config %{config} --no-stats)
+  (copy dist/%{target} %{target}))))
+ (enabled_if %{bin-available:webpack}))
+
+(rule
+ (target dummy)
+ (action (progn
+  (echo "Webpack-cli not installed: skipping examples/browser_playground\n")
+  (write-file dummy "")))
+ (enabled_if (not %{bin-available:webpack})))
