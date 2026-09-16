@@ -247,15 +247,6 @@ End ComputeResult.
 Section MembershipProof.
   Context {params: LindenParameters}.
 
-  Fixpoint regex_size (r: regex): nat := match r with
-  | Epsilon | Regex.Character _ => 1
-  | Disjunction r1 r2 | Sequence r1 r2 => 1 + regex_size r1 + regex_size r2
-  | Quantified _ min _ r => (S min) * (3 + regex_size r)
-  | Lookaround _ r => 1 + regex_size r
-  | Group _ r => 2 + regex_size r (* Open, Close *)
-  | Anchor _ | Backreference _ => 1
-  end.
-
   (* Formalizing when an input, list of actions and direction come from a supported regex *)
   Inductive act_from_regex (r: regex): input -> actions -> Direction -> Prop :=
   | afr_refl: forall inp dir, act_from_regex r inp [Areg r] dir
