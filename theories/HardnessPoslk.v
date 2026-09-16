@@ -806,7 +806,7 @@ Section HardnessPoslk.
     forall len, wf_gm_poslk len GroupMap.empty.
   Proof.
     intro len. unfold wf_gm_poslk. split.
-    - apply emptygm_wf.
+    - apply wf_gm_empty.
     - unfold wf_gm_n, wf_gm_n_i. intros i _. left. apply GroupMap.Facts.empty_o.
   Qed.
 

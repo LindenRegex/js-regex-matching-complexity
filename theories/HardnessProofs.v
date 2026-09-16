@@ -1013,25 +1013,14 @@ Section Proofs.
     forall t: tree, is_tree rer [Areg r] (init_input s) GroupMap.empty forward t ->
       first_leaf t (init_input s) <> None.
 
-  Lemma emptygm_find: forall i, GroupMap.find i GroupMap.empty = None.
-  Proof.
-    intro i. unfold GroupMap.find, GroupMap.empty.
-    apply GroupMap.Facts.empty_o.
-  Qed.
-
-  Lemma emptygm_wf: wf_gm n GroupMap.empty.
-  Proof.
-    unfold wf_gm. intros gid LE. left. apply emptygm_find. 
-  Qed.
-  
 
   Theorem qbf_regex:
     regex_matches_string rer (theRegex q a_char semicolon_char) str <->
     qbf_true q = true.
   Proof.
-    pose proof theRegex_aux_spec n 1 ltac:(lia) ltac:(lia) ltac:(lia) GroupMap.empty ltac:(apply emptygm_wf).
+    pose proof theRegex_aux_spec n 1 ltac:(lia) ltac:(lia) ltac:(lia) GroupMap.empty (wf_gm_empty n).
     specialize_prove H. {
-      intros j _ _. apply emptygm_find.
+      intros j _ _. apply find_empty.
     }
     specialize (H (inp_of_idx 0) quants).
     split.
