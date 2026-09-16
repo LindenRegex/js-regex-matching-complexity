@@ -62,20 +62,27 @@ Section EndToEnd.
      and giving weight 1 to Acheck and Aclose actions. *)
   Local Notation actions_size := MembershipProof.actions_size.
 
-  (* TODO explain *)
+  (* Polynomial bound on the memory usage of the PSPACE algorithm: *)
   Section MembershipStateSizeBound.
   Local Hint Extern 3 (_ <= _) => nia : core.
 
   Theorem membership_state_size_bound:
+    (* Let `wr` be a Warblre regex and `lr` the corresponding Linden regex. *)
     forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (act: actions),
       let lr := linden_of wr in
+      (* Let (`act`, `inp`, `dir`) be a semantic state that can result from matching `lr`. *)
       MembershipProof.act_from_regex lr inp act dir ->
+      (* Let `n` be the expanded size of `lr`. *)
       let n := expanded_size lr in
+      (* Let `frame` be this upper bound on the memory usage of a stack frame. *)
       let frame := (1 + length (input_str inp)) * actions_size act in
+      (* Let `poly` be this polynomial in the input size and expanded size of `wr`. *)
       let poly := (1 + length (input_str inp))
                   * (pattern_expanded_size wr
                      + pattern_expanded_size wr * pattern_expanded_size wr) in
+      (* Then the size of the list of actions (giving weight 1 to Acheck actions) is at most n+n(n+1)/2... *)
       actions_size act <= n + Nat.div2 (n * S n) /\
+      (* ... and the total memory usage (computation depth * frame size bound) is a polynomial in the input size and expanded size of `wr`. *)
       fuel_budget lr inp * frame <= S poly * poly.
   Proof.
     cbv zeta; intros * AFR; pose proof MembershipProof.actions_size_bound' AFR as ACT.
