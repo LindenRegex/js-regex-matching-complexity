@@ -1,4 +1,4 @@
-# Proving that JavaScript regex matching is OptP-complete
+# Complexity results about JavaScript regex matching
 
 ## Setup
 
