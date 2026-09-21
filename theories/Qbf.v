@@ -124,31 +124,6 @@ Inductive wf_qbf: qbf -> Prop :=
 Module Environment := MSetList.Make Nat.
 Definition env := Environment.t.
 
-(** ** Propositional version of validity of QBF *)
-(*Definition true_variable (e: env) (v: variable): Prop :=
-  Environment.In v e.
-
-Inductive valid_literal (e: env): literal -> Prop :=
-| ValidPosVar: forall v, true_variable e v -> valid_literal e (PosVar v)
-| ValidNegVar: forall v, ~true_variable e v -> valid_literal e (NegVar v).
-
-Definition valid_clause (e: env) (c: clause): Prop :=
-  List.Exists (valid_literal e) c.
-
-Inductive qbf_valid: nat -> env -> qbf -> Prop :=
-| Valid_noquant: forall (n: nat) (e: env) (cl: list clause),
-    Forall (valid_clause e) cl -> qbf_valid n e (nil, cl)
-| Valid_Exists_false: forall (n: nat) (e: env) (ql: list quantifier) (cl: list clause),
-    qbf_valid (S n) e (ql, cl) ->
-    qbf_valid n e (Exists::ql, cl)
-| Valid_Exists_true: forall (n: nat) (e: env) (ql: list quantifier) (cl: list clause),
-    qbf_valid (S n) (Environment.add n e) (ql, cl) ->
-    qbf_valid n e (Exists::ql, cl)
-| Valid_NotExists: forall (n: nat) (e: env) (ql: list quantifier) (cl: list clause),
-    ~qbf_valid (S n) e (ql, cl) ->
-    ~qbf_valid (S n) (Environment.add n e) (ql, cl) ->
-    qbf_valid n e (NotExists::ql, cl).*)
-
 (** ** Functional version of validity if QBF *)
 Definition true_variable (e: env) (v: variable): bool :=
   Environment.mem v e.

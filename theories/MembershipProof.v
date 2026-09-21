@@ -1097,7 +1097,6 @@ Section MembershipProof.
     - eapply strict_suffix_trans; eauto.
   Qed.
 
-  (* TODO Move to Linden *)
   Lemma remaining_length_current_str:
     forall inp dir, remaining_length inp dir = length (current_str inp dir).
   Proof.
@@ -1158,20 +1157,6 @@ remaining_length nextinp dir) * last_chunk_size cont). {
       simpl. lia.
   Qed.
 
-  (* TODO Move to Linden *)
-  Lemma advance_input_samestr:
-    forall inp nextinp dir,
-      advance_input inp dir = Some nextinp ->
-      input_str nextinp = input_str inp.
-  Proof.
-    intros inp nextinp dir ADV. unfold advance_input in ADV.
-    destruct inp as [next pref]. destruct dir.
-    - destruct next as [|x next]; try discriminate.
-      injection ADV as <-. simpl. rewrite <- app_assoc. reflexivity.
-    - destruct pref as [|x pref]; try discriminate.
-      injection ADV as <-. simpl. rewrite <- app_assoc. reflexivity.
-  Qed.
-
   Lemma read_decreases_fuel:
     forall inp cd nextinp cont dir,
       advance_input inp dir = Some nextinp ->
@@ -1183,7 +1168,6 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     pose proof read_decreases_fuel_nolk inp cd nextinp cont dir ADV. lia.
   Qed.
 
-  (* TODO Move to Linden *)
   Lemma advance_input_n_samestr:
     forall inp nextinp n dir,
       advance_input_n inp n dir = nextinp ->
@@ -1658,8 +1642,6 @@ remaining_length nextinp dir) * last_chunk_size cont). {
        assert (t' = t) by (eauto using is_tree_determ); subst;
        cbn [res_to_leaf] in *; rewrite LF; reflexivity).
   Qed.
-
-  (* removed the deprecated tree depth proofs *)
 
   Lemma regex_lookaround_fuel_bound:
     forall r str, regex_lookaround_fuel str r <= (1 + length str) * expanded_size r * expanded_size r.
