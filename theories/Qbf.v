@@ -124,7 +124,7 @@ Inductive wf_qbf: qbf -> Prop :=
 Module Environment := MSetList.Make Nat.
 Definition env := Environment.t.
 
-(** ** Functional version of validity if QBF *)
+(** ** Functional version of validity of QBF *)
 Definition true_variable (e: env) (v: variable): bool :=
   Environment.mem v e.
 
