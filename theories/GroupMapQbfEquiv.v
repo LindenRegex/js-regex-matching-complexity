@@ -1,4 +1,4 @@
-From JsRegexOptp Require Import GroupMaps Qbf.
+From JSRegexComplexity Require Import GroupMaps Qbf.
 From Linden Require Import Parameters Groups.
 
 Section GroupMapQbfEquiv.

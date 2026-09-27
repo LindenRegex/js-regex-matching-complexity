@@ -1,5 +1,5 @@
 From Linden Require Import Chars.
-From JsRegexOptp Require Import Qbf Basics.
+From JSRegexComplexity Require Import Qbf Basics.
 From Stdlib Require Import List Lia.
 Import ListNotations.
 

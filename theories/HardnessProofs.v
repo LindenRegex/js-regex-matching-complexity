@@ -1,6 +1,6 @@
-From JsRegexOptp Require Import QbfPrenex.
-From JsRegexOptp Require Import Basics.
-From JsRegexOptp Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
+From JSRegexComplexity Require Import QbfPrenex.
+From JSRegexComplexity Require Import Basics.
+From JSRegexComplexity Require Import RegexEncoding Qbf GroupMaps GroupMapQbfEquiv.
 From Linden Require Import Chars Groups Semantics Tree Tactics.
 From Linden.Rewriting Require Import ProofSetup.
 From Warblre Require Import Parameters RegExpRecord Base.

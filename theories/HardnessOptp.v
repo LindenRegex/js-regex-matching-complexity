@@ -1,6 +1,6 @@
 (** * OptP-hardness: CNF LEXICOGRAPHIC SAT reduces to JavaScript regex matching *)
 
-From JsRegexOptp Require Import Basics Qbf GroupMaps Bits RegexEncoding
+From JSRegexComplexity Require Import Basics Qbf GroupMaps Bits RegexEncoding
   HardnessProofs MembershipOptp WarblreExtensions WarblreEncoding Warblre.
 From Linden Require Import Chars Groups Semantics Tree LWParameters
   ResultTranslation EquivMain.

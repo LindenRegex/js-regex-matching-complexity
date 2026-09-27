@@ -1,8 +1,8 @@
 (** * QBF encodings but written in Warblre instead of Linden *)
 
-From JsRegexOptp Require Import Qbf RegexEncoding HardnessProofs WarblreExtensions.
-From JsRegexOptp Require Import Basics.
-From JsRegexOptp Require RegexEncodingPoslk.
+From JSRegexComplexity Require Import Qbf RegexEncoding HardnessProofs WarblreExtensions.
+From JSRegexComplexity Require Import Basics.
+From JSRegexComplexity Require RegexEncodingPoslk.
 From Linden Require Import LWParameters Chars RegexpTranslation EquivMain.
 From Warblre Require Import Patterns Numeric Parameters StaticSemantics Result.
 From Stdlib Require Import List Lia PeanoNat.

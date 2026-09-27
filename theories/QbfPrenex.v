@@ -1,5 +1,5 @@
 From Stdlib Require Import List Lia.
-From JsRegexOptp Require Import Qbf.
+From JSRegexComplexity Require Import Qbf.
 Import ListNotations.
 Open Scope bool_scope.
 

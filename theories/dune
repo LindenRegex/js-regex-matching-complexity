@@ -1,6 +1,6 @@
 (include_subdirs qualified)
 
 (rocq.theory
- (name JsRegexOptp)
- (package jsregexoptp)
+ (name JSRegexComplexity)
+ (package js-regex-complexity)
  (theories Linden Warblre Ltac2 Stdlib StrictOrderSolver))

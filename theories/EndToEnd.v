@@ -1,6 +1,6 @@
-From JsRegexOptp Require Import QbfPrenex RegexEncoding MembershipProof WarblreExtensions
+From JSRegexComplexity Require Import QbfPrenex RegexEncoding MembershipProof WarblreExtensions
   WarblreEncoding Warblre Qbf GroupMaps HardnessOptp MembershipOptp.
-From JsRegexOptp Require Import Basics.
+From JSRegexComplexity Require Import Basics.
 From Linden Require Import Tree.
 From Linden Require Import Chars Groups Semantics LWParameters
   FunctionalUtils ResultTranslation EquivMain.

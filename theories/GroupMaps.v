@@ -1,5 +1,5 @@
 From Linden Require Import Groups.
-From JsRegexOptp Require Import Basics Qbf Bits.
+From JSRegexComplexity Require Import Basics Qbf Bits.
 From Stdlib Require Import List Lia PeanoNat.
 Import ListNotations.
 

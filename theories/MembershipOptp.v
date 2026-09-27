@@ -5,8 +5,8 @@ From Linden Require Import Semantics Chars StrictSuffix FunctionalSemantics Tree
 From Warblre Require Import Base spec.RegExpRecord.
 From Stdlib Require Import List Lia.
 Import ListNotations.
-From JsRegexOptp Require Import MembershipProof Bits.
-From JsRegexOptp Require Export Basics.
+From JSRegexComplexity Require Import MembershipProof Bits.
+From JSRegexComplexity Require Export Basics.
 
 Section OptpAlgo.
 

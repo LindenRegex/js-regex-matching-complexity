@@ -1,6 +1,6 @@
 From Linden Require Import Chars Groups Tree Semantics Tactics FunctionalUtils Equivalence.
-From JsRegexOptp Require Import Basics.
-From JsRegexOptp Require Import Qbf RegexEncoding RegexEncodingPoslk GroupMaps
+From JSRegexComplexity Require Import Basics.
+From JSRegexComplexity Require Import Qbf RegexEncoding RegexEncodingPoslk GroupMaps
   HardnessProofs GroupMapQbfEquiv.
 From Warblre Require Import RegExpRecord Parameters Base.
 From Stdlib Require Import List Lia.

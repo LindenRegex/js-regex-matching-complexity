@@ -1,7 +1,7 @@
-From JsRegexOptp Require Import Qbf RegexEncoding GroupMaps HardnessProofs MembershipProof
+From JSRegexComplexity Require Import Qbf RegexEncoding GroupMaps HardnessProofs MembershipProof
   WarblreExtensions WarblreEncoding LindenExtensions.
-From JsRegexOptp Require Import Basics.
-From JsRegexOptp Require RegexEncodingPoslk HardnessPoslk.
+From JSRegexComplexity Require Import Basics.
+From JSRegexComplexity Require RegexEncodingPoslk HardnessPoslk.
 From Linden Require Import LWParameters Chars Groups Semantics Tree RegexpTranslation
   FunctionalUtils ResultTranslation EquivMain.
 From Warblre Require Import Patterns StaticSemantics Result Base EarlyErrors

@@ -1,7 +1,7 @@
 From Linden Require Import Regex Parameters Semantics Chars StrictSuffix
   FunctionalSemantics Tactics Tree FunctionalUtils ComputeIsTree
   Semantics.Tree Semantics.Groups.
-From JsRegexOptp Require Export Basics.
+From JSRegexComplexity Require Export Basics.
 From Warblre Require Import Base spec.RegExpRecord.
 From Stdlib Require Import List Sorted Lia.
 Import ListNotations.

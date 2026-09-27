@@ -2,7 +2,7 @@ From Linden Require Export Regex Parameters.
 From Linden Require Import Chars.
 From Warblre Require Import Base.
 From Stdlib Require Import Lia.
-From JsRegexOptp Require Export LindenExtensions.
+From JSRegexComplexity Require Export LindenExtensions.
 
 Section Basics.
   Context {params: LindenParameters}.
