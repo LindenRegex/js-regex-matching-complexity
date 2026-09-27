@@ -10,7 +10,7 @@
 
 (package
  (name jsregexoptp)
- (synopsis "Proving that JavaScript regex matching is OptP-complete")
+ (synopsis "Complexity results about JavaScript regex matching")
  (depends
   (rocq-prover (= 9.1.0))
   (linden (= "dev"))))
