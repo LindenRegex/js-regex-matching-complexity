@@ -67,29 +67,38 @@ Section EndToEnd.
   Local Hint Extern 3 (_ <= _) => nia : core.
 
   Theorem membership_state_size_bound:
-    (* Let `wr` be a Warblre regex and `lr` the corresponding Linden regex. *)
-    forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (act: actions),
+    (* Let `wr` be a Warblre regex that passes the early errors check and `lr` the corresponding Linden regex. *)
+    forall (wr: Patterns.Regex),
+      StaticSemantics.earlyErrors wr [] = Success false ->
       let lr := linden_of wr in
       (* Let (`act`, `inp`, `dir`) be a semantic state that can result from matching `lr`. *)
-      MembershipProof.act_from_regex lr inp act dir ->
-      (* Let `n` be the expanded size of `lr`. *)
-      let n := expanded_size lr in
-      (* Let `frame` be this upper bound on the memory usage of a stack frame. *)
-      let frame := (1 + length (input_str inp)) * actions_size act in
-      (* Let `poly` be this polynomial in the input size and expanded size of `wr`. *)
-      let poly := (1 + length (input_str inp))
-                  * (pattern_expanded_size wr
-                     + pattern_expanded_size wr * pattern_expanded_size wr) in
-      (* Then the size of the list of actions (giving weight 1 to Acheck actions) is at most n+n(n+1)/2... *)
-      actions_size act <= n + Nat.div2 (n * S n) /\
-      (* ... and the total memory usage (computation depth * frame size bound) is a polynomial in the input size and expanded size of `wr`. *)
-      fuel_budget lr inp * frame <= S poly * poly.
+      forall (inp: input) (dir: Direction) (act: actions),
+        MembershipProof.act_from_regex lr inp act dir ->
+        (* Let `n` be the expanded size of `lr`. *)
+        let n := expanded_size lr in
+        (* Let `frame` be this upper bound on the memory usage of a stack frame. *)
+        let frame := (1 + length (input_str inp)) * actions_size act in
+        (* Let `poly` be this polynomial in the input size and expanded size of `wr`. *)
+        let poly := (1 + length (input_str inp))
+                    * (pattern_expanded_size wr
+                      + pattern_expanded_size wr * pattern_expanded_size wr) in
+        (* Then the size of the list of actions (giving weight 1 to Acheck actions) is at most n+n(n+1)/2... *)
+        actions_size act <= n + Nat.div2 (n * S n) /\
+        (* ... and the total memory usage (computation depth * frame size bound) is bounded by a polynomial in the input size and expanded size of `wr`. *)
+        fuel_budget lr inp * frame <= S poly * poly.
   Proof.
-    cbv zeta; intros * AFR; pose proof MembershipProof.actions_size_bound' AFR as ACT.
-    pose proof expanded_size_pos (linden_of wr); pose proof linden_of_expanded_size wr;
+    cbv zeta; intros wr EE * AFR; pose proof MembershipProof.actions_size_bound' AFR as ACT.
+    pose proof expanded_size_pos (linden_of wr); pose proof linden_of_expanded_size wr EE;
       pose proof triangle_even (expanded_size (linden_of wr)).
-    split; [exact ACT|];
-      eauto using PeanoNat.Nat.mul_le_mono, PeanoNat.Nat.mul_le_mono_l, fuel_budget_source.
+    split.
+    - exact ACT.
+    - pose proof fuel_budget_source wr inp EE. rewrite H2.
+      do 2 apply PeanoNat.Nat.mul_le_mono_l. etransitivity; [apply ACT|].
+      rewrite H1, H0, PeanoNat.Nat.div2_even.
+      apply PeanoNat.Nat.add_le_mono_l.
+      rewrite <- PeanoNat.Nat.div2_even with (a := pattern_expanded_size wr * pattern_expanded_size wr).
+      apply PeanoNat.Nat.div2_le_mono.
+      nia.
   Qed.
 
   End MembershipStateSizeBound.
@@ -255,29 +264,28 @@ Section EndToEnd.
     Proof.
       setoid_rewrite matches_at_compute_tr; unfold pspace_algo, first_leaf.
       generalize (MembershipProof.compute_result_spec lr (init_input s) _ forward
-                    (MembershipProof.afr_refl _ _ _) _ (le_n _) GroupMap.empty rer _
+                    (MembershipProof.afr_refl _ _ _) (fuel_budget lr (init_input s)) (fuel_budget_adequate (init_input s) lr) GroupMap.empty rer _
                     (compute_tr_is_tree rer)).
       destruct compute_result; intros [= <-]; eexists; easy.
     Qed.
 
     Lemma pspace_algo_fuel_poly (s: LWParameters.string):
-        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-        <= S ((1 + length s)
+        fuel_budget lr (init_input s)
+        = S ((1 + length s)
               * (pattern_expanded_size wr
                  + pattern_expanded_size wr * pattern_expanded_size wr)).
     Proof.
       pose proof fuel_budget_source wr (init_input s) as SRC; cbn in SRC.
-      pose proof fuel_budget_spec wr rer eq_refl lr (init_input s).
-      unfold lr in *; lia.
+      unfold lr in *; auto.
     Qed.
 
     (* PSPACE-membership theorem in terms of the Warblre `Matcher`: *)
     Theorem pspace_membership_matcher:
       (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
-        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-        <= S ((1 + length s)
+        (* - the fuel that the PSPACE algorithm runs with is a polynomial in the string size and the expanded regex size, *)
+        fuel_budget lr (init_input s)
+        = S ((1 + length s)
               * (pattern_expanded_size wr
                  + pattern_expanded_size wr * pattern_expanded_size wr)) /\
         exists b m res,
@@ -303,9 +311,9 @@ Section EndToEnd.
     Theorem pspace_membership_e2e:
       (* for any input string `s`, *)
       forall (s: LWParameters.string),
-        (* - the fuel that the PSPACE algorithm runs with is polynomial in the string size and the expanded regex size, *)
-        S (MembershipProof.actions_fuel (init_input s) [Areg lr] forward)
-        <= S ((1 + length s)
+        (* - the fuel that the PSPACE algorithm runs with is a polynomial in the string size and the expanded regex size, *)
+        fuel_budget lr (init_input s)
+        = S ((1 + length s)
               * (pattern_expanded_size wr
                  + pattern_expanded_size wr * pattern_expanded_size wr)) /\
         exists b,
@@ -530,7 +538,7 @@ Section EndToEnd.
         let n := guess_budget lr inp in
         (* Then:
            - `n` is polynomial in the remaining length of `inp` and the expanded size of `wr`, *)
-        n <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr) /\
+        n = S ((1 + remaining_length inp forward) * pattern_expanded_size wr) /\
         exists m best,
           (* - compiling `wr` succeeds, *)
           Semantics.compilePattern wr rer = Success m /\
@@ -543,7 +551,7 @@ Section EndToEnd.
             = Success (to_MatchState (exec_of_parse rer lr inp best)
                                      (RegExpRecord.capturingGroupsCount rer)).
     Proof.
-      intros inp ?; split; [apply guess_budget_source|].
+      intros inp ?; split; [apply guess_budget_source; auto|].
       destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best (PARSE & LEN & EXECP)].
       destruct (matcher_at_input wr rer no_early_errors eq_refl) as [m (COMP & MATCH)].
@@ -559,7 +567,7 @@ Section EndToEnd.
         let n := guess_budget lr inp in
         (* Then:
            - `n` is polynomial in the length of `s` and the expanded size of `wr`, *)
-        n <= S ((1 + length s) * pattern_expanded_size wr) /\
+        n = S ((1 + length s) * pattern_expanded_size wr) /\
         exists inst best,
           (* - compiling `wr` succeeds (this is essentially what `regExpInitialize` does), *)
           regExpInitialize wr flags = Success inst /\
@@ -571,7 +579,7 @@ Section EndToEnd.
           exec_agrees inst s (to_MatchState (exec_of_parse rer lr inp best)
                                             (RegExpRecord.capturingGroupsCount rer)).
     Proof.
-      intros s inp ?; split; [apply (guess_budget_source wr inp)|].
+      intros s inp ?; split; [apply (guess_budget_source wr inp); auto|].
       destruct (optp_membership_poly rer lr inp _ lr_nolk (compute_tr_is_tree _))
         as [best (PARSE & LEN & EXECP)].
       destruct (matches_regExpExec_result_flags wr lr s no_early_errors eq_refl flags rer

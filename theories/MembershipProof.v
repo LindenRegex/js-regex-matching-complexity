@@ -1662,6 +1662,17 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     apply regex_lookaround_fuel_bound.
   Qed.
 
+  Theorem fuel_budget_adequate:
+    forall inp r,
+      fuel_budget r inp > actions_fuel inp [Areg r] forward.
+  Proof.
+    intros inp r.
+    unfold fuel_budget.
+    pose proof poly_fuel inp r.
+    pose proof remaining_le_full_length inp forward.
+    nia.
+  Qed.
+
 End MembershipProof.
 
 
@@ -1671,7 +1682,7 @@ Section PSPACE_algo.
   Context (rer: RegExpRecord).
 
   Definition pspace_algo (r:regex) (s:LWParameters.string) :=
-    let init_fuel := S (actions_fuel (init_input s) [Areg r] forward) in
+    let init_fuel := fuel_budget r (init_input s) in
     match compute_result rer [Areg r] (init_input s) GroupMap.empty forward init_fuel with
     | Success _ => Some true
     | NoMatch => Some false
@@ -1688,8 +1699,8 @@ Section PSPACE_algo.
       destruct compute_result eqn:CR; try solve [inversion H0].
       apply f_equal with (f:=res_to_leaf) in CR.
       eapply compute_result_is_tree_same_leaf in CR; eauto.
-    - set (f:=S (actions_fuel (init_input s) [Areg r] forward)).
-      assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by lia.
+    - set (f:=fuel_budget r (init_input s)).
+      assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by eauto using fuel_budget_adequate.
       unfold pspace_algo. destruct compute_result eqn:CR; auto.
       + specialize (result_terminates' r (init_input s) [Areg r] forward (afr_refl r _ _) f MORE GroupMap.empty rer) as OOF.
         subst f. rewrite CR in OOF. exfalso. apply OOF. auto.
@@ -1708,8 +1719,8 @@ Section PSPACE_algo.
       destruct compute_result eqn:CR; try solve [inversion H0].
       apply f_equal with (f:=res_to_leaf) in CR.
       eapply compute_result_is_tree_same_leaf in CR; eauto.
-    - set (f:=S (actions_fuel (init_input s) [Areg r] forward)).
-      assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by lia.
+    - set (f:=fuel_budget r (init_input s)).
+      assert (MORE: f > actions_fuel (init_input s) [Areg r] forward) by eauto using fuel_budget_adequate.
       unfold pspace_algo. destruct compute_result eqn:CR; auto.
       + specialize (result_terminates' r (init_input s) [Areg r] forward (afr_refl r _ _) f MORE GroupMap.empty rer) as OOF.
         subst f. rewrite CR in OOF. exfalso. apply OOF. auto.

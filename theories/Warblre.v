@@ -32,7 +32,7 @@ Section TranslationSize.
   Lemma warblre_to_linden_expanded_size (wr: Patterns.Regex):
     forall n nm lr,
       warblre_to_linden wr n nm = Success lr ->
-      expanded_size lr <= pattern_expanded_size wr.
+      expanded_size lr = pattern_expanded_size wr.
   Proof.
     induction wr; intros n nm lr TR; cbn in TR |- *;
       repeat match type of TR with
@@ -48,22 +48,26 @@ Section TranslationSize.
   Qed.
 
   Corollary linden_of_expanded_size wr:
-      expanded_size (linden_of wr) <= pattern_expanded_size wr.
+    StaticSemantics.earlyErrors wr [] = Success false ->
+    expanded_size (linden_of wr) = pattern_expanded_size wr.
   Proof.
-    unfold linden_of, warblre_to_linden'; destruct (warblre_to_linden _ _ _) eqn:TR;
-      eauto using warblre_to_linden_expanded_size, pattern_expanded_size_pos.
+    intro EE. unfold linden_of, warblre_to_linden'; destruct (warblre_to_linden _ _ _) eqn:TR.
+    - eauto using warblre_to_linden_expanded_size.
+    - pose proof earlyErrors_pass_translation wr EE as [lr SUCC]. congruence.
   Qed.
 
   Corollary guess_budget_source wr inp:
+    StaticSemantics.earlyErrors wr [] = Success false ->
       guess_budget (linden_of wr) inp
-      <= S ((1 + remaining_length inp forward) * pattern_expanded_size wr).
-  Proof. unfold guess_budget; pose proof linden_of_expanded_size wr; nia. Qed.
+      = S ((1 + remaining_length inp forward) * pattern_expanded_size wr).
+  Proof. intro EE. unfold guess_budget. pose proof linden_of_expanded_size wr EE. nia. Qed.
 
   Corollary fuel_budget_source wr inp:
+    StaticSemantics.earlyErrors wr [] = Success false ->
       fuel_budget (linden_of wr) inp
-      <= S ((1 + length (input_str inp))
+      = S ((1 + length (input_str inp))
             * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
-  Proof. unfold fuel_budget; pose proof linden_of_expanded_size wr; nia. Qed.
+  Proof. intro EE. unfold fuel_budget; pose proof linden_of_expanded_size wr EE; nia. Qed.
 End TranslationSize.
 
 Section TranslationFragment.
