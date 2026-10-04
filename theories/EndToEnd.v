@@ -67,38 +67,29 @@ Section EndToEnd.
   Local Hint Extern 3 (_ <= _) => nia : core.
 
   Theorem membership_state_size_bound:
-    (* Let `wr` be a Warblre regex that passes the early errors check and `lr` the corresponding Linden regex. *)
-    forall (wr: Patterns.Regex),
-      StaticSemantics.earlyErrors wr [] = Success false ->
+    (* Let `wr` be a Warblre regex and `lr` the corresponding Linden regex. *)
+    forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (act: actions),
       let lr := linden_of wr in
       (* Let (`act`, `inp`, `dir`) be a semantic state that can result from matching `lr`. *)
-      forall (inp: input) (dir: Direction) (act: actions),
-        MembershipProof.act_from_regex lr inp act dir ->
-        (* Let `n` be the expanded size of `lr`. *)
-        let n := expanded_size lr in
-        (* Let `frame` be this upper bound on the memory usage of a stack frame. *)
-        let frame := (1 + length (input_str inp)) * actions_size act in
-        (* Let `poly` be this polynomial in the input size and expanded size of `wr`. *)
-        let poly := (1 + length (input_str inp))
-                    * (pattern_expanded_size wr
-                      + pattern_expanded_size wr * pattern_expanded_size wr) in
-        (* Then the size of the list of actions (giving weight 1 to Acheck actions) is at most n+n(n+1)/2... *)
-        actions_size act <= n + Nat.div2 (n * S n) /\
-        (* ... and the total memory usage (computation depth * frame size bound) is bounded by a polynomial in the input size and expanded size of `wr`. *)
-        fuel_budget lr inp * frame <= S poly * poly.
+      MembershipProof.act_from_regex lr inp act dir ->
+      (* Let `n` be the expanded size of `lr`. *)
+      let n := expanded_size lr in
+      (* Let `frame` be this upper bound on the memory usage of a stack frame. *)
+      let frame := (1 + length (input_str inp)) * actions_size act in
+      (* Let `poly` be this polynomial in the input size and expanded size of `wr`. *)
+      let poly := (1 + length (input_str inp))
+                  * (pattern_expanded_size wr
+                     + pattern_expanded_size wr * pattern_expanded_size wr) in
+      (* Then the size of the list of actions (giving weight 1 to Acheck actions) is at most n+n(n+1)/2... *)
+      actions_size act <= n + Nat.div2 (n * S n) /\
+      (* ... and the total memory usage (computation depth * frame size bound) is a polynomial in the input size and expanded size of `wr`. *)
+      fuel_budget lr inp * frame <= S poly * poly.
   Proof.
-    cbv zeta; intros wr EE * AFR; pose proof MembershipProof.actions_size_bound' AFR as ACT.
-    pose proof expanded_size_pos (linden_of wr); pose proof linden_of_expanded_size wr EE;
+    cbv zeta; intros * AFR; pose proof MembershipProof.actions_size_bound' AFR as ACT.
+    pose proof expanded_size_pos (linden_of wr); pose proof linden_of_expanded_size_le wr;
       pose proof triangle_even (expanded_size (linden_of wr)).
-    split.
-    - exact ACT.
-    - pose proof fuel_budget_source wr inp EE. rewrite H2.
-      do 2 apply PeanoNat.Nat.mul_le_mono_l. etransitivity; [apply ACT|].
-      rewrite H1, H0, PeanoNat.Nat.div2_even.
-      apply PeanoNat.Nat.add_le_mono_l.
-      rewrite <- PeanoNat.Nat.div2_even with (a := pattern_expanded_size wr * pattern_expanded_size wr).
-      apply PeanoNat.Nat.div2_le_mono.
-      nia.
+    split; [exact ACT|];
+      eauto using PeanoNat.Nat.mul_le_mono, PeanoNat.Nat.mul_le_mono_l, fuel_budget_source_le.
   Qed.
 
   End MembershipStateSizeBound.
@@ -275,7 +266,7 @@ Section EndToEnd.
               * (pattern_expanded_size wr
                  + pattern_expanded_size wr * pattern_expanded_size wr)).
     Proof.
-      pose proof fuel_budget_source wr (init_input s) as SRC; cbn in SRC.
+      pose proof fuel_budget_source wr (init_input s) no_early_errors as SRC; cbn in SRC.
       unfold lr in *; auto.
     Qed.
 

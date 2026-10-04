@@ -68,6 +68,20 @@ Section TranslationSize.
       = S ((1 + length (input_str inp))
             * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
   Proof. intro EE. unfold fuel_budget; pose proof linden_of_expanded_size wr EE; nia. Qed.
+
+  Corollary linden_of_expanded_size_le wr:
+      expanded_size (linden_of wr) <= pattern_expanded_size wr.
+  Proof.
+    unfold linden_of, warblre_to_linden'; destruct (warblre_to_linden _ _ _) eqn:TR; cbn;
+      [erewrite warblre_to_linden_expanded_size by exact TR
+      | pose proof pattern_expanded_size_pos wr]; lia.
+  Qed.
+
+  Corollary fuel_budget_source_le wr inp:
+      fuel_budget (linden_of wr) inp
+      <= S ((1 + length (input_str inp))
+            * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
+  Proof. unfold fuel_budget; pose proof linden_of_expanded_size_le wr; nia. Qed.
 End TranslationSize.
 
 Section TranslationFragment.
