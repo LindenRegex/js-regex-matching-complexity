@@ -1671,6 +1671,12 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     nia.
   Qed.
 
+  Corollary compute_result_budget:
+    forall (r: regex) (inp: input) gm rer t,
+      is_tree rer [Areg r] inp gm forward t ->
+      res_to_leaf (compute_result rer [Areg r] inp gm forward (fuel_budget r inp))
+      = Some (tree_res t gm inp forward).
+  Proof. eauto using compute_result_spec, afr_refl, fuel_budget_adequate. Qed.
 End MembershipProof.
 
 
