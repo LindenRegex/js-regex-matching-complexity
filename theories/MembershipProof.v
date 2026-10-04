@@ -1662,11 +1662,9 @@ remaining_length nextinp dir) * last_chunk_size cont). {
     apply regex_lookaround_fuel_bound.
   Qed.
 
-  Theorem fuel_budget_adequate:
-    forall inp r,
+  Theorem fuel_budget_adequate inp (r: regex):
       fuel_budget r inp > actions_fuel inp [Areg r] forward.
   Proof.
-    intros inp r.
     unfold fuel_budget.
     pose proof poly_fuel inp r.
     pose proof remaining_le_full_length inp forward.

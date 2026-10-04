@@ -319,19 +319,12 @@ Section MembershipTransport.
     unfold EquivMain.compilePattern; rewrite COMP, EXEC; now intros ->.
   Qed.
 
-  Lemma fuel_budget_spec (r: regex) inp:
-      fuel_budget r inp > MembershipProof.actions_fuel inp [Areg r] forward.
-  Proof.
-    pose proof MembershipProof.poly_fuel inp r; pose proof remaining_le_full_length inp forward.
-    unfold fuel_budget; nia.
-  Qed.
-
   Lemma compute_result_poly inp:
       res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
       = Some (linden_result rer lr inp).
   Proof.
     unfold linden_result; eapply compute_result_spec;
-      eauto using afr_refl, fuel_budget_spec, compute_tr_is_tree.
+      eauto using afr_refl, MembershipProof.fuel_budget_adequate, compute_tr_is_tree.
   Qed.
 End MembershipTransport.
 
