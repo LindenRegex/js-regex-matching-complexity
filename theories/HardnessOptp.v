@@ -251,14 +251,6 @@ Section LexSatReduction.
   Lemma lexsat_qbf_all_exists nv pf qt: List.In qt (fst (lexsat_qbf nv pf)) -> qt = Qbf.Exists.
   Proof. apply repeat_spec. Qed.
 
-  Definition lexsat_size (nv: nat) (pf: pos_formula): nat :=
-    nv + pos_formula_size pf.
-
-  Lemma lexsat_qbf_size nv pf: qbf_size (lexsat_qbf nv pf) = lexsat_size nv pf.
-  Proof.
-    unfold qbf_size, lexsat_size, pos_formula_size; cbn; rewrite repeat_length; lia.
-  Qed.
-
   Lemma lexsat_qbf_wf nv pf: wf_pos_formula nv pf -> wf_qbf (lexsat_qbf nv pf).
   Proof. intro; constructor; rewrite repeat_length; now constructor. Qed.
 

@@ -51,12 +51,3 @@ Proof.
   destruct (g start); simpl; apply IH with (i := i); try lia; auto.
   all: intros j ? ?; apply AGREE; lia.
 Qed.
-
-Lemma bits_le_complement b1:
-  forall b2, length b1 = length b2 ->
-    bits_le (map negb b1) (map negb b2) = bits_le b2 b1.
-Proof. induction b1 as [|[] b1 IH]; intros [|[] b2] L; try discriminate; cbn; auto. Qed.
-
-Example bits_le_complement_needs_equal_length:
-  bits_le [false] [false; false] = true /\ bits_le [true] [true; true] = true.
-Proof. split; reflexivity. Qed.

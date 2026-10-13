@@ -1,4 +1,4 @@
-From Stdlib Require Import List Lia.
+From Stdlib Require Import List.
 From JSRegexComplexity Require Import Qbf.
 Import ListNotations.
 Open Scope bool_scope.
@@ -62,10 +62,6 @@ Section Translation.
   Lemma tr_quants_length ql: forall b, length (tr_quants b ql) = length ql.
   Proof. induction ql as [|q ql IH]; intro b; cbn; [reflexivity | now rewrite IH]. Qed.
 
-  Lemma tr_body_last ql:
-    forall q b, tr_body b (ql ++ [q]) pf = if is_forall q then NegForm pf else PosForm pf.
-  Proof. induction ql as [|q' ql IH]; intros q b; cbn; auto. Qed.
-
   Lemma tr_body_inner ql: forall b, inner_pos_formula (tr_body b ql pf) = pf.
   Proof. induction ql as [|q ql IH]; intros b; cbn; [destruct b|]; auto. Qed.
 
@@ -106,9 +102,6 @@ Proof. intro WF; auto using wf_qbf_of_pqbf, qbf_size_of_pqbf, qbf_of_pqbf_true. 
 Definition ex_forall_exists: pqbf :=
   ([PForall; PExists], [[PosVar 1; PosVar 2]; [NegVar 1; NegVar 2]]).
 
-Lemma wf_ex_forall_exists: wf_pqbf ex_forall_exists.
-Proof. repeat constructor; cbn; lia. Qed.
-
 Example ex_forall_exists_translation:
   qbf_of_pqbf ex_forall_exists =
     ([NotExists; NotExists], PosForm [[PosVar 1; PosVar 2]; [NegVar 1; NegVar 2]]).
@@ -121,12 +114,6 @@ Proof. now vm_compute. Qed.
 Example ex_forall_exists_size:
   pqbf_size ex_forall_exists = 9 /\ qbf_size (qbf_of_pqbf ex_forall_exists) = 9.
 Proof. now vm_compute. Qed.
-
-Example ex_forall_exists_reduction:
-  wf_qbf (qbf_of_pqbf ex_forall_exists) /\
-  qbf_size (qbf_of_pqbf ex_forall_exists) = pqbf_size ex_forall_exists /\
-  qbf_true (qbf_of_pqbf ex_forall_exists) = pqbf_true ex_forall_exists.
-Proof. auto using pcnf_reduces_to_qbf, wf_ex_forall_exists. Qed.
 
 Definition ex_forall: pqbf := ([PForall], [[PosVar 1]]).
 

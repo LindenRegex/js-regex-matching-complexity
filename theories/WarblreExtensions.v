@@ -209,32 +209,6 @@ Definition rer_of {params: Parameters} (wr: Patterns.Regex) (flags: RegExpFlags)
   reg_exp_record (RegExpFlags.i flags) (RegExpFlags.m flags) (RegExpFlags.s flags)
     (RegExpFlags.u flags) (StaticSemantics.countLeftCapturingParensWithin wr []).
 
-(* 22.2.3.3 steps 17-19 *)
-Lemma regExpInitialize_record {params: Parameters} wr flags inst:
-    Frontend.regExpInitialize wr flags = Success inst ->
-    RegExpInstance.regExpRecord inst = rer_of wr flags.
-Proof.
-  unfold Frontend.regExpInitialize; destruct (Semantics.compilePattern _ _); now intros [= <-].
-Qed.
-
-Lemma rer_of_complete {params: Parameters} wr rer:
-    RegExpRecord.capturingGroupsCount rer
-    = StaticSemantics.countLeftCapturingParensWithin wr [] ->
-    exists flags, rer = rer_of wr flags.
-Proof.
-  destruct rer as [ic ml da [] n]; cbn; intros ->;
-    now exists (reg_exp_flags false false ic ml da tt false).
-Qed.
-
-Lemma reg_exp_flags_complete (i: bool) (flags: RegExpFlags):
-    RegExpFlags.d flags = false ->
-    RegExpFlags.i flags = i ->
-    RegExpFlags.y flags = true ->
-    exists g m s, flags = reg_exp_flags false g i m s tt true.
-Proof.
-  destruct flags as [d g ic m s [] y]; cbn; intros -> -> ->; now exists g, m, s.
-Qed.
-
 Section ExecSucceeds.
   Context {params: Parameters}.
 
