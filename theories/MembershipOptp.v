@@ -339,6 +339,7 @@ Section OptpAlgo.
   | st_close inp gid cont dir:
       act_step inp (Aclose gid :: cont) dir inp cont dir.
 
+  (* act_step preserves act_from_regex. *)
   Lemma act_step_afr r inp act dir inp' act' dir':
     MembershipProof.act_from_regex r inp act dir ->
     act_step inp act dir inp' act' dir' ->
@@ -352,6 +353,7 @@ Section OptpAlgo.
       |eapply MembershipProof.afr_pop_quant_free_skip with (delta := NoI.Inf)]; exact AFR.
   Qed.
 
+  (* act_step preserves the absence of lookarounds. *)
   Lemma act_step_nolk inp act dir inp' act' dir':
     act_step inp act dir inp' act' dir' ->
     actions_no_lookaround act -> actions_no_lookaround act'.
@@ -363,6 +365,7 @@ Section OptpAlgo.
     apply (cons_decreases_fuel _ a new _ _);
       [exact I | reflexivity | cbn; lia | cbn; lia].
 
+  (* act_step decreases the fuel of semantic states. *)
   Lemma act_step_decreases_fuel r inp act dir inp' act' dir':
     MembershipProof.act_from_regex r inp act dir ->
     act_step inp act dir inp' act' dir' ->
@@ -390,6 +393,8 @@ Section OptpAlgo.
     - cons_dec (Aclose gid) (@nil action).
   Qed.
 
+  (* Corollary that groups the previous results together.
+  This is useful in the proof of the main theorem below. *)
   Corollary act_step_ok r inp act dir inp' act' dir' n:
     MembershipProof.act_from_regex r inp act dir ->
     actions_no_lookaround act ->
@@ -402,6 +407,7 @@ Section OptpAlgo.
     repeat split; [eauto using act_step_afr | eauto using act_step_nolk | lia].
   Qed.
 
+  (* Utility lemma to make as much progress as possible within a tree node. *)
   Local Ltac optp_node :=
     repeat match goal with
       | _ => progress cbn [tree_res] in *
@@ -413,9 +419,12 @@ Section OptpAlgo.
           replace ni with (advance_input_n i (length s) d) in *
             by (symmetry; eauto using read_backref_success_advance)
       end.
+  (* Unfold and simplify the call to optp_algo, including using existing equalities, then unify with rhs evar by reflexivity. *)
   Local Ltac optp_unfold :=
     intros; cbn [optp_algo optp_step res_of tree_res];
     repeat match goal with E: ?x = _ |- context[?x] => rewrite E end; reflexivity.
+  (* Apply IH, using act_step_ok to prove that it applies.
+  st should be a proof that we stepped once in terms of semantic states (usually an application of a constructor of act_step). *)
   Local Ltac optp_rec IH st :=
     match goal with
     | AFR: MembershipProof.act_from_regex ?r ?i ?a ?d,
@@ -425,7 +434,9 @@ Section OptpAlgo.
         destruct (act_step_ok r i a d _ _ _ n AFR NOLK FUEL st) as (A & N & F);
         apply IH with (r := r); assumption
     end.
+  (* Solve case where there is no branching. *)
   Local Ltac optp_go IH st := eapply optp_spec_step; [optp_unfold | optp_rec IH st].
+  (* Solve case where a result is immediately and unconditionally returned. *)
   Local Ltac optp_done := apply optp_spec_done; optp_unfold.
 
   (* Main theorem: *)
@@ -443,14 +454,21 @@ Section OptpAlgo.
         is the same as the first leaf of t. *)
         optp_spec n (optp_algo dir (Cfg act inp gm)) (tree_res t gm inp dir).
   Proof.
-    induction 1; intros r n AFR NOLK FUEL; destruct n as [|n]; try lia; optp_node.
-    - optp_done.
+    induction 1; intros r n AFR NOLK FUEL; destruct n as [|n]; try lia. (*; optp_node.*)
+    - simpl. apply optp_spec_done. simpl. reflexivity.
     - apply is_strict_suffix_correct in PROGRESS.
-      optp_go IHis_tree (st_check inp strcheck cont dir PROGRESS).
-    - apply is_strict_suffix_inv_false in CHECKFAIL; optp_done.
+      eapply optp_spec_step.
+      + simpl. rewrite PROGRESS. reflexivity.
+      + simpl. pose proof act_step_ok r inp _ dir inp cont dir n AFR NOLK FUEL (st_check inp strcheck cont dir PROGRESS) as [AFR' [NOLK' FUEL']].
+        eapply IHis_tree; eauto.
+        
+      (*optp_go IHis_tree (st_check inp strcheck cont dir PROGRESS).*)
+    - apply is_strict_suffix_inv_false in CHECKFAIL. optp_done.
     - optp_go IHis_tree (st_close inp gid cont dir).
     - optp_go IHis_tree (st_epsilon inp cont dir).
-    - optp_go IHis_tree (st_char inp cd _ cont dir (read_char_success_advance _ _ _ _ _ _ READ)).
+    - optp_node. eapply optp_spec_step.
+      + simpl. rewrite READ. reflexivity.
+      + pose proof act_step_ok r inp _ dir _ cont dir n AFR NOLK FUEL (st_char inp cd _ cont dir (read_char_success_advance _ _ _ _ _ _ READ)) as [AFR' [NOLK' FUEL']]. eapply IHis_tree; eauto. (*optp_go IHis_tree (st_char inp cd _ cont dir (read_char_success_advance _ _ _ _ _ _ READ)).*)
     - optp_done.
     - eapply optp_spec_choice; [optp_unfold | optp_unfold
         | optp_rec IHis_tree1 (st_disj_left inp r1 r2 cont dir)
@@ -474,7 +492,7 @@ Section OptpAlgo.
     - destruct NOLK as [[] _].
     - optp_go IHis_tree (st_anchor inp a cont dir).
     - optp_done.
-    - optp_go IHis_tree (st_backref inp gid (length br_str) _ cont dir eq_refl).
+    - optp_node. optp_go IHis_tree (st_backref inp gid (length br_str) _ cont dir eq_refl).
     - optp_done.
   Qed.
 
@@ -505,10 +523,6 @@ Section OptpAlgo.
     (exists cs0, length cs0 = n /\ bs = optp_output r inp cs0) /\
     (forall cs, length cs = n -> bits_le (optp_output r inp cs) bs = true).
 
-  Lemma parse_spec_unique r inp n b1 b2:
-      parse_spec r inp n b1 -> parse_spec r inp n b2 -> b1 = b2.
-  Proof. intros [[cs1 [L1 ->]] M1] [[cs2 [L2 ->]] M2]; auto using bits_le_antisym. Qed.
-
   (* Let `n` ∈ ℕ, `r` a regex, `inp` an input.
   If `o` is the maximum output of `optp_run`, then `o` can be retrieved from the bits output by the OptP algorithm. *)
   Lemma optp_spec_parse r inp n o:
@@ -522,69 +536,6 @@ Section OptpAlgo.
     - exists (false :: repeat true n).
       split; [|reflexivity]; split; [exists (repeat true n) | intros cs LEN];
         rewrite SPEC by auto using repeat_length; cbn; auto using repeat_length, bits_le_ones.
-  Qed.
-
-  (* The result of parsing determines the result of execution. *)
-  Theorem parse_determines_exec r inp t n best:
-      no_lookaround r ->
-      is_tree rer [Areg r] inp GroupMap.empty forward t ->
-      n > MembershipProof.actions_fuel inp [Areg r] forward ->
-      parse_spec r inp n best ->
-      exec_of_parse r inp best = tree_res t GroupMap.empty inp forward.
-  Proof.
-    intros ? ? ? PARSE; edestruct (optp_spec_parse r inp n) as [b [P E]];
-      [eapply optp_max_spec with (r := r); cbn; eauto using MembershipProof.afr_refl|].
-    now rewrite (parse_spec_unique r inp n best b PARSE P).
-  Qed.
-
-  (* The maximum between b1 and b2 in lexicographic order. *)
-  Definition maxb (b1 b2: list bool): list bool := if bits_le b1 b2 then b2 else b1.
-
-  Lemma maxb_le_l b1 b2: bits_le b1 (maxb b1 b2) = true.
-  Proof. unfold maxb; destruct (bits_le b1 b2) eqn:B; auto using bits_le_refl. Qed.
-
-  Lemma maxb_le_r b1 b2: bits_le b2 (maxb b1 b2) = true.
-  Proof.
-    unfold maxb; destruct (bits_le b1 b2) eqn:B; [apply bits_le_refl|].
-    destruct (bits_le_total b1 b2); congruence.
-  Qed.
-
-  (* A function to naively compute the maximum output of a function f on inputs of length n. *)
-  Fixpoint max_out (f: list bool -> list bool) (n: nat): list bool :=
-    match n with
-    | 0 => f []
-    | S n =>
-        maxb (max_out (fun cs => f (false :: cs)) n) (max_out (fun cs => f (true :: cs)) n)
-    end.
-
-  (* `max_out f n` indeed returns the maximum output of function `f` on inputs of length `n`. *)
-  Lemma max_out_spec n:
-    forall f,
-      (exists cs, length cs = n /\ max_out f n = f cs) /\
-      (forall cs, length cs = n -> bits_le (f cs) (max_out f n) = true).
-  Proof.
-    induction n as [|n IH]; intro f; cbn [max_out].
-    - split; [exists []; auto|]; intros [|b cs] LEN; [apply bits_le_refl | discriminate].
-    - destruct (IH (fun cs => f (false :: cs))) as [[cs0 [LEN0 EQ0]] MAX0].
-      destruct (IH (fun cs => f (true :: cs))) as [[cs1 [LEN1 EQ1]] MAX1]; split.
-      + unfold maxb; destruct bits_le; [exists (true :: cs1) | exists (false :: cs0)]; split; auto; cbn; lia.
-      + guess; [eapply bits_le_trans, maxb_le_r | eapply bits_le_trans, maxb_le_l]; eauto.
-  Qed.
-
-  (* A function that computes the result of the OptP algorithm on inputs of length `n`. *)
-  Definition parse (r: regex) (inp: input) (n: nat): list bool :=
-    max_out (optp_output r inp) n.
-
-  Theorem parse_parse_spec r inp n: parse_spec r inp n (parse r inp n).
-  Proof. apply max_out_spec. Qed.
-
-  Theorem optp_membership_exec r inp t n:
-      no_lookaround r ->
-      is_tree rer [Areg r] inp GroupMap.empty forward t ->
-      n > MembershipProof.actions_fuel inp [Areg r] forward ->
-      exec_of_parse r inp (parse r inp n) = tree_res t GroupMap.empty inp forward.
-  Proof.
-    intros; eauto using parse_determines_exec, parse_parse_spec.
   Qed.
 
   Lemma regex_lookaround_fuel_nolk r:
@@ -616,9 +567,15 @@ Section OptpAlgo.
         length best = S n /\
         exec_of_parse r inp best = tree_res t GroupMap.empty inp forward.
   Proof.
-    intros NLK TREE FUEL; pose proof parse_parse_spec r inp n as PARSE.
-    exists (parse r inp n); split; [assumption|]; split; [|auto using optp_membership_exec].
-    destruct PARSE as [[cs0 [<- ->]] _]; reflexivity.
+    intros NLK TREE FUEL.
+    pose proof optp_max_spec [Areg r] inp GroupMap.empty forward t TREE r n (afr_refl r inp forward).
+    assert (actions_no_lookaround [Areg r]). { simpl. auto. }
+    specialize (H H0 FUEL).
+    pose proof optp_spec_parse r inp n (tree_res t GroupMap.empty inp forward) H.
+    destruct H1 as [best [? ?]].
+    exists best; split; [|split]; auto.
+    unfold parse_spec in H1. apply proj1 in H1.
+    destruct H1 as [cs0 [? ?]]. subst best n. reflexivity.
   Qed.
 
   Corollary optp_membership_poly r inp t:
