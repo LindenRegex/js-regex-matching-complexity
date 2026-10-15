@@ -5,9 +5,6 @@ Import ListNotations.
 
 Section GroupMaps.
   Context {params: LindenParameters}.
-  Context (q: qbf).
-
-  Let n := length (fst q).
 
   Definition var_range (gid: group_id): GroupMap.range :=
     GroupMap.Range (2*(gid-1)) (Some (2*(gid-1)+1)).
@@ -93,21 +90,6 @@ Definition gm_lex_lt (num_vars: nat) (gm gm': group_map): Prop :=
     GroupMap.find i gm = None /\
     GroupMap.find i gm' = Some (var_range i) /\
     agree_below i gm gm'.
-
-Lemma gm_lex_lt_irrefl: forall nv gm, ~ gm_lex_lt nv gm gm.
-Proof. intros nv gm (i & _ & _ & NONE & SOME & _); congruence. Qed.
-
-Lemma gm_lex_lt_trans: forall nv gm1 gm2 gm3,
-    gm_lex_lt nv gm1 gm2 -> gm_lex_lt nv gm2 gm3 -> gm_lex_lt nv gm1 gm3.
-Proof.
-  intros nv gm1 gm2 gm3 (i & ? & ? & N1 & S1 & A1) (j & ? & ? & N2 & S2 & A2).
-  destruct (Nat.lt_trichotomy i j) as [? | [<- | ?]]; [exists i | congruence | exists j];
-    [rewrite <- A2 by lia | rewrite A1 by lia];
-    (repeat split; auto; intros k ? ?; now rewrite A1, A2 by lia).
-Qed.
-
-Lemma gm_lex_lt_asym: forall nv gm gm', gm_lex_lt nv gm gm' -> ~ gm_lex_lt nv gm' gm.
-Proof. intros nv gm gm' LT LT'. eapply gm_lex_lt_irrefl, gm_lex_lt_trans; eauto. Qed.
 
 Lemma gm_lex_trichotomy_aux: forall k nv gm gm',
     k <= nv -> wf_gm nv gm -> wf_gm nv gm' ->
@@ -217,7 +199,3 @@ Qed.
 Definition is_lex_max_sat (num_vars: nat) (pf: pos_formula) (b: list bool): Prop :=
   length b = num_vars /\ assign_cnf b pf = true /\
   (forall b', length b' = num_vars -> assign_cnf b' pf = true -> bits_le b' b = true).
-
-Lemma is_lex_max_sat_unique: forall nv pf b b',
-    is_lex_max_sat nv pf b -> is_lex_max_sat nv pf b' -> b = b'.
-Proof. intros * (? & ? & M) (? & ? & M'); auto using bits_le_antisym. Qed.

@@ -65,8 +65,7 @@ Section TranslationSize.
   Corollary fuel_budget_source wr inp:
     StaticSemantics.earlyErrors wr [] = Success false ->
       fuel_budget (linden_of wr) inp
-      = S ((1 + length (input_str inp))
-            * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
+      = S ((1 + length (input_str inp)) * pattern_expanded_size wr).
   Proof. intro EE. unfold fuel_budget; pose proof linden_of_expanded_size wr EE; nia. Qed.
 
   Corollary linden_of_expanded_size_le wr:
@@ -79,8 +78,7 @@ Section TranslationSize.
 
   Corollary fuel_budget_source_le wr inp:
       fuel_budget (linden_of wr) inp
-      <= S ((1 + length (input_str inp))
-            * (pattern_expanded_size wr + pattern_expanded_size wr * pattern_expanded_size wr)).
+      <= S ((1 + length (input_str inp)) * pattern_expanded_size wr).
   Proof. unfold fuel_budget; pose proof linden_of_expanded_size_le wr; nia. Qed.
 End TranslationSize.
 
@@ -337,8 +335,8 @@ Section MembershipTransport.
       res_to_leaf (compute_result rer [Areg lr] inp GroupMap.empty forward (fuel_budget lr inp))
       = Some (linden_result rer lr inp).
   Proof.
-    unfold linden_result; eapply compute_result_spec;
-      eauto using afr_refl, MembershipProof.fuel_budget_adequate, compute_tr_is_tree.
+    unfold linden_result;
+      eauto using MembershipProof.compute_result_budget, compute_tr_is_tree.
   Qed.
 End MembershipTransport.
 

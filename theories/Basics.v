@@ -24,8 +24,7 @@ Section Basics.
     end.
 
   Definition fuel_budget (r: regex) (inp: input): nat :=
-    S ((1 + length (input_str inp))
-       * (expanded_size r + expanded_size r * expanded_size r)).
+    S ((1 + length (input_str inp)) * expanded_size r).
 
   Definition guess_budget (r: regex) (inp: input): nat :=
     S ((1 + remaining_length inp forward) * expanded_size r).

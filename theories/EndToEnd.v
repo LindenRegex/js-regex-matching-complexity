@@ -25,9 +25,7 @@ Section EndToEnd.
   (* The fuel budget definition; it is a polynomial in the string size and the expanded regex size. *)
   Remark fuel_budget_value:
     forall (r: regex) (inp: input),
-      fuel_budget r inp
-      = S ((1 + length (input_str inp))
-           * (expanded_size r + expanded_size r * expanded_size r)).
+      fuel_budget r inp = S ((1 + length (input_str inp)) * expanded_size r).
   Proof. reflexivity. Qed.
 
   (* The guess budget definition; it is a polynomial in the string size and the expanded regex size. *)
@@ -60,7 +58,7 @@ Section EndToEnd.
 
   (* We measure the size of a list of actions by expanding its lower-bounded quantifiers
      and giving weight 1 to Acheck and Aclose actions. *)
-  Local Notation actions_size := MembershipProof.actions_size.
+  Local Notation actions_size := (MembershipProof.act_wt expanded_size 1).
 
   (* Polynomial bound on the memory usage of the PSPACE algorithm: *)
   Section MembershipStateSizeBound.
@@ -70,8 +68,9 @@ Section EndToEnd.
     (* Let `wr` be a Warblre regex and `lr` the corresponding Linden regex. *)
     forall (wr: Patterns.Regex) (inp: input) (dir: Direction) (act: actions),
       let lr := linden_of wr in
-      (* Let (`act`, `inp`, `dir`) be a semantic state that can result from matching `lr`. *)
-      MembershipProof.act_from_regex lr inp act dir ->
+      (* Let `act` be any actions list reachable while matching `lr`,
+         including inside the sub-match of a lookaround. *)
+      MembershipProof.act_reachable lr dir act ->
       (* Let `n` be the expanded size of `lr`. *)
       let n := expanded_size lr in
       (* Let `frame` be this upper bound on the memory usage of a stack frame. *)
@@ -85,21 +84,23 @@ Section EndToEnd.
       (* ... and the total memory usage (computation depth * frame size bound) is a polynomial in the input size and expanded size of `wr`. *)
       fuel_budget lr inp * frame <= S poly * poly.
   Proof.
-    cbv zeta; intros * AFR; pose proof MembershipProof.actions_size_bound' AFR as ACT.
-    pose proof expanded_size_pos (linden_of wr); pose proof linden_of_expanded_size_le wr;
-      pose proof triangle_even (expanded_size (linden_of wr)).
-    split; [exact ACT|];
-      eauto using PeanoNat.Nat.mul_le_mono, PeanoNat.Nat.mul_le_mono_l, fuel_budget_source_le.
+    intros * RE; cbv zeta; unfold lr in *.
+    pose proof MembershipProof.reachable_bound RE as [ACT _]; unfold MembershipProof.sz_bound in ACT.
+    pose proof expanded_size_pos (linden_of wr); pose proof pattern_expanded_size_pos wr;
+      pose proof linden_of_expanded_size_le wr;
+      pose proof triangle_even (expanded_size (linden_of wr));
+      pose proof fuel_budget_source_le wr inp.
+    split; [exact ACT|]; eauto using PeanoNat.Nat.mul_le_mono, PeanoNat.Nat.mul_le_mono_l.
   Qed.
 
   End MembershipStateSizeBound.
 
   Corollary compute_result_terminates:
     forall (rer: RegExpRecord) (r: regex) (inp: input) (act: actions) (dir: Direction),
-      MembershipProof.act_from_regex r inp act dir ->
-      forall fuel, fuel > MembershipProof.actions_fuel inp act dir ->
+      MembershipProof.act_from_regex r dir act ->
+      forall fuel, fuel > MembershipProof.actions_fuel r inp act dir ->
         forall gm, compute_result rer act inp gm dir fuel <> Out_of_fuel.
-  Proof. eauto using MembershipProof.result_terminates'. Qed.
+  Proof. eauto using MembershipProof.algo_terminates. Qed.
 
   Context (a_char semicolon_char z_char: Parameters.Character).
   Context (hasIndices global ignoreCase multiline dotAll: bool).
@@ -254,17 +255,14 @@ Section EndToEnd.
                 (matches_at rer lr (init_input s) <-> b = true).
     Proof.
       setoid_rewrite matches_at_compute_tr; unfold pspace_algo, first_leaf.
-      generalize (MembershipProof.compute_result_spec lr (init_input s) _ forward
-                    (MembershipProof.afr_refl _ _ _) (fuel_budget lr (init_input s)) (fuel_budget_adequate (init_input s) lr) GroupMap.empty rer _
-                    (compute_tr_is_tree rer)).
+      generalize (MembershipProof.compute_result_budget lr (init_input s)
+                    GroupMap.empty rer _ (compute_tr_is_tree rer)).
       destruct compute_result; intros [= <-]; eexists; easy.
     Qed.
 
     Lemma pspace_algo_fuel_poly (s: LWParameters.string):
         fuel_budget lr (init_input s)
-        = S ((1 + length s)
-              * (pattern_expanded_size wr
-                 + pattern_expanded_size wr * pattern_expanded_size wr)).
+        = S ((1 + length s) * pattern_expanded_size wr).
     Proof.
       pose proof fuel_budget_source wr (init_input s) no_early_errors as SRC; cbn in SRC.
       unfold lr in *; auto.
@@ -276,9 +274,7 @@ Section EndToEnd.
       forall (s: LWParameters.string),
         (* - the fuel that the PSPACE algorithm runs with is a polynomial in the string size and the expanded regex size, *)
         fuel_budget lr (init_input s)
-        = S ((1 + length s)
-              * (pattern_expanded_size wr
-                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
+        = S ((1 + length s) * pattern_expanded_size wr) /\
         exists b m res,
           (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
                yielding a boolean `b`, *)
@@ -304,9 +300,7 @@ Section EndToEnd.
       forall (s: LWParameters.string),
         (* - the fuel that the PSPACE algorithm runs with is a polynomial in the string size and the expanded regex size, *)
         fuel_budget lr (init_input s)
-        = S ((1 + length s)
-              * (pattern_expanded_size wr
-                 + pattern_expanded_size wr * pattern_expanded_size wr)) /\
+        = S ((1 + length s) * pattern_expanded_size wr) /\
         exists b,
           (* - running the PSPACE algorithm on the regex `lr` and the string `s` succeeds,
                yielding a boolean `b`, *)
